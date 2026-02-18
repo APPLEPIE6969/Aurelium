@@ -1,6 +1,6 @@
 # Aurelium 💎
 
-**Aurelium** (formerly AurelEconomy) is a comprehensive, standalone economy plugin for Minecraft Paper 1.21. It features a custom currency (**Aurels**), a flexible Admin Market, a player-driven Auction House, and seamless Vault integration.
+**Aurelium** (formerly AurelEconomy) is a comprehensive, standalone economy plugin for Minecraft Paper 1.21.x It features a custom currency (**Aurels**), a flexible Admin Market, a player-driven Auction House, and seamless Vault integration.
 
 ## ✨ Key Features
 
