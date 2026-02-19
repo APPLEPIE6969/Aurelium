@@ -1,56 +1,66 @@
 # Aurelium 💎
 
-**Aurelium** (formerly AurelEconomy) is a comprehensive, standalone economy plugin for Minecraft Paper 1.21.x It features a custom currency (**Aurels**), a flexible Admin Market, a player-driven Auction House, and seamless Vault integration.
+**Aurelium** (formerly AurelEconomy) is a comprehensive, standalone economy plugin for Minecraft Paper 1.21, but is compatible with 1.21.x. It features a custom currency (**Aurels**), a flexible Admin Market, a player-driven Auction House, and seamless Vault integration.
 
 ## ✨ Key Features
 
 ### 1. 💰 Core Economy
 -   **Currency**: "Aurels" (₳) - Customizable name and symbol.
 -   **Vault Support**: Fully compatible with Vault-dependent plugins (ShopGUI+, Essentials, etc.).
--   **Auto-Install**: Automatically detects if Vault is missing and installs it for you on startup!
 -   **Database**: Robust SQLite storage (no setup required).
+-   **Offline Earnings**: Get paid for auction sales even when you're offline.
 
 ### 2. 🏪 Customizable Admin Market (`/market`)
-A server-owned shop that gives you **FULL control**:
--   **Configurable Items**: On first run, **every item** is written to `config.yml`.
--   **Buy/Sell Control**:
-    -   Set `buy: -1.0` to **disable buying** an item.
-    -   Set `sell: 0.0` to **disable selling** an item.
-    -   *Default*: Buying enabled for resources/blocks, selling disabled (Buy-Only Market) unless you enable it!
--   **Dynamic Pricing**: Prices fluctuate based on supply (optional).
--   **Refined Selection**: No junk tools/armor. Focus on blocks, nature, and rare resources.
--   **Expensive Ores**: Luxury pricing for Diamonds (5k) and Ancient Debris (25k).
+A server-owned shop that functions like a **Stock Market**:
+-   **Demand/Supply Logic**: Prices automatically rise when people buy (Demand) and fall when they sell (Supply).
+-   **Massive Catalog**: Includes **ALL Building Blocks** (Stones, Deepslate, Wood, Glass, Nature, etc.).
+-   **Spawner Market**: Over **60+ Mob Spawners** available for purchase.
+-   **Balanced Economy**: Hand-crafted prices based on crafting complexity.
+-   **Volatility Visualization**: View real-time market trends in `/stocks`.
 
 ### 3. ⚖️ Auction House (`/ah`)
-A player-to-player trading system:
--   **Offline Sales**: If your item sells while you are offline, you get paid immediately!
-    -   **Notification**: On join, you see: *"You earned 15,000₳ for selling Diamond Sword while offline."*
--   **Sell**: List items for sale with `/ah sell <price>`.
--   **Bid & BIN**: Support for Auction bidding and Buy It Now.
--   **Collection Bin**: Expired or cancelled items go to `/ah collect`.
+A player-driven exchange with advanced trading tools:
+-   **Easy Bidding**: dedicated **Bid Menu** with quick-increment buttons (+10%, +50%, +100%).
+-   **Auction IDs**: Every listing now displays a unique **ID** (e.g., `#123`) in the item lore to help with commands.
+-   **Private Offers**: Don't like the price? **Right-Click** an item to send a private offer to the seller using its ID.
+-   **Manage Offers**: Sellers can view all incoming deals in `/ah offers` and instantly **Accept (✔)** or **Decline (✖)**.
+-   **Live Updates**: The GUI **instantly refreshes** for all players when an item is bought, bidded on, or cancelled.
+-   **Cancellation**: Sellers can cancel their own auctions with **Shift+Right-Click**. A partial fee refund is given based on remaining time.
+-   **Auto-Refunds**: Placed a bid and got outbid? Your money is **instantly returned** to your balance.
+-   **Collection Bin**: Expired items or won auctions are held in a secure `/ah collect` bin if your inventory is full.
 
-### 4. 🕸️ Spawners
--   **Buy**: Purchase pre-filled Mob Spawners (Zombie, Skeleton, Iron Golem, etc.) from the Market.
--   **Mine**: Using a **Silk Touch** pickaxe allows you to pick up spawners and keep their mob type!
--   **Place**: Placing a specific spawner works correctly (no more default Pig spawners).
+### 4. 📈 Stocks & Market Trends (`/stocks`)
+-   **Real-time Tracking**: View the current value of every item in the market.
+-   **Trends**: 
+    -   **Green (▲ +%)**: Demand is peaking.
+    -   **Red (▼ -%)**: Market is oversaturated.
+-   **Precision**: Data points updated per-transaction for maximum accuracy.
 
-## 📜 Commands
+## Commands
 
+### Player Commands
 | Command | Description | Permission |
 | :--- | :--- | :--- |
-| `/bal [player]` | Check your or another player's balance. | `None` |
-| `/pay <player> <amount>` | Send money to another player. | `None` |
-| `/market` | Open the Admin Market GUI. | `None` |
-| `/ah` | Open the Auction House GUI. | `None` |
-| `/ah sell <price>` | Sell the item in your hand. | `None` |
-| `/ah collect` | Collect expired/cancelled items. | `None` |
-| `/eco <give/take/set>` | Admin command to modify balances. | `aureleconomy.admin` |
+| `/bal [player]` | Check balance. | `aureleconomy.bal` |
+| `/pay <player> <amount>` | Pay another player. | `aureleconomy.pay` |
+| `/market` | Open the server market. | `aureleconomy.market` |
+| `/stocks` | View market trends. | `aureleconomy.stocks` |
+| `/ah` | Open the Auction House. | `aureleconomy.ah` |
+| `/ah sell <price>` | List item for BIN (Buy It Now). | `aureleconomy.ah` |
+| `/ah bid <price>` | List item for Auction. | `aureleconomy.ah` |
+| `/ah offer <id> <qty>` | Send a private offer for an item. | `aureleconomy.ah` |
+| `/ah offers` | Manage incoming private offers. | `aureleconomy.ah` |
+| `/ah collect` | Collect expired/purchased items. | `aureleconomy.ah` |
+
+### Admin Commands
+| Command | Description | Permission |
+| :--- | :--- | :--- |
+| `/eco <give/take/set> <player> <amount>` | Modify player balances. | `aureleconomy.admin` |
 
 ## ⚙️ Installation
-1.  Download `Aurelium-1.0.0.jar`.
+1.  Download `Aurelium-1.0.0-SNAPSHOT.jar`.
 2.  Place it in your server's `plugins/` folder.
-3.  **Restart** the server.
-4.  *Note*: If you don't have Vault, the plugin will install it for you. Just restart once more!
+3.  **Restart** the server. (Vault will auto-install if missing).
 
 ## 🔧 Configuration (`config.yml`)
 ### Market Items
@@ -67,7 +77,45 @@ market:
     BEDROCK:
       buy: -1.0      # -1.0 = Buying DISABLED
 ```
-### Other Settings
--   **Starting Balance**: Default 100.0.
--   **Auction Tax**: Set listing fees and sales tax (default 2% / 5%).
--   **Dynamic Pricing**: Enable/Disable price fluctuation.
+### Global Settings
+Control the plugin's behavior in `config.yml`:
+
+```yaml
+market:
+
+
+  # 📈 Dynamic Pricing
+  # If true, prices rise when items are bought and fall when sold. 
+  # Set to 'false' for static prices.
+  dynamic-pricing: true
+  
+  # Price adjustment percentage per transaction (0.01 = 1%)
+  price-increase-per-buy: 0.01
+  price-decrease-per-sell: 0.01
+  
+  # Items that cannot be bought or sold
+  blacklist:
+    - BEDROCK
+    - BARRIER
+
+auction-house:
+  # ⏱️ Duration (seconds)
+  default-duration: 86400 # 24 Hours
+  
+  # 💸 Taxes
+  # Fee to list an item (Percentage of asking price)
+  listing-fee-percent: 2.0 
+  # Tax taken from the seller when an item sells
+  sales-tax-percent: 5.0
+### 🌍 Localization
+A `messages.yml` file is generated on startup.
+-   **Translate**: Change any message to your language.
+-   **Color Codes**: Use MiniMessage formatting (e.g., `<green>`) or legacy `&` codes.
+
+## ❓ Troubleshooting
+-   **"Unknown Command"**: If `/market` or `/eco` says "Unknown command", the plugin failed to load.
+    -   Check your server console/logs for errors.
+    -   Ensure you have `Aurelium-1.0.0-SNAPSHOT.jar` in `plugins/`.
+    -   Ensure you are running **Paper 1.21.x**.
+-   **"No Permission"**:
+    -   Ensure you are **OP** (`/op <player>`) or have the permission node `aureleconomy.admin`.
