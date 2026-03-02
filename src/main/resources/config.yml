@@ -5,9 +5,19 @@
 
 # ─────────────── Database ───────────────
 database:
-  # Currently only SQLite is supported
+  # Supported types: sqlite, mysql
   type: sqlite
+  
+  # ---------- SQLite Settings ----------
   file: "database.db"
+  
+  # ---------- MySQL Settings ----------
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "aurelium"
+    username: "root"
+    password: "password"
 
 # ─────────────── Economy ───────────────
 economy:
