@@ -1,0 +1,39 @@
+package com.aureleconomy.commands;
+
+import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.gui.SellGUI;
+import net.kyori.adventure.text.Component;
+import org.bukkit.command.Command;
+import org.bukkit.command.TabExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
+import java.util.Collections;
+import java.util.List;
+
+public class SellCommand implements TabExecutor {
+
+    private final AurelEconomy plugin;
+
+    public SellCommand(AurelEconomy plugin) {
+        this.plugin = plugin;
+    }
+
+    @Override
+    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label,
+            @NotNull String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(Component.text("Only players can use /sell."));
+            return true;
+        }
+
+        new SellGUI(plugin, player).open(player);
+        return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label,
+            @NotNull String[] args) {
+        return Collections.emptyList();
+    }
+}

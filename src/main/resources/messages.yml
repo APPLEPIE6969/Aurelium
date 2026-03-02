@@ -1,0 +1,24 @@
+prefix: "<gradient:#FFD700:#FFA500>AurelEconomy</gradient> <dark_gray>» <gray>"
+
+economy:
+  balance: "Your balance: <gold>%amount% %symbol%</gold>"
+  balance-other: "<yellow>%player%</yellow>'s balance: <gold>%amount% %symbol%</gold>"
+  paid: "You paid <yellow>%player%</yellow> <gold>%amount% %symbol%</gold>."
+  received: "You received <gold>%amount% %symbol%</gold> from <yellow>%player%</yellow>."
+  insufficient-funds: "<red>You do not have enough %currency%!</red>"
+  admin-give: "Given <gold>%amount%</gold> to <yellow>%player%</yellow>."
+  admin-take: "Took <gold>%amount%</gold> from <yellow>%player%</yellow>."
+  admin-set: "Set <yellow>%player%</yellow>'s balance to <gold>%amount%</gold>."
+
+market:
+  bought: "Bought <green>%amount%x %item%</green> for <gold>%price% %symbol%</gold>."
+  sold: "Sold <green>%amount%x %item%</green> for <gold>%price% %symbol%</gold>."
+  blacklisted: "<red>This item is not allowed in the market!</red>"
+
+auction:
+  listed: "Listed <green>%item%</green> in the Auction House for <gold>%price%</gold>."
+  bid-placed: "You placed a bid of <gold>%amount%</gold> on <green>%item%</green>."
+  outbid: "<red>You have been outbid on <green>%item%</green>!</red>"
+  sold: "Your <green>%item%</green> was sold for <gold>%price%</gold>!"
+  won: "You won the auction for <green>%item%</green>!"
+  collected: "Collected items/money from the Collection Bin."

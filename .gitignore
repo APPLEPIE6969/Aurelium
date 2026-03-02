@@ -1,0 +1,14 @@
+.gradle/
+build/
+bin/
+target/
+.vscode/
+.idea/
+*.log
+*.zip
+*.tar.gz
+dependency-reduced-pom.xml
+apache-maven-*/
+gradle-*/
+*.jar
+!src/main/resources/*.jar

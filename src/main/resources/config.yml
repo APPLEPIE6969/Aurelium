@@ -1,0 +1,114 @@
+# ╔═══════════════════════════════════════════════════╗
+# ║           AurelEconomy Configuration              ║
+# ║            v1.2.0 — Full Reference                ║
+# ╚═══════════════════════════════════════════════════╝
+
+# ─────────────── Database ───────────────
+database:
+  # Currently only SQLite is supported
+  type: sqlite
+  file: "database.db"
+
+# ─────────────── Economy ───────────────
+economy:
+  # The full name of your server's currency (shown in messages)
+  currency-name: "Aurels"
+  # The symbol displayed next to prices (e.g., ₳, $, €)
+  currency-symbol: "₳"
+  # Balance given to new players on first join
+  starting-balance: 100.0
+  # Maximum balance a player can hold (set to -1 for no limit)
+  max-balance: -1
+  # Minimum amount allowed in a /pay transaction
+  min-pay-amount: 0.01
+
+  # 💬 Messages (supports MiniMessage formatting)
+  # Placeholders: %amount%, %symbol%, %player%, %currency%
+  prefix: "<gold>[AurelEconomy] <gray>"
+  balance: "Balance: %amount%%symbol%"
+  balance-other: "Balance of %player%: %amount%%symbol%"
+  paid: "You paid <green>%amount%%symbol%</green> to <yellow>%player%</yellow>."
+  received: "You received <green>%amount%%symbol%</green> from <yellow>%player%</yellow>."
+  insufficient-funds: "You don't have enough %currency%!"
+  admin-give: "Gave <green>%amount%%symbol%</green> to <yellow>%player%</yellow>."
+  admin-take: "Took <red>%amount%%symbol%</red> from <yellow>%player%</yellow>."
+  admin-set: "Set <yellow>%player%</yellow>'s balance to <green>%amount%%symbol%</green>."
+
+# ─────────────── Market (Admin Shop) ───────────────
+market:
+  # Master switch: enable or disable the entire /market system
+  enabled: true
+  # Enable or disable the dynamic pricing algorithm
+  dynamic-pricing: true
+  # Percentage to increase price when a player BUYS from the shop
+  price-increase-per-buy: 0.001
+  # Percentage to decrease price when a player SELLS to the shop
+  price-decrease-per-sell: 0.001
+  # Default sell price as a fraction of buy price for new items (0.5 = 50%)
+  default-sell-ratio: 0.5
+
+  # 📊 Price Stabilization
+  # Prevents auto-farms from permanently crashing item values
+  # Price can never drop below this % of the original base price (0.2 = 20%)
+  price-floor: 0.2
+  # Price can never rise above this % of the original base price (5.0 = 500%)
+  price-ceiling: 5.0
+  # Prices naturally drift back toward their base price over time
+  price-recovery:
+    enabled: true
+    # % of the gap to recover each cycle (0.01 = 1% closer to base per cycle)
+    rate: 0.01
+    # Minutes between recovery cycles
+    interval-minutes: 10
+
+  # 📉 Market Crash Alerts
+  # Broadcast a message when high-value items drop significantly in price
+  alerts:
+    enabled: true
+    # Percentage of base price at which to trigger an alert (0.5 = when price reaches 50% of base)
+    threshold: 0.5
+    # Items must have a base price above this to qualify for alerts
+    min-base-price: 200.0
+
+  # Items that cannot be bought or sold in the market
+  blacklist:
+    - BEDROCK
+    - BARRIER
+    - COMMAND_BLOCK
+    - STRUCTURE_VOID
+    - LIGHT
+
+# ─────────────── Auction House ───────────────
+auction-house:
+  # Master switch: enable or disable the entire /ah system
+  enabled: true
+  # Default listing duration in seconds (86400 = 24 hours)
+  default-duration: 86400
+  # Maximum listing duration in seconds (604800 = 7 days)
+  max-duration: 604800
+  # Listing fee percentage (taken from player balance when listing)
+  listing-fee-percent: 2.0
+  # Sales tax percentage (taken from final sale price and given to the server as a sink)
+  sales-tax-percent: 5.0
+  # Maximum number of active listings per player (-1 for unlimited)
+  max-listings-per-player: -1
+  # Minimum price a player can list an item for
+  min-listing-price: 1.0
+
+# ─────────────── Buy Orders ───────────────
+buy-orders:
+  # Master switch: enable or disable the entire /orders system
+  enabled: true
+  # Maximum number of active buy orders a single player can have at once
+  # Set to -1 for unlimited
+  max-active-orders-per-player: 10
+  # Minimum price per item a player can offer
+  min-price-per-piece: 0.1
+  # Maximum total value of a single order (-1 for no limit)
+  max-order-value: -1
+
+  # 💸 Taxes
+  # Fee to create an order (percentage of total order cost, taken as an economic sink)
+  creation-fee-percent: 2.0
+  # Tax taken from the seller when they fulfill a buy order
+  sales-tax-percent: 5.0
