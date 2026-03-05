@@ -240,7 +240,8 @@ public class OrderMaterialGUI extends GUIHolder {
                                     throw new NumberFormatException();
 
                                 // Create the order
-                                plugin.getOrderManager().createOrder(player, entry.material, amount, pricePerPiece);
+                                plugin.getOrderManager().createOrder(player, entry.material, amount, pricePerPiece,
+                                        plugin.getEconomyManager().getDefaultCurrency());
 
                             } catch (NumberFormatException ex) {
                                 player.sendMessage(

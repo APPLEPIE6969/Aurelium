@@ -16,7 +16,13 @@ public abstract class GUIHolder implements InventoryHolder {
     public abstract void handleClick(org.bukkit.event.inventory.InventoryClickEvent event);
 
     public void handleDrag(org.bukkit.event.inventory.InventoryDragEvent event) {
-        // Default implementation: do nothing
+        // Default implementation: block dragging in top inventory
+        for (int slot : event.getRawSlots()) {
+            if (slot < inventory.getSize()) {
+                event.setCancelled(true);
+                return;
+            }
+        }
     }
 
     public void handleClose(org.bukkit.event.inventory.InventoryCloseEvent event) {

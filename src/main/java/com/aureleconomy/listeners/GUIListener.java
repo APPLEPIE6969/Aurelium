@@ -18,6 +18,7 @@ public class GUIListener implements Listener {
         org.bukkit.inventory.InventoryHolder holder = event.getInventory().getHolder();
         if (holder instanceof com.aureleconomy.gui.StocksGUI
                 || holder instanceof com.aureleconomy.gui.MarketGUI
+                || holder instanceof com.aureleconomy.gui.ShopGUI
                 || holder instanceof com.aureleconomy.gui.AuctionGUI
                 || holder instanceof com.aureleconomy.gui.OrdersGUI
                 || holder instanceof com.aureleconomy.gui.OrderCategoryGUI

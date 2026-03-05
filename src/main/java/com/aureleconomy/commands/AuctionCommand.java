@@ -32,6 +32,12 @@ public class AuctionCommand implements TabExecutor {
             return true;
         }
 
+        if (!player.hasPermission("aureleconomy.ah")) {
+            player.sendMessage(
+                    Component.text("You do not have permission to use the Auction House.", NamedTextColor.RED));
+            return true;
+        }
+
         if (args.length == 0) {
             player.openInventory(new AuctionGUI(plugin, player, false).getInventory());
             return true;
@@ -115,13 +121,32 @@ public class AuctionCommand implements TabExecutor {
                 return true;
             }
 
-            // Duration handling
+            // Duration & Currency handling
             long durationMillis = plugin.getConfig().getLong("auction-house.default-duration", 86400) * 1000;
-            if (args.length >= 3) {
+            String currency = plugin.getEconomyManager().getDefaultCurrency();
+
+            if (args.length == 3) {
+                // Determine if it represents a currency or a duration
+                if (plugin.getConfig().getConfigurationSection("economy.currencies").contains(args[2])) {
+                    currency = args[2];
+                } else {
+                    durationMillis = parseDuration(args[2]);
+                    if (durationMillis == -1) {
+                        player.sendMessage(
+                                Component.text("Invalid duration (e.g., 1h, 7d, 1y). Max 1 year.", NamedTextColor.RED));
+                        return true;
+                    }
+                }
+            } else if (args.length >= 4) {
                 durationMillis = parseDuration(args[2]);
                 if (durationMillis == -1) {
                     player.sendMessage(
-                            Component.text("Invalid duration (e.g., 1h, 7d, 1y). Max 1 year.", NamedTextColor.RED));
+                            Component.text("Invalid duration (e.g., 1h, 7d). Max 1 year.", NamedTextColor.RED));
+                    return true;
+                }
+                currency = args[3];
+                if (!plugin.getConfig().getConfigurationSection("economy.currencies").contains(currency)) {
+                    player.sendMessage(Component.text("Invalid currency: " + currency, NamedTextColor.RED));
                     return true;
                 }
             }
@@ -133,18 +158,20 @@ public class AuctionCommand implements TabExecutor {
             double scalingMultiplier = 1.0 + (Math.max(0, days - 1) * 0.05);
             double feeAmount = price * feeRate * scalingMultiplier;
 
-            if (!plugin.getEconomyManager().has(player, feeAmount)) {
+            if (!plugin.getEconomyManager().has(player, feeAmount, currency)) {
                 player.sendMessage(
                         Component.text(
-                                "You cannot afford the listing fee of " + plugin.getEconomyManager().format(feeAmount),
+                                "You cannot afford the listing fee of "
+                                        + plugin.getEconomyManager().format(feeAmount, currency),
                                 NamedTextColor.RED));
                 return true;
             }
 
-            plugin.getEconomyManager().withdraw(player, feeAmount);
-            boolean isBin = sub.equals("sell");
+            plugin.getEconomyManager().withdraw(player, feeAmount, currency);
+            boolean isBin = sub.equals("bin");
 
-            plugin.getAuctionManager().listAuction(player.getUniqueId(), item.clone(), price, isBin, durationMillis,
+            plugin.getAuctionManager().listAuction(player.getUniqueId(), item.clone(), price, currency, isBin,
+                    durationMillis,
                     feeAmount);
             player.getInventory().setItemInMainHand(null);
 

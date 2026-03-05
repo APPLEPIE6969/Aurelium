@@ -8,6 +8,7 @@ public class AuctionItem {
     private final UUID seller;
     private final ItemStack item;
     private double price;
+    private final String currency;
     private final boolean isBin;
     private final long expiration;
     private final double listingFee;
@@ -16,12 +17,14 @@ public class AuctionItem {
     private boolean ended;
     private boolean collected;
 
-    public AuctionItem(int id, UUID seller, ItemStack item, double price, boolean isBin, long expiration,
+    public AuctionItem(int id, UUID seller, ItemStack item, double price, String currency, boolean isBin,
+            long expiration,
             double listingFee, long startTime, UUID highestBidder, boolean ended, boolean collected) {
         this.id = id;
         this.seller = seller;
         this.item = item;
         this.price = price;
+        this.currency = currency;
         this.isBin = isBin;
         this.expiration = expiration;
         this.listingFee = listingFee;
@@ -45,6 +48,10 @@ public class AuctionItem {
 
     public double getPrice() {
         return price;
+    }
+
+    public String getCurrency() {
+        return currency;
     }
 
     public boolean isBin() {

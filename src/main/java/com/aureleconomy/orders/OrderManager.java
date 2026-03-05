@@ -40,9 +40,16 @@ public class OrderManager {
                 int requested = rs.getInt("amount_requested");
                 int filled = rs.getInt("amount_filled");
                 double price = rs.getDouble("price_per_piece");
+                String currency = "Aurels";
+                try {
+                    currency = rs.getString("currency");
+                    if (currency == null)
+                        currency = "Aurels";
+                } catch (SQLException ignored) {
+                }
                 String status = rs.getString("status");
 
-                BuyOrder order = new BuyOrder(id, buyerUuid, material, requested, filled, price, status);
+                BuyOrder order = new BuyOrder(id, buyerUuid, material, requested, filled, price, currency, status);
                 activeOrders.put(id, order);
             }
             plugin.getComponentLogger().info("Loaded " + activeOrders.size() + " active buy orders.");
@@ -64,7 +71,7 @@ public class OrderManager {
                 .toList());
     }
 
-    public void createOrder(Player player, Material material, int amount, double pricePerPiece) {
+    public void createOrder(Player player, Material material, int amount, double pricePerPiece, String currency) {
         // Enforce max active orders per player
         int maxOrders = plugin.getConfig().getInt("buy-orders.max-active-orders-per-player", 10);
         if (maxOrders != -1) {
@@ -77,11 +84,16 @@ public class OrderManager {
             }
         }
 
+        if (plugin.getMarketManager().isBlacklisted(material)) {
+            player.sendMessage(Component.text("This item is blacklisted and cannot be ordered.", NamedTextColor.RED));
+            return;
+        }
+
         // Enforce minimum price per piece
         double minPrice = plugin.getConfig().getDouble("buy-orders.min-price-per-piece", 0.1);
         if (pricePerPiece < minPrice) {
             player.sendMessage(Component.text(
-                    "The minimum price per piece is " + plugin.getEconomyManager().format(minPrice) + ".",
+                    "The minimum price per piece is " + plugin.getEconomyManager().format(minPrice, currency) + ".",
                     NamedTextColor.RED));
             return;
         }
@@ -93,22 +105,24 @@ public class OrderManager {
         double feeAmount = (feePercent / 100.0) * totalCost;
         double totalToDeduct = totalCost + feeAmount;
 
-        if (!plugin.getEconomyManager().has(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct)) {
+        if (!plugin.getEconomyManager().has(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct, currency)) {
             player.sendMessage(Component.text("You do not have enough funds! You need "
-                    + plugin.getEconomyManager().format(totalToDeduct) + " (includes " + feePercent + "% fee).",
+                    + plugin.getEconomyManager().format(totalToDeduct, currency) + " (includes " + feePercent
+                    + "% fee).",
                     NamedTextColor.RED));
             return;
         }
 
         // Deduct money upfront (escrow + non-refundable fee)
-        plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct);
+        plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct, currency);
         if (feeAmount > 0) {
             player.sendMessage(
-                    Component.text("Paid a creation fee of " + plugin.getEconomyManager().format(feeAmount) + ".",
+                    Component.text(
+                            "Paid a creation fee of " + plugin.getEconomyManager().format(feeAmount, currency) + ".",
                             NamedTextColor.GRAY, TextDecoration.ITALIC));
         }
 
-        String sql = "INSERT INTO buy_orders (buyer_uuid, material, amount_requested, price_per_piece) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO buy_orders (buyer_uuid, material, amount_requested, price_per_piece, currency) VALUES (?, ?, ?, ?, ?)";
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             Connection conn = plugin.getDatabaseManager().getConnection();
             try (PreparedStatement ps = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
@@ -117,13 +131,14 @@ public class OrderManager {
                 ps.setString(2, material.name());
                 ps.setInt(3, amount);
                 ps.setDouble(4, pricePerPiece);
+                ps.setString(5, currency);
                 ps.executeUpdate();
 
                 try (ResultSet rs = ps.getGeneratedKeys()) {
                     if (rs.next()) {
                         int id = rs.getInt(1);
                         BuyOrder order = new BuyOrder(id, player.getUniqueId(), material, amount, 0, pricePerPiece,
-                                "ACTIVE");
+                                currency, "ACTIVE");
 
                         // Sync back to main thread to add to memory
                         plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -131,7 +146,7 @@ public class OrderManager {
                             player.sendMessage(Component.text(
                                     "Successfully placed buy order for " + amount + "x "
                                             + material.name().replace("_", " ") + " at "
-                                            + plugin.getEconomyManager().format(pricePerPiece) + " each.",
+                                            + plugin.getEconomyManager().format(pricePerPiece, currency) + " each.",
                                     NamedTextColor.GREEN));
                         });
                     }
@@ -139,7 +154,8 @@ public class OrderManager {
             } catch (SQLException e) {
                 plugin.getComponentLogger().error("Failed to insert buy order", e);
                 // Refund escrow + fee on database error
-                plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct);
+                plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct,
+                        currency);
                 player.sendMessage(
                         Component.text("A database error occurred. Your money has been refunded.", NamedTextColor.RED));
             }
@@ -159,12 +175,15 @@ public class OrderManager {
         // Calculate refund
         int remainingItems = order.getAmountRemaining();
         double refundAmount = remainingItems * order.getPricePerPiece();
-        plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(player.getUniqueId()), refundAmount);
+        plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(player.getUniqueId()), refundAmount,
+                order.getCurrency());
 
         updateOrderStatusInDB(orderId, "CANCELLED", order.getAmountFilled());
 
         player.sendMessage(
-                Component.text("Order cancelled. Refunded " + plugin.getEconomyManager().format(refundAmount) + ".",
+                Component.text(
+                        "Order cancelled. Refunded "
+                                + plugin.getEconomyManager().format(refundAmount, order.getCurrency()) + ".",
                         NamedTextColor.GREEN));
     }
 
@@ -172,6 +191,11 @@ public class OrderManager {
         BuyOrder order = activeOrders.get(orderId);
         if (order == null)
             return;
+
+        if (order.getBuyerUuid().equals(seller.getUniqueId())) {
+            seller.sendMessage(Component.text("You cannot fulfill your own buy order.", NamedTextColor.RED));
+            return;
+        }
 
         if (amountToSell > order.getAmountRemaining()) {
             amountToSell = order.getAmountRemaining();
@@ -196,7 +220,8 @@ public class OrderManager {
         double taxAmount = (salesTaxPercent / 100.0) * rawPayout;
         double finalPayout = rawPayout - taxAmount;
 
-        plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(seller.getUniqueId()), finalPayout);
+        plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(seller.getUniqueId()), finalPayout,
+                order.getCurrency());
 
         // Update order status
         order.setAmountFilled(order.getAmountFilled() + amountToSell);
@@ -214,8 +239,9 @@ public class OrderManager {
         plugin.getAuctionManager().sendToCollectionBin(order.getBuyerUuid(), toDeliver);
 
         seller.sendMessage(Component.text("You sold " + amountToSell + "x items to a buy order for "
-                + plugin.getEconomyManager().format(finalPayout), NamedTextColor.GREEN)
-                .append(Component.text(" (Tax: " + plugin.getEconomyManager().format(taxAmount) + ")",
+                + plugin.getEconomyManager().format(finalPayout, order.getCurrency()), NamedTextColor.GREEN)
+                .append(Component.text(
+                        " (Tax: " + plugin.getEconomyManager().format(taxAmount, order.getCurrency()) + ")",
                         NamedTextColor.GRAY,
                         TextDecoration.ITALIC)));
 

@@ -44,11 +44,19 @@ public class AuctionManager {
     }
 
     private AuctionItem mapResultSet(ResultSet rs) throws SQLException {
+        String currency = "Aurels";
+        try {
+            currency = rs.getString("currency");
+            if (currency == null)
+                currency = "Aurels";
+        } catch (SQLException ignored) {
+        }
         return new AuctionItem(
                 rs.getInt("id"),
                 UUID.fromString(rs.getString("seller_uuid")),
                 itemFromBase64(rs.getString("item_data")),
                 rs.getDouble("price"),
+                currency,
                 rs.getBoolean("is_bin"),
                 rs.getLong("expiration"),
                 rs.getDouble("listing_fee"),
@@ -59,7 +67,8 @@ public class AuctionManager {
                 rs.getBoolean("collected"));
     }
 
-    public void listAuction(UUID seller, ItemStack item, double price, boolean isBin, long durationMillis,
+    public void listAuction(UUID seller, ItemStack item, double price, String currency, boolean isBin,
+            long durationMillis,
             double listingFee) {
         long now = System.currentTimeMillis();
         long expiration = now + durationMillis;
@@ -67,21 +76,23 @@ public class AuctionManager {
         // Save to DB
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
-                    "INSERT INTO auctions (seller_uuid, item_data, price, is_bin, expiration, listing_fee, start_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO auctions (seller_uuid, item_data, price, currency, is_bin, expiration, listing_fee, start_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     java.sql.Statement.RETURN_GENERATED_KEYS)) {
                 ps.setString(1, seller.toString());
                 ps.setString(2, itemToBase64(item));
                 ps.setDouble(3, price);
-                ps.setBoolean(4, isBin);
-                ps.setLong(5, expiration);
-                ps.setDouble(6, listingFee);
-                ps.setLong(7, now);
+                ps.setString(4, currency);
+                ps.setBoolean(5, isBin);
+                ps.setLong(6, expiration);
+                ps.setDouble(7, listingFee);
+                ps.setLong(8, now);
                 ps.executeUpdate();
 
                 ResultSet rs = ps.getGeneratedKeys();
                 if (rs.next()) {
                     int id = rs.getInt(1);
-                    AuctionItem ai = new AuctionItem(id, seller, item, price, isBin, expiration, listingFee, now, null,
+                    AuctionItem ai = new AuctionItem(id, seller, item, price, currency, isBin, expiration, listingFee,
+                            now, null,
                             false, false);
                     synchronized (activeAuctions) {
                         activeAuctions.add(ai);
@@ -95,35 +106,41 @@ public class AuctionManager {
     }
 
     public void bid(AuctionItem auction, UUID bidder, double amount) {
-        UUID previousBidder = auction.getHighestBidder();
-        double previousPrice = auction.getPrice();
+        synchronized (auction) {
+            UUID previousBidder = auction.getHighestBidder();
+            double previousPrice = auction.getPrice();
 
-        auction.setPrice(amount);
-        auction.setHighestBidder(bidder);
+            auction.setPrice(amount);
+            auction.setHighestBidder(bidder);
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
-                    .prepareStatement("UPDATE auctions SET price = ?, highest_bidder_uuid = ? WHERE id = ?")) {
-                ps.setDouble(1, amount);
-                ps.setString(2, bidder.toString());
-                ps.setInt(3, auction.getId());
-                ps.executeUpdate();
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
+                        .prepareStatement("UPDATE auctions SET price = ?, highest_bidder_uuid = ? WHERE id = ?")) {
+                    ps.setDouble(1, amount);
+                    ps.setString(2, bidder.toString());
+                    ps.setInt(3, auction.getId());
+                    ps.executeUpdate();
 
-                // Refund previous bidder
-                if (previousBidder != null) {
-                    plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(previousBidder), previousPrice);
-                    Player prev = Bukkit.getPlayer(previousBidder);
-                    if (prev != null) {
-                        prev.sendMessage(Component.text("You have been outbid on " + auction.getItem().getType().name()
-                                + "! Your bid of " + previousPrice + " was refunded.", NamedTextColor.YELLOW));
+                    // Refund previous bidder
+                    if (previousBidder != null) {
+                        plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(previousBidder), previousPrice,
+                                auction.getCurrency());
+                        Player prev = Bukkit.getPlayer(previousBidder);
+                        if (prev != null) {
+                            prev.sendMessage(
+                                    Component.text("You have been outbid on " + auction.getItem().getType().name()
+                                            + "! Your bid of "
+                                            + plugin.getEconomyManager().format(previousPrice, auction.getCurrency())
+                                            + " was refunded.", NamedTextColor.YELLOW));
+                        }
                     }
-                }
 
-                com.aureleconomy.gui.AuctionGUI.refreshAllViewers();
-            } catch (SQLException e) {
-                plugin.getComponentLogger().error("Database error in AuctionManager", e);
-            }
-        });
+                    com.aureleconomy.gui.AuctionGUI.refreshAllViewers();
+                } catch (SQLException e) {
+                    plugin.getComponentLogger().error("Database error in AuctionManager", e);
+                }
+            });
+        }
     }
 
     public void cancelAuction(AuctionItem ai, Player player) {
@@ -162,9 +179,9 @@ public class AuctionManager {
                 // Give refund and item
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (finalRefund > 0) {
-                        plugin.getEconomyManager().deposit(player, finalRefund);
+                        plugin.getEconomyManager().deposit(player, finalRefund, ai.getCurrency());
                         player.sendMessage(Component.text("Auction cancelled. Refunded "
-                                + plugin.getEconomyManager().format(finalRefund) + " of listing fee.",
+                                + plugin.getEconomyManager().format(finalRefund, ai.getCurrency()) + " of listing fee.",
                                 NamedTextColor.GREEN));
                     } else {
                         player.sendMessage(Component.text("Auction cancelled.", NamedTextColor.GREEN));
@@ -211,7 +228,7 @@ public class AuctionManager {
                 // Sold
                 double taxPercent = plugin.getConfig().getDouble("auction-house.sales-tax-percent", 5.0);
                 double finalPrice = auction.getPrice() * (1 - (taxPercent / 100.0));
-                plugin.getEconomyManager().deposit(seller, finalPrice);
+                plugin.getEconomyManager().deposit(seller, finalPrice, auction.getCurrency());
                 seller.sendMessage("Your auction sold for " + finalPrice); // use messages.yml in real impl
             } else {
                 // Nobody bought it, goes to collection bin
@@ -223,7 +240,8 @@ public class AuctionManager {
                 // Offline seller, deposit money directly
                 double taxPercent = plugin.getConfig().getDouble("auction-house.sales-tax-percent", 5.0);
                 double finalPrice = auction.getPrice() * (1 - (taxPercent / 100.0));
-                plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(auction.getSeller()), finalPrice);
+                plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(auction.getSeller()), finalPrice,
+                        auction.getCurrency());
 
                 // Log notification
                 logOfflineEarning(auction.getSeller(), finalPrice, auction.getItem());
@@ -405,10 +423,10 @@ public class AuctionManager {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     Player bidder = Bukkit.getPlayer(finalOffer.getBidder());
                     if (plugin.getEconomyManager().has(Bukkit.getOfflinePlayer(finalOffer.getBidder()),
-                            finalOffer.getAmount())) {
+                            finalOffer.getAmount(), ai.getCurrency())) {
                         plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(finalOffer.getBidder()),
-                                finalOffer.getAmount());
-                        plugin.getEconomyManager().deposit(seller, finalOffer.getAmount());
+                                finalOffer.getAmount(), ai.getCurrency());
+                        plugin.getEconomyManager().deposit(seller, finalOffer.getAmount(), ai.getCurrency());
 
                         // Mark offer as accepted
                         updateOfferStatus(offerId, "ACCEPTED");

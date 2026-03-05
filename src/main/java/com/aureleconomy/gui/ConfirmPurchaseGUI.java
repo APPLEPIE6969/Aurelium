@@ -68,7 +68,21 @@ public class ConfirmPurchaseGUI extends GUIHolder {
     public void handleClick(InventoryClickEvent event) {
         Player player = (Player) event.getWhoClicked();
         int slot = event.getSlot();
+
+        // Prevent clicking in bottom inventory entirely
+        if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) {
+            event.setCancelled(true);
+            return;
+        }
+
         event.setCancelled(true);
+
+        // Prevent double click dupe
+        if (auction.isEnded()) {
+            player.sendMessage(Component.text("Transaction already processing.", NamedTextColor.RED));
+            player.closeInventory();
+            return;
+        }
 
         if (slot == 11) { // Confirm
             if (plugin.getEconomyManager().has(player, amount)) {
@@ -86,6 +100,7 @@ public class ConfirmPurchaseGUI extends GUIHolder {
                     }
 
                     // Finalize Buy It Now
+                    auction.setEnded(true);
                     plugin.getEconomyManager().withdraw(player, amount);
                     plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
                     plugin.getAuctionManager().endAuction(auction);

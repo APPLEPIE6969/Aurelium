@@ -29,6 +29,12 @@ permissions:
   aureleconomy.orders:
     description: Allows using /orders
     default: true
+  aureleconomy.web:
+    description: Allows access to the web dashboard via /web
+    default: true
+  aureleconomy.stocks:
+    description: Allows access to the market stocks via /stocks
+    default: true
 
 commands:
   bal:
@@ -65,6 +71,10 @@ commands:
     description: Manage Buy Orders - create, fill, cancel, or browse.
     usage: /orders [create|fill|cancel|my|search|help]
     permission: aureleconomy.orders
+  web:
+    description: Open the web market dashboard in your browser.
+    usage: /web
+    permission: aureleconomy.web
 
 libraries:
   - org.xerial:sqlite-jdbc:3.45.3.0

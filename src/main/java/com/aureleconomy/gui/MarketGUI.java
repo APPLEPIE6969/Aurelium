@@ -117,6 +117,22 @@ public class MarketGUI extends GUIHolder {
         int totalItems = allItems.size();
         int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
 
+        // Search Button
+        inventory.setItem(46, new ItemBuilder(Material.COMPASS)
+                .name(Component.text(searchQuery != null ? "Change Search: " + searchQuery : "Search Market",
+                        NamedTextColor.AQUA))
+                .lore(Component.text("Click to find specific items", NamedTextColor.GRAY))
+                .build());
+
+        // Page Indicator Book (Middle)
+        inventory.setItem(49, new ItemBuilder(Material.BOOK)
+                .name(Component.text("Page " + (page + 1) + " of " + totalPages, NamedTextColor.WHITE))
+                .lore(Component.text(
+                        searchQuery != null ? "Search Results: " + totalItems : "Total Items: " + totalItems,
+                        NamedTextColor.GRAY))
+                .build());
+
+        // Navigation Arrows
         if (page > 0) {
             inventory.setItem(48,
                     new ItemBuilder(Material.PAPER).name(Component.text("Previous Page", NamedTextColor.YELLOW))
@@ -128,16 +144,9 @@ public class MarketGUI extends GUIHolder {
                     new ItemBuilder(Material.PAPER).name(Component.text("Next Page", NamedTextColor.YELLOW)).build());
         }
 
-        // Back button / Clear Search
-        inventory.setItem(49, new ItemBuilder(Material.BARRIER)
+        // Back button / Clear Search (moved from 49 to 45 to make room for book)
+        inventory.setItem(45, new ItemBuilder(Material.BARRIER)
                 .name(Component.text(searchQuery != null ? "Clear Search" : "Back to Categories", NamedTextColor.RED))
-                .build());
-
-        // Search Button
-        inventory.setItem(46, new ItemBuilder(Material.COMPASS)
-                .name(Component.text(searchQuery != null ? "Change Search: " + searchQuery : "Search Market",
-                        NamedTextColor.AQUA))
-                .lore(Component.text("Click to find specific items", NamedTextColor.GRAY))
                 .build());
 
         int startIndex = page * itemsPerPage;
@@ -151,10 +160,13 @@ public class MarketGUI extends GUIHolder {
 
             // Price Logic
             double buyPrice;
+            String currency;
             if (entry.material == Material.SPAWNER && entry.customName != null) {
                 buyPrice = plugin.getMarketManager().getBuyPrice(entry.customName);
+                currency = plugin.getMarketManager().getCurrency(entry.customName);
             } else {
                 buyPrice = plugin.getMarketManager().getBuyPrice(entry.material);
+                currency = plugin.getMarketManager().getCurrency(entry.material);
             }
 
             // Item Creation
@@ -189,7 +201,8 @@ public class MarketGUI extends GUIHolder {
 
             if (buyPrice > 0) {
                 builder.lore(
-                        Component.text("Buy: " + plugin.getEconomyManager().format(buyPrice), NamedTextColor.GREEN));
+                        Component.text("Cost: " + plugin.getEconomyManager().format(buyPrice, currency),
+                                NamedTextColor.GREEN));
                 builder.lore(Component.text("Left-Click to Buy (1)", NamedTextColor.YELLOW));
                 builder.lore(Component.text("Shift-Left-Click to Buy (64)", NamedTextColor.YELLOW));
             }
@@ -204,6 +217,12 @@ public class MarketGUI extends GUIHolder {
     public void handleClick(InventoryClickEvent event) {
         event.setCancelled(true);
         Player player = (Player) event.getWhoClicked();
+
+        // Prevent clicking in bottom inventory entirely
+        if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) {
+            return;
+        }
+
         int slot = event.getSlot();
 
         if (category == null) {
@@ -215,7 +234,7 @@ public class MarketGUI extends GUIHolder {
             }
         } else {
             // Item Menu
-            if (slot == 49) {
+            if (slot == 45 || (slot == 49 && searchQuery != null)) { // Back or middle book if searching
                 if (searchQuery != null) {
                     searchQuery = null;
                     refresh();
@@ -224,8 +243,35 @@ public class MarketGUI extends GUIHolder {
                 }
             } else if (slot == 48 && page > 0) {
                 new MarketGUI(plugin, player, category, page - 1).open(player);
-            } else if (slot == 50 && itemSlots.size() == 45) { // Rough check, ideally track total pages
-                new MarketGUI(plugin, player, category, page + 1).open(player);
+            } else if (slot == 50) {
+                // Calculate total pages for limit check
+                List<MarketEntry> allItems;
+                if (searchQuery != null) {
+                    allItems = new java.util.ArrayList<>();
+                    String query = searchQuery.toLowerCase();
+                    for (Category cat : Category.values()) {
+                        if (cat == Category.ALL_ITEMS)
+                            continue;
+                        for (MarketEntry entry : MarketItems.getItems(cat)) {
+                            String name = (entry.customName != null ? entry.customName : entry.material.name())
+                                    .toLowerCase();
+                            if (name.contains(query))
+                                allItems.add(entry);
+                        }
+                    }
+                } else {
+                    allItems = MarketItems.getItems(category);
+                }
+
+                // Filter blacklisted
+                allItems = allItems.stream().filter(entry -> !plugin.getMarketManager().isBlacklisted(entry.material))
+                        .collect(java.util.stream.Collectors.toList());
+                int itemsPerPage = 45;
+                int totalPages = (int) Math.ceil((double) allItems.size() / itemsPerPage);
+
+                if (page < totalPages - 1) {
+                    new MarketGUI(plugin, player, category, page + 1).open(player);
+                }
             } else if (slot == 46) {
                 promptSearch(player);
             } else if (itemSlots.containsKey(slot)) {
@@ -249,10 +295,13 @@ public class MarketGUI extends GUIHolder {
 
         // Price Calculation
         double unitPrice;
+        String currency;
         if (entry.material == Material.SPAWNER && entry.customName != null) {
             unitPrice = plugin.getMarketManager().getBuyPrice(entry.customName);
+            currency = plugin.getMarketManager().getCurrency(entry.customName);
         } else {
             unitPrice = plugin.getMarketManager().getBuyPrice(entry.material);
+            currency = plugin.getMarketManager().getCurrency(entry.material);
         }
 
         // Sell Logic uses SELL price now
@@ -272,7 +321,7 @@ public class MarketGUI extends GUIHolder {
         double totalPrice = unitPrice * amount;
 
         if (isBuy) {
-            if (plugin.getEconomyManager().getBalance(player) >= totalPrice) {
+            if (plugin.getEconomyManager().getBalance(player, currency) >= totalPrice) {
                 // Give Item
 
                 // Wait, finding by material might find WRONG spawner if multiple types exist
@@ -298,13 +347,15 @@ public class MarketGUI extends GUIHolder {
                     meta.setBlockState(spawner);
                     meta.displayName(Component.text(entry.customName, NamedTextColor.AQUA));
                     item.setItemMeta(meta);
+                } else if (entry.material == Material.ENCHANTED_BOOK && entry.customName != null) {
+                    item = com.aureleconomy.market.MarketItems.createEnchantedBook(entry.customName);
                 } else {
                     item = new ItemStack(entry.material);
                 }
                 item.setAmount(amount);
 
                 if (com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), item, amount)) {
-                    plugin.getEconomyManager().withdraw(player, totalPrice);
+                    plugin.getEconomyManager().withdraw(player, totalPrice, currency);
                     player.getInventory().addItem(item);
 
                     // Dynamic Pricing Trigger

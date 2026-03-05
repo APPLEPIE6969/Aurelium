@@ -2,6 +2,7 @@ package com.aureleconomy.commands;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.gui.MarketGUI;
+import com.aureleconomy.gui.ShopGUI;
 import net.kyori.adventure.text.Component;
 import org.bukkit.command.Command;
 import org.bukkit.command.TabExecutor;
@@ -33,7 +34,12 @@ public class MarketCommand implements TabExecutor {
             return true;
         }
 
-        new MarketGUI(plugin, player).open(player);
+        String guiMode = plugin.getConfig().getString("market.gui-mode", "modern").toLowerCase();
+
+        switch (guiMode) {
+            case "classic" -> new MarketGUI(plugin, player).open(player);
+            default -> new ShopGUI(plugin, player).open(player);
+        }
         return true;
     }
 

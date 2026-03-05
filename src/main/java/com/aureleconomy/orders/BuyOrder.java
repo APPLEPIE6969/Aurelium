@@ -10,16 +10,18 @@ public class BuyOrder {
     private final int amountRequested;
     private int amountFilled;
     private final double pricePerPiece;
+    private final String currency;
     private String status;
 
     public BuyOrder(int id, UUID buyerUuid, Material material, int amountRequested, int amountFilled,
-            double pricePerPiece, String status) {
+            double pricePerPiece, String currency, String status) {
         this.id = id;
         this.buyerUuid = buyerUuid;
         this.material = material;
         this.amountRequested = amountRequested;
         this.amountFilled = amountFilled;
         this.pricePerPiece = pricePerPiece;
+        this.currency = currency;
         this.status = status;
     }
 
@@ -45,6 +47,10 @@ public class BuyOrder {
 
     public double getPricePerPiece() {
         return pricePerPiece;
+    }
+
+    public String getCurrency() {
+        return currency;
     }
 
     public String getStatus() {

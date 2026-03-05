@@ -17,6 +17,7 @@ public class MarketManager {
     private final Map<String, MarketEntry> entryCache = new ConcurrentHashMap<>();
     private final Map<String, Double> buyPrices = new ConcurrentHashMap<>(); // Key: Material name OR Custom Name
     private final Map<String, Double> sellPrices = new ConcurrentHashMap<>();
+    private final Map<String, String> itemCurrencies = new ConcurrentHashMap<>();
     private final Set<String> alertedItems = ConcurrentHashMap.newKeySet();
     private double priceIncreaseRate;
     private double priceDecreaseRate;
@@ -123,6 +124,13 @@ public class MarketManager {
 
                 buyPrices.put(key, config.getDouble(basePath + ".buy"));
                 sellPrices.put(key, config.getDouble(basePath + ".sell"));
+
+                String curPath = basePath + ".currency";
+                if (!config.contains(curPath)) {
+                    config.set(curPath, plugin.getEconomyManager().getDefaultCurrency());
+                    saveNeeded = true;
+                }
+                itemCurrencies.put(key, config.getString(curPath, plugin.getEconomyManager().getDefaultCurrency()));
             }
         }
 
@@ -281,10 +289,20 @@ public class MarketManager {
             return 0.0;
 
         double currentBuyPrice = getBuyPrice(key);
-        double multiplier = currentBuyPrice / baseBuyPrice;
+
+        // Calculate the ratio saved in config
+        double ratio = configSell / baseBuyPrice;
+
+        // If the saved ratio is identical to 1.0 (or very close), it's a bug from an
+        // older version
+        // of the plugin where buy=sell. Force it to use the global default ratio to fix
+        // the economy.
+        if (ratio > 0.95) {
+            ratio = plugin.getConfig().getDouble("market.default-sell-ratio", 0.5);
+        }
 
         // Apply exactly the same stock market multiplier to the base sell price
-        double dynamicSellPrice = configSell * multiplier;
+        double dynamicSellPrice = currentBuyPrice * ratio;
 
         // Anti-exploit safeguard: dynamic sell can never exceed dynamic buy
         if (dynamicSellPrice >= currentBuyPrice) {
@@ -292,6 +310,14 @@ public class MarketManager {
         }
 
         return dynamicSellPrice;
+    }
+
+    public String getCurrency(String key) {
+        return itemCurrencies.getOrDefault(key, plugin.getEconomyManager().getDefaultCurrency());
+    }
+
+    public String getCurrency(Material material) {
+        return getCurrency(material.name());
     }
 
     public java.util.List<MarketEntry> getItemsByCategory(String categoryName) {

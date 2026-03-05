@@ -17,6 +17,8 @@ public class AurelEconomy extends JavaPlugin {
     private com.aureleconomy.utils.ChatPromptManager chatPromptManager;
     private com.aureleconomy.orders.OrderManager orderManager;
     private VaultEconomy vaultEconomy;
+    private com.aureleconomy.web.WebServer webServer;
+    private com.aureleconomy.web.CloudSyncManager cloudSync;
     private final java.util.Set<org.bukkit.entity.Player> activeViewers = java.util.Collections
             .newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
 
@@ -27,10 +29,9 @@ public class AurelEconomy extends JavaPlugin {
         // Auto-Install Vault if missing
         com.aureleconomy.utils.VaultInstaller.install(this);
 
-        // Save/Update config
-        saveDefaultConfig();
-        getConfig().options().copyDefaults(true);
-        saveConfig();
+        // Save/Update config — auto-merges new keys from JAR while preserving user
+        // values
+        upgradeConfig();
 
         // Initialize Database
         databaseManager = new DatabaseManager(this);
@@ -68,6 +69,11 @@ public class AurelEconomy extends JavaPlugin {
         com.aureleconomy.commands.OrdersCommand ordersCmd = new com.aureleconomy.commands.OrdersCommand(this);
         getCommand("orders").setExecutor(ordersCmd);
         getCommand("orders").setTabCompleter(ordersCmd);
+
+        // Register /web command
+        if (getCommand("web") != null) {
+            getCommand("web").setExecutor(new com.aureleconomy.commands.WebCommand(this));
+        }
 
         getServer().getPluginManager().registerEvents(new com.aureleconomy.listeners.GUIListener(this), this);
         getServer().getPluginManager().registerEvents(new com.aureleconomy.listeners.SpawnerListener(this), this);
@@ -111,10 +117,31 @@ public class AurelEconomy extends JavaPlugin {
         }, 6000L, 6000L);
 
         getComponentLogger().info("AurelEconomy has been enabled!");
+
+        // Start web dashboard if enabled
+        if (getConfig().getBoolean("web.enabled", false)) {
+            String webMode = getConfig().getString("web.mode", "cloud").toLowerCase();
+            if ("local".equals(webMode)) {
+                webServer = new com.aureleconomy.web.WebServer(this);
+                if (!webServer.start()) {
+                    webServer = null;
+                }
+            } else {
+                // Cloud mode — connect to external Render server
+                cloudSync = new com.aureleconomy.web.CloudSyncManager(this);
+                cloudSync.start();
+            }
+        }
     }
 
     @Override
     public void onDisable() {
+        if (webServer != null) {
+            webServer.stop();
+        }
+        if (cloudSync != null) {
+            cloudSync.stop();
+        }
         if (marketManager != null) {
             marketManager.persistPrices();
         }
@@ -158,5 +185,64 @@ public class AurelEconomy extends JavaPlugin {
 
     public void removeViewer(org.bukkit.entity.Player player) {
         activeViewers.remove(player);
+    }
+
+    public com.aureleconomy.web.WebServer getWebServer() {
+        return webServer;
+    }
+
+    public com.aureleconomy.web.CloudSyncManager getCloudSync() {
+        return cloudSync;
+    }
+
+    /**
+     * Upgrades config.yml on every startup:
+     * 1. Load the user's existing config values
+     * 2. Delete the old config file
+     * 3. Save the fresh default config from the JAR (with full comments)
+     * 4. Re-apply every value the user had set
+     * 5. Save to disk
+     *
+     * Result: the config always has the latest comments and new sections
+     * from the JAR, but the user's custom values are never lost.
+     */
+    private void upgradeConfig() {
+        java.io.File configFile = new java.io.File(getDataFolder(), "config.yml");
+
+        if (!configFile.exists()) {
+            // First run — just save the default
+            saveDefaultConfig();
+            return;
+        }
+
+        // 1. Snapshot every key the user currently has
+        org.bukkit.configuration.file.YamlConfiguration oldConfig = org.bukkit.configuration.file.YamlConfiguration
+                .loadConfiguration(configFile);
+        java.util.Map<String, Object> userValues = new java.util.LinkedHashMap<>();
+        for (String key : oldConfig.getKeys(true)) {
+            if (!oldConfig.isConfigurationSection(key)) {
+                userValues.put(key, oldConfig.get(key));
+            }
+        }
+
+        // 2. Delete old file
+        configFile.delete();
+
+        // 3. Save fresh default from JAR (contains all new keys + comments)
+        saveDefaultConfig();
+        reloadConfig();
+
+        // 4. Re-apply the user's values (never overwrite with defaults)
+        for (java.util.Map.Entry<String, Object> entry : userValues.entrySet()) {
+            // Skip config-version — always use the latest from the JAR
+            if (entry.getKey().equals("config-version"))
+                continue;
+            getConfig().set(entry.getKey(), entry.getValue());
+        }
+
+        // 5. Persist
+        saveConfig();
+        getComponentLogger().info("config.yml updated to version "
+                + getConfig().getInt("config-version", 0) + " — your settings have been preserved.");
     }
 }

@@ -7,6 +7,13 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
+import org.bukkit.NamespacedKey;
+import io.papermc.paper.registry.RegistryAccess;
+import io.papermc.paper.registry.RegistryKey;
+
 public class MarketItems {
 
         public enum Category {
@@ -58,6 +65,63 @@ public class MarketItems {
                         this.customSellPrice = sellPrice;
                         this.customName = customName;
                 }
+        }
+
+        public static ItemStack createEnchantedBook(String name) {
+                ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
+                EnchantmentStorageMeta meta = (EnchantmentStorageMeta) book.getItemMeta();
+                if (meta == null || name == null)
+                        return book;
+
+                String[] parts = name.split(" ");
+                if (parts.length < 2 && !name.equals("Flame") && !name.equals("Infinity") && !name.equals("Channeling")
+                                && !name.equals("Multishot") && !name.equals("Mending"))
+                        return book;
+
+                String roman = "";
+                String enchName = name;
+                int level = 1;
+
+                if (parts.length > 1) {
+                        roman = parts[parts.length - 1];
+                        if (roman.matches("^[IVX]+$")) {
+                                enchName = name.substring(0, name.lastIndexOf(" "));
+                                switch (roman) {
+                                        case "I":
+                                                level = 1;
+                                                break;
+                                        case "II":
+                                                level = 2;
+                                                break;
+                                        case "III":
+                                                level = 3;
+                                                break;
+                                        case "IV":
+                                                level = 4;
+                                                break;
+                                        case "V":
+                                                level = 5;
+                                                break;
+                                }
+                        }
+                }
+
+                String bukkitName = enchName.toUpperCase().replace(" ", "_");
+
+                // Handle special cases where Bukkit names differ from in-game names
+                if (bukkitName.equals("SWEEPING_EDGE"))
+                        bukkitName = "SWEEPING_COLLISION";
+
+                Enchantment ench = RegistryAccess.registryAccess()
+                                .getRegistry(RegistryKey.ENCHANTMENT)
+                                .get(NamespacedKey.minecraft(bukkitName.toLowerCase()));
+
+                if (ench != null) {
+                        meta.addStoredEnchant(ench, level, true);
+                }
+
+                book.setItemMeta(meta);
+                return book;
         }
 
         private static final Map<Category, List<MarketEntry>> items = new EnumMap<>(Category.class);

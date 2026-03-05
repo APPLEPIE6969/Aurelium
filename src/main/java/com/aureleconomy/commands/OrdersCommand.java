@@ -97,7 +97,16 @@ public class OrdersCommand implements TabExecutor {
             return;
         }
 
-        plugin.getOrderManager().createOrder(player, material, amount, pricePerPiece);
+        String currency = plugin.getEconomyManager().getDefaultCurrency();
+        if (args.length >= 5) {
+            currency = args[4];
+            if (!plugin.getConfig().getConfigurationSection("economy.currencies").contains(currency)) {
+                player.sendMessage(Component.text("Invalid currency: " + currency, NamedTextColor.RED));
+                return;
+            }
+        }
+
+        plugin.getOrderManager().createOrder(player, material, amount, pricePerPiece, currency);
     }
 
     // /orders fill <orderId> [amount]
@@ -171,7 +180,8 @@ public class OrdersCommand implements TabExecutor {
                                     NamedTextColor.GREEN))
                             .append(Component.text(" @ ", NamedTextColor.GRAY))
                             .append(Component.text(
-                                    plugin.getEconomyManager().format(order.getPricePerPiece()) + " each",
+                                    plugin.getEconomyManager().format(order.getPricePerPiece(), order.getCurrency())
+                                            + " each",
                                     NamedTextColor.WHITE)));
         }
         player.sendMessage(Component.text("Use /orders cancel <id> to cancel an order.", NamedTextColor.GRAY,
@@ -209,7 +219,8 @@ public class OrdersCommand implements TabExecutor {
                             .append(Component.text(order.getAmountRemaining() + " needed", NamedTextColor.GREEN))
                             .append(Component.text(" @ ", NamedTextColor.GRAY))
                             .append(Component.text(
-                                    plugin.getEconomyManager().format(order.getPricePerPiece()) + " each",
+                                    plugin.getEconomyManager().format(order.getPricePerPiece(), order.getCurrency())
+                                            + " each",
                                     NamedTextColor.WHITE)));
         }
         player.sendMessage(Component.text("Use /orders fill <id> to sell items to an order.", NamedTextColor.GRAY,

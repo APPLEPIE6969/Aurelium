@@ -16,6 +16,7 @@ import org.bukkit.inventory.ItemStack;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SellGUI extends GUIHolder {
 
@@ -214,7 +215,7 @@ public class SellGUI extends GUIHolder {
     }
 
     private void calculateAndPrompt() {
-        double total = 0;
+        Map<String, Double> totals = new HashMap<>();
         boolean hasSellable = false;
 
         for (int i = 0; i < 45; i++) {
@@ -222,9 +223,10 @@ public class SellGUI extends GUIHolder {
             if (item != null && item.getType() != Material.AIR) {
                 String key = getItemKey(item);
                 double price = plugin.getMarketManager().getSellPrice(key);
+                String currency = plugin.getMarketManager().getCurrency(key);
 
                 if (price > 0) {
-                    total += price * item.getAmount();
+                    totals.put(currency, totals.getOrDefault(currency, 0.0) + (price * item.getAmount()));
                     hasSellable = true;
                 }
             }
@@ -237,22 +239,27 @@ public class SellGUI extends GUIHolder {
 
         this.isConfirming = true;
 
-        // update items for confirmation
         inventory.setItem(45, new ItemBuilder(Material.RED_CONCRETE)
                 .name(Component.text("Cancel", NamedTextColor.RED))
                 .build());
 
-        inventory.setItem(49, new ItemBuilder(Material.LIME_CONCRETE)
-                .name(Component.text("Confirm Sell", NamedTextColor.GREEN))
-                .lore(Component.text("Total Value: " + plugin.getEconomyManager().format(total), NamedTextColor.YELLOW),
-                        Component.text("Click to confirm", NamedTextColor.GRAY))
-                .build());
+        ItemBuilder confirmButton = new ItemBuilder(Material.LIME_CONCRETE)
+                .name(Component.text("Confirm Sell", NamedTextColor.GREEN));
+
+        for (Map.Entry<String, Double> entry : totals.entrySet()) {
+            confirmButton.lore(
+                    Component.text("Value: " + plugin.getEconomyManager().format(entry.getValue(), entry.getKey()),
+                            NamedTextColor.YELLOW));
+        }
+        confirmButton.lore(Component.text("Click to confirm", NamedTextColor.GRAY));
+
+        inventory.setItem(49, confirmButton.build());
 
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1, 1);
     }
 
     private void performSell() {
-        double finalTotal = 0;
+        Map<String, Double> finalTotals = new HashMap<>();
         List<ItemStack> unsold = new ArrayList<>();
 
         for (int i = 0; i < 45; i++) {
@@ -260,8 +267,9 @@ public class SellGUI extends GUIHolder {
             if (item != null && item.getType() != Material.AIR) {
                 String key = getItemKey(item);
                 double price = plugin.getMarketManager().getSellPrice(key);
+                String currency = plugin.getMarketManager().getCurrency(key);
                 if (price > 0) {
-                    finalTotal += price * item.getAmount();
+                    finalTotals.put(currency, finalTotals.getOrDefault(currency, 0.0) + (price * item.getAmount()));
                     inventory.setItem(i, null); // Remove sold item
                     plugin.getMarketManager().onTransaction(key, false, item.getAmount()); // Trigger Market Supply Drop
                 } else {
@@ -270,10 +278,13 @@ public class SellGUI extends GUIHolder {
             }
         }
 
-        if (finalTotal > 0) {
-            plugin.getEconomyManager().deposit(player, finalTotal);
-            player.sendMessage(Component.text("Sold items for " + plugin.getEconomyManager().format(finalTotal),
-                    NamedTextColor.GREEN));
+        if (!finalTotals.isEmpty()) {
+            for (Map.Entry<String, Double> entry : finalTotals.entrySet()) {
+                plugin.getEconomyManager().deposit(player, entry.getValue(), entry.getKey());
+                player.sendMessage(Component.text(
+                        "Sold items for " + plugin.getEconomyManager().format(entry.getValue(), entry.getKey()),
+                        NamedTextColor.GREEN));
+            }
             player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1);
         }
 

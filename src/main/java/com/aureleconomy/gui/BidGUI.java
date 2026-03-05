@@ -80,6 +80,13 @@ public class BidGUI extends GUIHolder {
 
     public void handleClick(InventoryClickEvent event) {
         Player player = (Player) event.getWhoClicked();
+
+        // Prevent clicking in bottom inventory entirely
+        if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) {
+            event.setCancelled(true);
+            return;
+        }
+
         int slot = event.getSlot();
         event.setCancelled(true);
 

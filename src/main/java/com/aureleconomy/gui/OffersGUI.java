@@ -79,6 +79,12 @@ public class OffersGUI extends GUIHolder {
         if (clicked == null || clicked.getType() == Material.AIR)
             return;
 
+        Player player = (Player) event.getWhoClicked();
+        // Prevent clicking in bottom inventory entirely
+        if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) {
+            return;
+        }
+
         if (event.getSlot() == 49) {
             new AuctionGUI(plugin, player, false).open();
             return;

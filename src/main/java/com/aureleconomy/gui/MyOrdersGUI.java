@@ -57,7 +57,9 @@ public class MyOrdersGUI extends GUIHolder {
                     .lore(
                             Component.empty(),
                             Component.text("Price Per Piece: ", NamedTextColor.GRAY)
-                                    .append(Component.text(plugin.getEconomyManager().format(order.getPricePerPiece()),
+                                    .append(Component.text(
+                                            plugin.getEconomyManager().format(order.getPricePerPiece(),
+                                                    order.getCurrency()),
                                             NamedTextColor.GREEN)),
                             Component.text("Requested: ", NamedTextColor.GRAY)
                                     .append(Component.text(order.getAmountRequested(), NamedTextColor.YELLOW)),

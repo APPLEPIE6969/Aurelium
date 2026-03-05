@@ -1,7 +1,10 @@
 # ╔═══════════════════════════════════════════════════╗
 # ║           AurelEconomy Configuration              ║
-# ║            v1.2.0 — Full Reference                ║
+# ║            v1.2.3 — Full Reference                ║
 # ╚═══════════════════════════════════════════════════╝
+
+# DO NOT EDIT — used by the plugin to auto-add new config keys on updates
+config-version: 1
 
 # ─────────────── Database ───────────────
 database:
@@ -21,13 +24,23 @@ database:
 
 # ─────────────── Economy ───────────────
 economy:
-  # The full name of your server's currency (shown in messages)
-  currency-name: "Aurels"
-  # The symbol displayed next to prices (e.g., ₳, $, €)
-  currency-symbol: "₳"
-  # Balance given to new players on first join
-  starting-balance: 100.0
-  # Maximum balance a player can hold (set to -1 for no limit)
+  # The default currency used for Vault, generic fallbacks, and migrated existing balances
+  default-currency: "Aurels"
+  
+  # Configure all allowed currencies on your server here
+  currencies:
+    Aurels:
+      symbol: "₳"
+      starting-balance: 100.0
+    # Examples of how to add more currencies:
+    # Dollars:
+    #   symbol: "$"
+    #   starting-balance: 0.0
+    # Euros:
+    #   symbol: "€"
+    #   starting-balance: 50.0
+
+  # Maximum balance a player can hold (-1 for no limit)
   max-balance: -1
   # Minimum amount allowed in a /pay transaction
   min-pay-amount: 0.01
@@ -35,19 +48,24 @@ economy:
   # 💬 Messages (supports MiniMessage formatting)
   # Placeholders: %amount%, %symbol%, %player%, %currency%
   prefix: "<gold>[AurelEconomy] <gray>"
-  balance: "Balance: %amount%%symbol%"
-  balance-other: "Balance of %player%: %amount%%symbol%"
+  balance: "Balance (%currency%): %amount%%symbol%"
+  balance-other: "Balance of %player% (%currency%): %amount%%symbol%"
   paid: "You paid <green>%amount%%symbol%</green> to <yellow>%player%</yellow>."
   received: "You received <green>%amount%%symbol%</green> from <yellow>%player%</yellow>."
   insufficient-funds: "You don't have enough %currency%!"
-  admin-give: "Gave <green>%amount%%symbol%</green> to <yellow>%player%</yellow>."
-  admin-take: "Took <red>%amount%%symbol%</red> from <yellow>%player%</yellow>."
-  admin-set: "Set <yellow>%player%</yellow>'s balance to <green>%amount%%symbol%</green>."
+  admin-give: "Gave <green>%amount%%symbol%</green> (%currency%) to <yellow>%player%</yellow>."
+  admin-take: "Took <red>%amount%%symbol%</red> (%currency%) from <yellow>%player%</yellow>."
+  admin-set: "Set <yellow>%player%</yellow>'s balance to <green>%amount%%symbol%</green> (%currency%)."
 
 # ─────────────── Market (Admin Shop) ───────────────
 market:
   # Master switch: enable or disable the entire /market system
   enabled: true
+  # Which GUI to show when a player runs /market
+  # Options:
+  #   "classic" — Original plain chest inventory (MarketGUI)
+  #   "modern"  — Styled chest with gradient titles, glass borders, and MiniMessage lore (ShopGUI)
+  gui-mode: modern
   # Enable or disable the dynamic pricing algorithm
   dynamic-pricing: true
   # Percentage to increase price when a player BUYS from the shop
@@ -121,4 +139,38 @@ buy-orders:
   # Fee to create an order (percentage of total order cost, taken as an economic sink)
   creation-fee-percent: 2.0
   # Tax taken from the seller when they fulfill a buy order
+  # Tax taken from the seller when they fulfill a buy order
   sales-tax-percent: 5.0
+
+# ─────────────── Web Dashboard ───────────────
+# Serves a browser-based market interface (Modrinth-style)
+# Players use /web or /market (when gui-mode is "web") to get a clickable link
+web:
+  # Enable the web dashboard
+  enabled: true
+  # Mode: "local" (embedded server, needs open port) or "cloud" (central Render server, works everywhere)
+  # Options:
+  #   "local" — Runs a web server inside the plugin. Requires an open port on this machine.
+  #   "cloud" — Syncs data to an external web server (Render). Works on shared hosting (MineKeep, Apex, etc.)
+  mode: cloud
+
+  # ── Local mode settings (only used when mode is "local") ──
+  local:
+    # The public IP or hostname players use to reach this server
+    # Examples: "play.myserver.com", "192.168.1.50", "localhost" (same machine)
+    host: "localhost"
+    # Port to listen on (must be opened in your firewall)
+    port: 8585
+    # Session timeout in minutes
+    session-timeout-minutes: 10
+
+  # ── Cloud mode settings (only used when mode is "cloud") ──
+  cloud:
+    # URL of the central web server (e.g. your Render deployment)
+    url: "https://webaureliummc.onrender.com"
+    # Unique server ID (auto-generated on first run — do not share with anyone)
+    server-id: ""
+    # API key for authentication (auto-generated on first run — do not share with anyone)
+    api-key: ""
+    # How often to sync market data (in seconds)
+    sync-interval: 30

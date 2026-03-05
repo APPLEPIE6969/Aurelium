@@ -181,6 +181,8 @@ public class AuctionGUI extends GUIHolder {
 
     @Override
     public synchronized void handleClick(InventoryClickEvent event) {
+        event.setCancelled(true); // Always cancel first to prevent item loss/dupes
+
         Player player = (Player) event.getWhoClicked();
         int slot = event.getSlot();
         ItemStack clicked = event.getCurrentItem();
@@ -188,7 +190,10 @@ public class AuctionGUI extends GUIHolder {
         if (clicked == null || clicked.getType() == Material.AIR)
             return;
 
-        event.setCancelled(true);
+        // Prevent clicking in bottom inventory entirely to execute GUI commands
+        if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) {
+            return;
+        }
 
         if (slot == 49) {
             if (searchQuery != null && !isCollectionBin) {
@@ -242,8 +247,8 @@ public class AuctionGUI extends GUIHolder {
                     double fee = plugin.getConfig().getDouble("auction.listing-fee", 10.0);
                     if (plugin.getEconomyManager().has(player, fee)) {
                         plugin.getEconomyManager().withdraw(player, fee);
-                        plugin.getAuctionManager().listAuction(player.getUniqueId(), hand.clone(), price, true,
-                                86400000L * 7, fee);
+                        plugin.getAuctionManager().listAuction(player.getUniqueId(), hand.clone(), price,
+                                plugin.getEconomyManager().getDefaultCurrency(), true, 86400000L * 7, fee);
                         player.getInventory().setItemInMainHand(null);
                         player.sendMessage(Component.text("Item listed for " + price, NamedTextColor.GREEN));
                     } else {
@@ -277,10 +282,10 @@ public class AuctionGUI extends GUIHolder {
             // I'll assume I did it for now, and will add it when I write the file.
 
             if (id != null) {
-                // Find auction by ID from DB or manager?
-                // Manager only has active.
-                // Collection bin items are in DB.
-                // We should collect it.
+                // Prevent duplicate processing via macro spam by instantly clearing the slot
+                // locally
+                event.getClickedInventory().setItem(slot, null);
+
                 plugin.getAuctionManager().markCollected(id);
 
                 // Remove lore

@@ -1,20 +1,47 @@
 # Aurelium 💎
 
-**Aurelium** is a comprehensive, standalone economy plugin for Minecraft Paper 1.21.11. It features a custom currency (**Aurels**), a flexible Admin Market, a player-driven Auction House, and seamless Vault integration.
+> **⚠️ EXPERIMENTAL WEB FEATURES ⚠️**
+> 
+> *The newly added Web Dashboard features are currently in active development. Please expect potential bugs or instability if you enable `web.enabled` in your configuration. The core in-game economy, GUI markets, and auction house are mostly stable.*
+
+**Aurelium** is a comprehensive, standalone economy plugin for Minecraft Paper 1.21.11. It features a multi-currency system, a flexible Server Market with three interface modes (classic chest, modern styled, or browser-based web dashboard), a player-driven Auction House, Buy Orders, and seamless Vault integration.
 
 ## ✨ Features
 
+### 🌐 Web Dashboard (Optional)
+Aurelium includes a modern, responsive web application that players can use to browse the Server Market, monitor stock trends, and engage with the Auction House from their browser.
+
+* **Server Market:** Fully functional directly from the web—purchase items and have them delivered instantly in-game!
+* **Auction House:** Fully interactive from the web—place bids and buyout items (BIN) securely. 
+* **Buy Orders:** Fully interactive from the web—fulfill player buy orders straight from your online inventory.
+* **Price Tracker:** An interactive chart tracking detailed item price histories. 
+* **Live Sync:** Changes in-game reflect instantly on the web, and vice-versa. Click any item for an **interactive chart** with 7-day price history, smooth bezier curves, gradient fills, and hover tooltips.
+- **Price History**: Prices are recorded every 10 minutes and stored for 7 days for charts.
+- **Cloud Mode**: Optional cloud hosting via Render for always-accessible dashboards.
+- **Multi-Currency UI**: Correctly displays custom currency symbols (e.g., `₳`, `$`, `€`) synced perfectly from your `config.yml`.
+- **Icon Fallbacks**: Robust image loading seamlessly falls back to older Minecraft versions (1.20, 1.19, 1.18) if modern icons aren't available from external APIs yet.
+- **Secure Sessions**: Players use `/web` in-game to get a time-limited clickable link. Sessions use a rolling 1-hour timeout that resets on activity. Visiting the dashboard without a session shows a friendly error screen with instructions.
+- **Tab Sleep Mode**: When a player switches to another browser tab or minimizes the window, the entire dashboard goes to sleep — no network requests, no CPU usage. When they return, it instantly wakes up and loads fresh data.
+- **RAM Optimized**: Bulk data (auctions, orders, stocks, price history) is cached as raw JSON strings, keeping per-server memory usage under 1MB.
+- **Activation Queue**: If the cloud server reaches its 500MB RAM limit, new server registrations are fairly waitlisted until memory frees up.
+- **Configurable**: Port and enable/disable toggle in `config.yml`.
+
 ### 💰 Economy
-- **Currency**: "Aurels" (₳) - Customizable name and symbol.
+- **Multi-Currency**: Define multiple currencies (e.g., Aurels ₳, Dollars $, Euros €) with unique symbols and starting balances.
+- **Per-Item Currency**: Assign specific currencies to individual market items.
 - **Vault Support**: Fully compatible with Vault-dependent plugins (ShopGUI+, Essentials, etc.).
-- **Database**: Robust SQLite storage (no setup required).
+- **Database**: SQLite or MySQL storage with automatic migration support.
 - **Offline Earnings**: Get paid for auction sales even when you're offline.
 
 ### 🏪 Market
-A server-owned shop that functions like a **Stock Market**:
+A server-owned shop that functions like a **Stock Market**, with **three interface modes**:
+- **Classic**: Traditional chest-based inventory GUI.
+- **Modern**: Styled chest GUI with MiniMessage gradient titles, glass-pane borders, and formatted lore.
+- **Web**: A Modrinth-inspired browser dashboard (see Web Dashboard above).
 - **Demand/Supply Logic**: Prices automatically rise when people buy (Demand) and fall when they sell (Supply). Both Buy and Sell values scale proportionally.
 - **Anti-Exploit Safeguards**: Mathematically prevents the dynamic Sell price from ever exceeding the Buy price.
 - **Live UI Updates**: The `/market` and `/stocks` menus automatically refresh every **1 second** natively while open.
+- **Smart Pagination**: GUIs now feature **Page Indicator Books** in the center of the navigation bar, showing exactly what page you are on (e.g., "Page 1 of 5").
 - **Searchable Menus**: Easily find any item in the Market or Auction House using the new **Compass** search button.
 - **Market Crash Alerts**: Server-wide announcements when high-value items (Diamonds, Spawners, etc.) drop to bargain prices.
 - **Performance Optimized**: 
@@ -58,18 +85,19 @@ A global request system that lets players buy things they want even while offlin
 
 | Command | Description | Permission |
 | :--- | :--- | :--- |
-| `/bal [player]` | Check your own or another player's balance. | `aureleconomy.bal` |
-| `/pay <player> <amount>` | Pay another player. | `aureleconomy.pay` |
-| `/market` | Open the server market. | `aureleconomy.market` |
+| `/bal [player] [currency]` | Check your own or another player's balance. | `aureleconomy.bal` |
+| `/pay <player> <amount> [currency]` | Pay another player. | `aureleconomy.pay` |
+| `/market` | Open the in-game server market (Classic or Modern mode). | `aureleconomy.market` |
+| `/web` | Generate a secure link to the Browser Dashboard. | `aureleconomy.web` |
 | `/stocks` | View market trends. | `aureleconomy.stocks` |
 | `/orders` | Open the Buy Orders GUI. | `aureleconomy.orders` |
-| `/orders create <item> <amount> <price>` | Place a buy order via command. | `aureleconomy.orders` |
+| `/orders create <item> <amount> <price> [currency]` | Place a buy order via command. | `aureleconomy.orders` |
 | `/orders fill <id> [amount]` | Fulfill someone else's order from your inventory. | `aureleconomy.orders` |
 | `/orders cancel <id>` | Cancel your own order and get a refund. | `aureleconomy.orders` |
 | `/orders my` | List all your active buy orders with IDs. | `aureleconomy.orders` |
 | `/orders search <query>` | Search active orders by item name. | `aureleconomy.orders` |
 | `/ah` | Open the Auction House. | `aureleconomy.ah` |
-| `/ah sell <price> [duration]` | List item for BIN (Buy It Now). Duration optional (e.g. 1h, 7d). | `aureleconomy.ah` |
+| `/ah sell <price> [duration] [currency]` | List item for BIN (Buy It Now). Duration optional (e.g. 1h, 7d). | `aureleconomy.ah` |
 | `/ah bid <price> [duration]` | List item for Auction. Duration optional (e.g. 1h, 7d).| `aureleconomy.ah` |
 | `/ah offer <id> <qty>` | Send a private offer for an item. | `aureleconomy.ah` |
 | `/ah offers` | Manage incoming private offers. | `aureleconomy.ah` |
@@ -81,11 +109,11 @@ A global request system that lets players buy things they want even while offlin
 
 | Command | Description | Permission |
 | :--- | :--- | :--- |
-| `/eco <give/take/set> <player> <amount>` | Modify player balances. | `aureleconomy.admin` |
+| `/eco <give/take/set> <player> <amount> [currency]` | Modify player balances. | `aureleconomy.admin` |
 
 ## ⚙️ Setup
 
-1.  Download `Aurelium-1.2.2.jar`.
+1.  Download `Aurelium-1.3.0.jar`.
 2.  Place it in your server's `plugins/` folder.
 3.  **Restart** the server.
     - *Note: If Vault is not detected, Aurelium will automatically extract and install it into your plugins folder for you upon first run.*
@@ -126,41 +154,52 @@ database:
     password: "password"
     
 economy:
-  currency-name: "Aurels"           # Full currency name
-  currency-symbol: "₳"              # Symbol for prices
-  starting-balance: 100.0           # New player balance
-  max-balance: -1                   # Max balance (-1 = unlimited)
-  min-pay-amount: 0.01              # Minimum /pay transaction
+  default-currency: "Aurels"          # Default currency for Vault & fallbacks
+  currencies:
+    Aurels:
+      symbol: "₳"
+      starting-balance: 100.0
+    # Dollars:
+    #   symbol: "$"
+    #   starting-balance: 0.0
+  max-balance: -1                     # Max balance (-1 = unlimited)
+  min-pay-amount: 0.01                # Minimum /pay transaction
 
 market:
-  enabled: true                     # Master toggle for /market
-  dynamic-pricing: true             # Prices move on buy/sell
-  price-increase-per-buy: 0.001     # +0.1% per buy
-  price-decrease-per-sell: 0.001    # -0.1% per sell
-  default-sell-ratio: 0.5           # New items default sell = 50% of buy
-  price-floor: 0.2                  # Can't drop below 20% of base
-  price-ceiling: 5.0                # Can't rise above 500% of base
+  enabled: true                       # Master toggle for /market
+  gui-mode: modern                    # Interface for /market: "classic" or "modern"
+  dynamic-pricing: true               # Prices move on buy/sell
+  price-increase-per-buy: 0.001       # +0.1% per buy
+  price-decrease-per-sell: 0.001      # -0.1% per sell
+  default-sell-ratio: 0.5             # New items default sell = 50% of buy
+  price-floor: 0.2                    # Can't drop below 20% of base
+  price-ceiling: 5.0                  # Can't rise above 500% of base
   price-recovery:
-    enabled: true                   # Passive drift toward base
-    rate: 0.01                      # 1% of gap per cycle
-    interval-minutes: 10            # Recovery cycle frequency
+    enabled: true                     # Passive drift toward base
+    rate: 0.01                        # 1% of gap per cycle
+    interval-minutes: 10              # Recovery cycle frequency
 
 auction-house:
-  enabled: true                     # Master toggle for /ah
-  default-duration: 86400           # 24 hours (seconds)
-  max-duration: 604800              # 7 days max
-  listing-fee-percent: 2.0          # Fee to list
-  sales-tax-percent: 5.0            # Tax on sale
-  max-listings-per-player: -1       # -1 = unlimited
-  min-listing-price: 1.0            # Minimum listing price
+  enabled: true                       # Master toggle for /ah
+  default-duration: 86400             # 24 hours (seconds)
+  max-duration: 604800                # 7 days max
+  listing-fee-percent: 2.0            # Fee to list
+  sales-tax-percent: 5.0              # Tax on sale
+  max-listings-per-player: -1         # -1 = unlimited
+  min-listing-price: 1.0              # Minimum listing price
 
 buy-orders:
-  enabled: true                     # Master toggle for /orders
-  max-active-orders-per-player: 10  # -1 = unlimited
-  min-price-per-piece: 0.1          # Minimum offer price
-  max-order-value: -1               # -1 = unlimited
-  creation-fee-percent: 2.0         # Order creation fee
-  sales-tax-percent: 5.0            # Seller tax on fulfillment
+  enabled: true                       # Master toggle for /orders
+  max-active-orders-per-player: 10    # -1 = unlimited
+  min-price-per-piece: 0.1            # Minimum offer price
+  max-order-value: -1                 # -1 = unlimited
+  creation-fee-percent: 2.0           # Order creation fee
+  sales-tax-percent: 5.0              # Seller tax on fulfillment
+
+web:
+  enabled: true                       # Start the embedded web server
+  port: 8585                          # Port (must be opened in firewall)
+  # Session timeout: rolling 1 hour of inactivity (hardcoded)
 ```
 
 ### 🌍 Language
@@ -171,7 +210,7 @@ A `messages.yml` file is generated on startup.
 ## ❓ FAQ
 - **"Unknown Command"**: If `/market` or `/eco` says "Unknown command", the plugin failed to load.
     - Check your server console/logs for errors.
-    - Ensure you have `Aurelium-1.2.2.jar` in `plugins/`.
+    - Ensure you have `Aurelium-1.3.0.jar` in `plugins/`.
     - Ensure you are running **Paper 1.21.x**.
 - **"No Permission"**:
     - Ensure you are **OP** (`/op <player>`) or have the permission node `aureleconomy.admin`.

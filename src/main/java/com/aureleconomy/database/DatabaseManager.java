@@ -34,7 +34,8 @@ public class DatabaseManager {
     }
 
     private boolean initializeSQLite() throws SQLException {
-        File dataFolder = new File(plugin.getDataFolder(), plugin.getConfig().getString("database.file", "database.db"));
+        File dataFolder = new File(plugin.getDataFolder(),
+                plugin.getConfig().getString("database.file", "database.db"));
         if (!dataFolder.getParentFile().exists()) {
             dataFolder.getParentFile().mkdirs();
         }
@@ -60,24 +61,36 @@ public class DatabaseManager {
 
         String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false";
         connection = DriverManager.getConnection(url, username, password);
-        
+
         createTables();
         return true;
     }
 
     private void createTables() {
-        String autoIncrement = "mysql".equals(databaseType) ? "INT AUTO_INCREMENT PRIMARY KEY" : "INTEGER PRIMARY KEY AUTOINCREMENT";
-        
+        String autoIncrement = "mysql".equals(databaseType) ? "INT AUTO_INCREMENT PRIMARY KEY"
+                : "INTEGER PRIMARY KEY AUTOINCREMENT";
+
         try (Statement statement = connection.createStatement()) {
             // Players table
             statement.execute("CREATE TABLE IF NOT EXISTS players (" +
                     "uuid VARCHAR(36) PRIMARY KEY, " +
                     "name VARCHAR(16), " +
-                    "balance DOUBLE NOT NULL DEFAULT 0.0, " +
                     "gui_style VARCHAR(16) DEFAULT 'MODERN'" +
                     ");");
+
             // Migration for existing tables
             addColumnIfNotExists("players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
+
+            // Player Balances table
+            statement.execute("CREATE TABLE IF NOT EXISTS player_balances (" +
+                    "uuid VARCHAR(36), " +
+                    "currency VARCHAR(32), " +
+                    "balance DOUBLE NOT NULL DEFAULT 0.0, " +
+                    "PRIMARY KEY (uuid, currency)" +
+                    ");");
+
+            // Migrate legacy single-currency balances to player_balances if needed
+            migrateLegacyBalances();
 
             // Auctions table
             statement.execute("CREATE TABLE IF NOT EXISTS auctions (" +
@@ -85,6 +98,7 @@ public class DatabaseManager {
                     "seller_uuid VARCHAR(36), " +
                     "item_data TEXT, " + // Serialized item
                     "price DOUBLE, " +
+                    "currency VARCHAR(32), " +
                     "is_bin BOOLEAN, " +
                     "expiration LONG, " +
                     "highest_bidder_uuid VARCHAR(36), " +
@@ -95,15 +109,18 @@ public class DatabaseManager {
                     ");");
             addColumnIfNotExists("auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
             addColumnIfNotExists("auctions", "start_time", "LONG");
+            addColumnIfNotExists("auctions", "currency", "VARCHAR(32)");
 
             // Offline Earnings table
             statement.execute("CREATE TABLE IF NOT EXISTS offline_earnings (" +
                     "id " + autoIncrement + ", " +
                     "uuid VARCHAR(36), " +
                     "amount DOUBLE, " +
+                    "currency VARCHAR(32), " +
                     "item_display VARCHAR(64), " +
                     "timestamp LONG" +
                     ");");
+            addColumnIfNotExists("offline_earnings", "currency", "VARCHAR(32)");
 
             // Buy Orders table
             statement.execute("CREATE TABLE IF NOT EXISTS buy_orders (" +
@@ -113,8 +130,19 @@ public class DatabaseManager {
                     "amount_requested INTEGER, " +
                     "amount_filled INTEGER DEFAULT 0, " +
                     "price_per_piece DOUBLE, " +
+                    "currency VARCHAR(32), " +
                     "status VARCHAR(16) DEFAULT 'ACTIVE'" +
                     ");");
+            addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
+
+            // Price History table (for stock charts)
+            statement.execute("CREATE TABLE IF NOT EXISTS price_history (" +
+                    "id " + autoIncrement + ", " +
+                    "item_key VARCHAR(128), " +
+                    "buy_price DOUBLE, " +
+                    "sell_price DOUBLE, " +
+                    "timestamp LONG" +
+                    ")");
 
             createOffersTable(autoIncrement);
 
@@ -130,12 +158,41 @@ public class DatabaseManager {
                     "auction_id INTEGER, " +
                     "bidder_uuid VARCHAR(36), " +
                     "amount DOUBLE, " +
+                    "currency VARCHAR(32), " +
                     "status VARCHAR(16) DEFAULT 'PENDING', " +
                     "timestamp LONG, " +
                     "FOREIGN KEY(auction_id) REFERENCES auctions(id)" +
                     ");");
+            addColumnIfNotExists("auction_offers", "currency", "VARCHAR(32)");
         } catch (SQLException e) {
             plugin.getComponentLogger().error("Could not create offers table for " + databaseType + "!", e);
+        }
+    }
+
+    private void migrateLegacyBalances() {
+        // Attempt to select balance from players. if it doesn't error out, it means we
+        // need to migrate
+        try (Statement statement = connection.createStatement()) {
+            statement.executeQuery("SELECT balance FROM players LIMIT 1");
+
+            // If we got here, the column exists and we need to migrate
+            plugin.getComponentLogger()
+                    .info("Legacy single-currency database detected. Migrating to multi-currency system...");
+
+            String defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
+
+            // Insert into new table
+            statement.execute("INSERT IGNORE INTO player_balances (uuid, currency, balance) " +
+                    "SELECT uuid, '" + defaultCurrency + "', balance FROM players;");
+
+            // Drop the old column to prevent the migration check from passing again.
+            // Modern SQLite (3.35.0+) supports DROP COLUMN.
+            statement.execute("ALTER TABLE players DROP COLUMN balance;");
+
+            plugin.getComponentLogger().info("Multi-currency database migration completed successfully.");
+        } catch (SQLException e) {
+            // "balance" column doesn't exist anymore, which means migration already
+            // happened or this is a fresh DB. Safe to ignore.
         }
     }
 
@@ -176,7 +233,7 @@ public class DatabaseManager {
 
             // Add column
             statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
-            // Ignore dialect specific info prints for cleaner console output 
+            // Ignore dialect specific info prints for cleaner console output
         } catch (SQLException e) {
             // Silently fail if column manipulation isn't supported on backend
         }
