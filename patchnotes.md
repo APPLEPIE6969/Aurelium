@@ -4,6 +4,11 @@
 > 
 > *The newly added Web Dashboard features are currently in active development. Please expect potential bugs or instability if you enable `web.enabled` in your configuration. The core in-game economy, GUI markets, and auction house are stable.*
 
+## Version 1.3.1 — Request Limit Update (Minecraft 1.21.11)
+
+* **Updated**: Increased the web dashboard API rate limit to **330 requests per minute**.
+* **New**: Added an automatic rate-limit bypass for authenticated Minecraft servers.
+
 ## Version 1.3.0 — Cloud Dashboard Expansion (Minecraft 1.21.11)
 
 ### 🌐 Cloud Dashboard — New Pages

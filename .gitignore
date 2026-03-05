@@ -33,3 +33,8 @@ render-server/
 # OS Metadata
 .DS_Store
 Thumbs.db
+
+# Agent stuff
+.agents/
+.agent/
+testimg.png
