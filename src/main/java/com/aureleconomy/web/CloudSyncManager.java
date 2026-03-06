@@ -303,11 +303,14 @@ public class CloudSyncManager {
             }
             json.append("{\"id\":").append(ai.getId());
             json.append(",\"seller\":\"").append(escJson(sellerName)).append("\"");
+            json.append(",\"sellerUuid\":\"").append(ai.getSeller().toString()).append("\"");
             json.append(",\"itemName\":\"").append(escJson(itemName)).append("\"");
             json.append(",\"material\":\"").append(escJson(ai.getItem().getType().name().toLowerCase())).append("\"");
             json.append(",\"amount\":").append(ai.getItem().getAmount());
             json.append(",\"price\":").append(ai.getPrice());
             json.append(",\"currency\":\"").append(escJson(ai.getCurrency())).append("\"");
+            json.append(",\"currencySymbol\":\"")
+                    .append(escJson(plugin.getEconomyManager().getCurrencySymbol(ai.getCurrency()))).append("\"");
             json.append(",\"isBin\":").append(ai.isBin());
             json.append(",\"expiration\":").append(ai.getExpiration());
             json.append(",\"startTime\":").append(ai.getStartTime());
@@ -327,6 +330,7 @@ public class CloudSyncManager {
             String buyerName = resolvePlayerName(order.getBuyerUuid());
             json.append("{\"id\":").append(order.getId());
             json.append(",\"buyer\":\"").append(escJson(buyerName)).append("\"");
+            json.append(",\"buyerUuid\":\"").append(order.getBuyerUuid().toString()).append("\"");
             json.append(",\"material\":\"").append(escJson(order.getMaterial().name().toLowerCase())).append("\"");
             json.append(",\"itemName\":\"").append(escJson(order.getMaterial().name().replace("_", " "))).append("\"");
             json.append(",\"amountRequested\":").append(order.getAmountRequested());
@@ -342,13 +346,18 @@ public class CloudSyncManager {
 
         // ── Stocks / Price Tracker ──────────────────────────────────
         json.append(",\"stocks\":[");
-        List<MarketEntry> allItems = MarketItems.getItems(Category.ALL_ITEMS).stream()
-                .filter(e -> !plugin.getMarketManager().isBlacklisted(e.material))
-                .toList();
-        for (int i = 0; i < allItems.size(); i++) {
-            MarketEntry entry = allItems.get(i);
-            if (i > 0)
+        List<MarketEntry> allStocks = new ArrayList<>(plugin.getMarketManager().getEntryCache().values());
+        for (int i = 0; i < allStocks.size(); i++) {
+            MarketEntry entry = allStocks.get(i);
+
+            // Skip blacklisted items
+            if (plugin.getMarketManager().isBlacklisted(entry.material)) {
+                continue;
+            }
+
+            if (json.charAt(json.length() - 1) != '[') {
                 json.append(",");
+            }
 
             String priceKey = (entry.customName != null) ? entry.customName : entry.material.name();
             String displayName = entry.customName != null ? entry.customName
@@ -359,12 +368,13 @@ public class CloudSyncManager {
             double basePrice = entry.price;
 
             // Non-market items: use last sold price
-            if (basePrice == 1.0 && buyPrice == 1.0) {
+            if (basePrice == 1.0 && buyPrice <= 1.0) {
                 Double lastSold = plugin.getOrderManager().getLastSoldPrice(priceKey);
                 if (lastSold != null) {
                     buyPrice = lastSold;
                     sellPrice = lastSold;
-                } else {
+                } else if (buyPrice == 1.0) {
+                    // It's unvalued
                     buyPrice = 0;
                     sellPrice = 0;
                 }
@@ -373,6 +383,10 @@ public class CloudSyncManager {
             double change = 0;
             if (basePrice > 0 && buyPrice > 0 && basePrice != 1.0) {
                 change = ((buyPrice - basePrice) / basePrice) * 100;
+            } else if (basePrice == 1.0 && buyPrice > 0) {
+                // For non-market items, we don't really have a "change" from base,
+                // but we could mark it as 0 to avoid showing weird jumps.
+                change = 0;
             }
 
             String currency = (entry.material == Material.SPAWNER && entry.customName != null)
@@ -564,6 +578,11 @@ public class CloudSyncManager {
             return;
         }
 
+        if (auction.getSeller().equals(player.getUniqueId())) {
+            confirmPurchase(purchaseId, false, 0, "You cannot buy your own auction");
+            return;
+        }
+
         if (!plugin.getEconomyManager().has(player, amount, auction.getCurrency())) {
             confirmPurchase(purchaseId, false, 0, "Not enough funds");
             return;
@@ -695,6 +714,11 @@ public class CloudSyncManager {
 
         if (order == null || order.getAmountRemaining() <= 0) {
             confirmPurchase(purchaseId, false, 0, "Order is fully filled or invalid");
+            return;
+        }
+
+        if (order.getBuyerUuid().equals(seller.getUniqueId())) {
+            confirmPurchase(purchaseId, false, 0, "You cannot fill your own order");
             return;
         }
 

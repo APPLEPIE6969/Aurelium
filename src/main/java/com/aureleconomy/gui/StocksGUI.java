@@ -37,8 +37,25 @@ public class StocksGUI extends GUIHolder {
     }
 
     private void initializeStocks() {
+        java.util.Set<String> processedKeys = new java.util.HashSet<>();
+
+        // Priority 1: Specific categories (Tools, Food, Minerals, etc.)
         for (Category cat : Category.values()) {
+            if (cat == Category.ALL_ITEMS)
+                continue;
             for (MarketEntry entry : MarketItems.getItems(cat)) {
+                String key = (entry.customName != null && entry.material == Material.SPAWNER) ? entry.customName
+                        : entry.material.name();
+                if (processedKeys.add(key)) {
+                    stocks.add(new StockItem(entry));
+                }
+            }
+        }
+
+        // Priority 2: ALL_ITEMS (for everything else survival-obtainable)
+        for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
+            String key = entry.material.name(); // ALL_ITEMS generally doesn't have custom names in its init
+            if (processedKeys.add(key)) {
                 stocks.add(new StockItem(entry));
             }
         }

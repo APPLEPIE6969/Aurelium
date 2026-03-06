@@ -78,65 +78,69 @@ public class MarketManager {
         priceDecreaseRate = config.getDouble("market.price-decrease-per-sell", 0.001);
 
         // Iterate through all MarketItems and load/save prices
+        // First pass: Specific categories
         for (Category cat : Category.values()) {
+            if (cat == Category.ALL_ITEMS)
+                continue;
             for (MarketEntry entry : MarketItems.getItems(cat)) {
-
-                // Determine the Key for this item
-                String key = entry.material.name();
-                if (entry.customName != null && entry.material == Material.SPAWNER) {
-                    key = entry.customName;
-                }
-
-                // Add to entry cache for O(1) lookups
-                entryCache.put(key, entry);
-
-                // Config path (replace spaces with underscores for clean YAML)
-                String basePath = "market.items." + key.replace(" ", "_").toUpperCase();
-
-                // Buy Price
-                if (!config.contains(basePath + ".buy")
-                        || (config.getDouble(basePath + ".buy") == 1.0 && entry.price > 1.0)) {
-                    config.set(basePath + ".buy", entry.price);
-                    saveNeeded = true;
-                }
-                // Sell Price (Default 0.0 effectively disabling sell unless configured, OR
-                // default 80%?
-                // User asked to "remove selling items" previously, so defaulting sell to 0.0 is
-                // safer
-                // BUT user wants to "choose" now.
-                // Let's default sell to 0.0 to respect the "Buy Only" previous state,
-                // expecting owner to enable it if they want.
-                // Actually, standard is usually 80% if we want to enable it easily.
-                // But the previous request was strict "remove selling".
-                // So default sell to 0.0.
-                if (!config.contains(basePath + ".sell")) {
-                    double sellPrice;
-                    if (entry.customSellPrice != null) {
-                        sellPrice = entry.customSellPrice;
-                    } else {
-                        // Default selling to configured ratio of buy price
-                        double sellRatio = plugin.getConfig().getDouble("market.default-sell-ratio", 0.5);
-                        sellPrice = entry.price * sellRatio;
-                    }
-                    config.set(basePath + ".sell", sellPrice);
-                    saveNeeded = true;
-                }
-
-                buyPrices.put(key, config.getDouble(basePath + ".buy"));
-                sellPrices.put(key, config.getDouble(basePath + ".sell"));
-
-                String curPath = basePath + ".currency";
-                if (!config.contains(curPath)) {
-                    config.set(curPath, plugin.getEconomyManager().getDefaultCurrency());
-                    saveNeeded = true;
-                }
-                itemCurrencies.put(key, config.getString(curPath, plugin.getEconomyManager().getDefaultCurrency()));
+                processEntry(entry, config);
+            }
+        }
+        // Second pass: ALL_ITEMS (only for items not already processed)
+        for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
+            String key = (entry.customName != null && entry.material == Material.SPAWNER) ? entry.customName
+                    : entry.material.name();
+            if (!entryCache.containsKey(key)) {
+                processEntry(entry, config);
             }
         }
 
-        if (saveNeeded) {
+        if (configModified || saveNeeded) {
             plugin.saveConfig();
         }
+    }
+
+    private void processEntry(MarketEntry entry, FileConfiguration config) {
+        // Determine the Key for this item
+        String key = entry.material.name();
+        if (entry.customName != null && entry.material == Material.SPAWNER) {
+            key = entry.customName;
+        }
+
+        // Add to entry cache for O(1) lookups
+        entryCache.put(key, entry);
+
+        // Config path (replace spaces with underscores for clean YAML)
+        String basePath = "market.items." + key.replace(" ", "_").toUpperCase();
+
+        // Buy Price
+        if (!config.contains(basePath + ".buy")
+                || (config.getDouble(basePath + ".buy") == 1.0 && entry.price > 1.0)) {
+            config.set(basePath + ".buy", entry.price);
+            configModified = true;
+        }
+
+        if (!config.contains(basePath + ".sell")) {
+            double sellPrice;
+            if (entry.customSellPrice != null) {
+                sellPrice = entry.customSellPrice;
+            } else {
+                double sellRatio = plugin.getConfig().getDouble("market.default-sell-ratio", 0.5);
+                sellPrice = entry.price * sellRatio;
+            }
+            config.set(basePath + ".sell", sellPrice);
+            configModified = true;
+        }
+
+        buyPrices.put(key, config.getDouble(basePath + ".buy"));
+        sellPrices.put(key, config.getDouble(basePath + ".sell"));
+
+        String curPath = basePath + ".currency";
+        if (!config.contains(curPath)) {
+            config.set(curPath, plugin.getEconomyManager().getDefaultCurrency());
+            configModified = true;
+        }
+        itemCurrencies.put(key, config.getString(curPath, plugin.getEconomyManager().getDefaultCurrency()));
     }
 
     public void onTransaction(String materialName, boolean isBuy, int amount) {
@@ -249,6 +253,10 @@ public class MarketManager {
             plugin.getConfig().set(basePath + ".buy", newPrice);
             configModified = true;
         }
+    }
+
+    public Map<String, MarketEntry> getEntryCache() {
+        return entryCache;
     }
 
     public boolean isBlacklisted(Material material) {

@@ -4,6 +4,20 @@
 > 
 > *The newly added Web Dashboard features are currently in active development. Please expect potential bugs or instability if you enable `web.enabled` in your configuration. The core in-game economy, GUI markets, and auction house are stable.*
 
+## Version 1.3.2 — Web Dashboard Polish & Security (Minecraft 1.21.11)
+
+### 🌐 Cloud Dashboard Improvements
+* **Fix**: **Stock Change % Fix** — Resolved a bug where item base prices (like Diamonds) were being overwritten, causing 0% change to show on the web.
+* **Fix**: **Auction Display Fix** — Fixed a bug where auction prices would show as `undefined` instead of the correct currency symbol.
+* **New**: **Stitch-Inspired Icons** — Replaced all legacy emojis with a premium SVG icon system for better clarity and aesthetics.
+* **Security**: **Self-Trade Protection** — Players can no longer bid on their own auctions or fill their own buy orders via the web.
+  - Buy buttons are now explicitly labeled "Your Auction/Order" and disabled for owned items.
+  - Added backend validation to reject self-trading attempts.
+* **New**: Added `sellerUuid` and `buyerUuid` to sync payloads for improved identity tracking on the frontend.
+
+### 🎮 In-Game Fixes
+* **Fix**: **GUI De-duplication** — Removed redundant item entries in the `/stocks` GUI that appeared if an item was in multiple categories.
+
 ## Version 1.3.1 — Request Limit Update (Minecraft 1.21.11)
 
 * **Updated**: Increased the web dashboard API rate limit to **330 requests per minute**.
