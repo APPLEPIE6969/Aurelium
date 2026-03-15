@@ -487,14 +487,17 @@ public class CloudSyncManager {
                 double sp = rs.getDouble("sell_price");
                 long ts = rs.getLong("timestamp");
                 grouped.computeIfAbsent(key, k -> new ArrayList<>())
-                        .add("{\"t\":" + ts + ",\"b\":" + bp + ",\"s\":" + sp + "}");
+                        .add(new StringBuilder().append("{\"t\":").append(ts)
+                                .append(",\"b\":").append(bp)
+                                .append(",\"s\":").append(sp)
+                                .append("}").toString());
             }
 
             int idx = 0;
             for (var e : grouped.entrySet()) {
                 if (idx++ > 0)
                     sb.append(",");
-                sb.append("\"" + escJson(e.getKey()) + "\":[");
+                sb.append("\"").append(escJson(e.getKey())).append("\":[");
                 sb.append(String.join(",", e.getValue()));
                 sb.append("]");
             }
