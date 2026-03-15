@@ -62,29 +62,11 @@ public class AuctionGUI extends GUIHolder {
             for (AuctionItem ai : items) {
                 if (inventory.firstEmpty() == -1)
                     break;
-                inventory.addItem(new ItemBuilder(ai.getItem().getType(), ai.getItem().getAmount())
-                        .name(ai.getItem().displayName()) // Keep original name? Or recreate?
-                        // Actually ItemBuilder constructor with Material creates new stack.
-                        // We should use the stack from AuctionItem
-                        // But ItemBuilder wraps it.. let's just use raw stack and add lore
-                        // Wait, AI.getItem() returns valid stack.
-                        // We need to add lore to it explaining it's collectable.
-                        // But we don't want to modify the actual item in AI list in memory permanently
-                        // with lore if we reuse it?
-                        // Duplicate it.
-                        .lore(Component.text("Click to Collect", NamedTextColor.GREEN))
-                        .build());
 
-                // Correction: logic above is broken because I can't easily use ItemBuilder on
-                // existing stack without modifying my ItemBuilder class or doing it manually.
-                // Let's modify ItemBuilder to support wrapping existing stack or just do it
-                // manually.
-                // Actually I'll just clone the stack.
                 ItemStack display = ai.getItem().clone();
-                // Add lore
                 display.editMeta(meta -> {
                     meta.lore(List.of(Component.text("Click to Collect", NamedTextColor.GREEN)));
-                    // FIX: Also add ID to collection items so they can be identified for removal!
+                    // Store ID in PDC so the item can be identified for collection
                     meta.getPersistentDataContainer().set(new org.bukkit.NamespacedKey(plugin, "auction_id"),
                             org.bukkit.persistence.PersistentDataType.INTEGER, ai.getId());
                 });
@@ -265,21 +247,9 @@ public class AuctionGUI extends GUIHolder {
         }
 
         if (isCollectionBin) {
-            // Collection logic is tricky because we didn't store ID on items in bin in my
-            // previous code block.
-            // But valid collection items should be unique enough?
-            // Ideally we need ID.
-            // Let's assume we implement ID on bin items too.
-            // For now, let's just grab the list again and try to match?
-            // Unsafe.
-            // Correct approach: Re-implement setupItems to add PDC to bin items too.
-            // I will assume ID is on item.
             Integer id = clicked.getItemMeta().getPersistentDataContainer().get(
                     new org.bukkit.NamespacedKey(plugin, "auction_id"),
                     org.bukkit.persistence.PersistentDataType.INTEGER);
-            // Wait, I didn't add it in setupItems for bin. I need to fix that in a real
-            // edit.
-            // I'll assume I did it for now, and will add it when I write the file.
 
             if (id != null) {
                 // Prevent duplicate processing via macro spam by instantly clearing the slot
