@@ -163,6 +163,9 @@ web:
     port: 8585
     # Session timeout in minutes
     session-timeout-minutes: 10
+    # Restrict which websites can access this API.
+    # Use ["*"] for public access (insecure), or list specific origins like ["http://myserver.com"]
+    cors-allowed-origins: []
 
   # ── Cloud mode settings (only used when mode is "cloud") ──
   cloud:
