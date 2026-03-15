@@ -37,7 +37,27 @@ public class ApiHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         // CORS headers
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        List<String> allowedOrigins = plugin.getConfig().getStringList("web.local.cors-allowed-origins");
+
+        if (origin != null) {
+            exchange.getResponseHeaders().add("Vary", "Origin");
+
+            if (!allowedOrigins.isEmpty()) {
+                boolean allowed = false;
+                for (String allowedOrigin : allowedOrigins) {
+                    if ("*".equals(allowedOrigin) || origin.equalsIgnoreCase(allowedOrigin)) {
+                        allowed = true;
+                        break;
+                    }
+                }
+
+                if (allowed) {
+                    exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
+                }
+            }
+        }
+
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
