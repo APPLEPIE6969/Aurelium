@@ -58,7 +58,7 @@ public class MyOrdersGUI extends GUIHolder {
                             Component.empty(),
                             Component.text("Price Per Piece: ", NamedTextColor.GRAY)
                                     .append(Component.text(
-                                            plugin.getEconomyManager().format(order.getPricePerPiece(),
+                                            plugin.getEconomyManager().getFormattedWithSymbol(order.getPricePerPiece(),
                                                     order.getCurrency()),
                                             NamedTextColor.GREEN)),
                             Component.text("Requested: ", NamedTextColor.GRAY)

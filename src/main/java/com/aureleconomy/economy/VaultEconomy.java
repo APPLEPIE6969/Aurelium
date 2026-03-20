@@ -1,6 +1,7 @@
 package com.aureleconomy.economy;
 
 import com.aureleconomy.AurelEconomy;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import net.milkbowl.vault.economy.Economy;
@@ -8,6 +9,10 @@ import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
+/**
+ * Vault API implementation for AurelEconomy.
+ * Bridges Vault's double-based API with AurelEconomy's high-precision BigDecimal system.
+ */
 public class VaultEconomy implements Economy {
 
     private final AurelEconomy plugin;
@@ -40,7 +45,7 @@ public class VaultEconomy implements Economy {
 
     @Override
     public String format(double amount) {
-        return String.format("%.2f %s", amount, currencyNamePlural());
+        return economyManager.getFormattedWithSymbol(BigDecimal.valueOf(amount), economyManager.getDefaultCurrency());
     }
 
     @Override
@@ -55,22 +60,22 @@ public class VaultEconomy implements Economy {
 
     @Override
     public boolean hasAccount(String playerName) {
-        return hasAccount(Bukkit.getOfflinePlayer(playerName));
+        return true;
     }
 
     @Override
     public boolean hasAccount(OfflinePlayer player) {
-        return true; // We create accounts on the fly
+        return true;
     }
 
     @Override
     public boolean hasAccount(String playerName, String worldName) {
-        return hasAccount(playerName);
+        return true;
     }
 
     @Override
     public boolean hasAccount(OfflinePlayer player, String worldName) {
-        return hasAccount(player);
+        return true;
     }
 
     @Override
@@ -80,7 +85,7 @@ public class VaultEconomy implements Economy {
 
     @Override
     public double getBalance(OfflinePlayer player) {
-        return economyManager.getBalance(player);
+        return economyManager.getBalance(player).doubleValue();
     }
 
     @Override
@@ -100,7 +105,7 @@ public class VaultEconomy implements Economy {
 
     @Override
     public boolean has(OfflinePlayer player, double amount) {
-        return economyManager.has(player, amount);
+        return economyManager.has(player, BigDecimal.valueOf(amount));
     }
 
     @Override
@@ -123,11 +128,11 @@ public class VaultEconomy implements Economy {
         if (amount < 0) {
             return new EconomyResponse(0, 0, EconomyResponse.ResponseType.FAILURE, "Cannot withdraw negative funds");
         }
-        if (!has(player, amount)) {
-            return new EconomyResponse(0, getBalance(player), EconomyResponse.ResponseType.FAILURE,
-                    "Insufficient funds");
+        BigDecimal bdAmount = BigDecimal.valueOf(amount);
+        if (!economyManager.has(player, bdAmount)) {
+            return new EconomyResponse(0, getBalance(player), EconomyResponse.ResponseType.FAILURE, "Insufficient funds");
         }
-        economyManager.withdraw(player, amount);
+        economyManager.withdraw(player, bdAmount);
         return new EconomyResponse(amount, getBalance(player), EconomyResponse.ResponseType.SUCCESS, null);
     }
 
@@ -151,7 +156,8 @@ public class VaultEconomy implements Economy {
         if (amount < 0) {
             return new EconomyResponse(0, 0, EconomyResponse.ResponseType.FAILURE, "Cannot deposit negative funds");
         }
-        economyManager.deposit(player, amount);
+        BigDecimal bdAmount = BigDecimal.valueOf(amount);
+        economyManager.deposit(player, bdAmount);
         return new EconomyResponse(amount, getBalance(player), EconomyResponse.ResponseType.SUCCESS, null);
     }
 
@@ -227,27 +233,21 @@ public class VaultEconomy implements Economy {
 
     @Override
     public boolean createPlayerAccount(String playerName) {
-        return createPlayerAccount(Bukkit.getOfflinePlayer(playerName));
+        return true;
     }
 
     @Override
     public boolean createPlayerAccount(OfflinePlayer player) {
-        if (hasAccount(player)) {
-            return false;
-        }
-        // In our case, hasAccount always returns true because we create on the fly,
-        // but proper implementation might require explicit creation logic if we changed
-        // hasAccount.
         return true;
     }
 
     @Override
     public boolean createPlayerAccount(String playerName, String worldName) {
-        return createPlayerAccount(playerName);
+        return true;
     }
 
     @Override
     public boolean createPlayerAccount(OfflinePlayer player, String worldName) {
-        return createPlayerAccount(player);
+        return true;
     }
 }

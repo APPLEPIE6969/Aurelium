@@ -15,6 +15,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 public class OrderMaterialGUI extends GUIHolder {
@@ -120,16 +121,16 @@ public class OrderMaterialGUI extends GUIHolder {
             ItemBuilder builder = new ItemBuilder(item);
 
             String priceKey = (entry.customName != null) ? entry.customName : entry.material.name();
-            double marketBuyPrice = plugin.getMarketManager().getBuyPrice(priceKey);
+            BigDecimal marketBuyPrice = plugin.getMarketManager().getBuyPrice(priceKey);
 
-            if (marketBuyPrice > 0 && entry.price != 1.0) {
+            if (marketBuyPrice.compareTo(BigDecimal.ZERO) > 0 && entry.price.compareTo(BigDecimal.ONE) != 0) {
                 builder.lore(
                         Component.text("Market Value: ", NamedTextColor.GRAY)
                                 .append(Component.text(plugin.getEconomyManager().format(marketBuyPrice),
                                         NamedTextColor.GREEN)));
             } else {
                 // Check last sold price (For ALL_ITEMS category default 1.0 items)
-                Double lastSold = plugin.getOrderManager().getLastSoldPrice(priceKey);
+                BigDecimal lastSold = plugin.getOrderManager().getLastSoldPrice(priceKey);
                 if (lastSold != null) {
                     builder.lore(
                             Component.text("Last Sold For: ", NamedTextColor.GRAY)
@@ -235,8 +236,8 @@ public class OrderMaterialGUI extends GUIHolder {
                                 return;
                             }
                             try {
-                                double pricePerPiece = Double.parseDouble(priceStr);
-                                if (pricePerPiece <= 0)
+                                BigDecimal pricePerPiece = new BigDecimal(priceStr);
+                                if (pricePerPiece.compareTo(BigDecimal.ZERO) <= 0)
                                     throw new NumberFormatException();
 
                                 // Create the order

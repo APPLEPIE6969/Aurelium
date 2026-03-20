@@ -13,9 +13,8 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class SellGUI extends GUIHolder {
@@ -214,19 +213,22 @@ public class SellGUI extends GUIHolder {
         }
     }
 
+    private Map<String, BigDecimal> cachedTotals = new HashMap<>();
+
     private void calculateAndPrompt() {
-        Map<String, Double> totals = new HashMap<>();
+        cachedTotals.clear();
         boolean hasSellable = false;
 
         for (int i = 0; i < 45; i++) {
             ItemStack item = inventory.getItem(i);
             if (item != null && item.getType() != Material.AIR) {
                 String key = getItemKey(item);
-                double price = plugin.getMarketManager().getSellPrice(key);
+                BigDecimal price = plugin.getMarketManager().getSellPrice(key);
                 String currency = plugin.getMarketManager().getCurrency(key);
 
-                if (price > 0) {
-                    totals.put(currency, totals.getOrDefault(currency, 0.0) + (price * item.getAmount()));
+                if (price.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal amount = BigDecimal.valueOf(item.getAmount());
+                    cachedTotals.put(currency, cachedTotals.getOrDefault(currency, BigDecimal.ZERO).add(price.multiply(amount)));
                     hasSellable = true;
                 }
             }
@@ -246,9 +248,9 @@ public class SellGUI extends GUIHolder {
         ItemBuilder confirmButton = new ItemBuilder(Material.LIME_CONCRETE)
                 .name(Component.text("Confirm Sell", NamedTextColor.GREEN));
 
-        for (Map.Entry<String, Double> entry : totals.entrySet()) {
+        for (Map.Entry<String, BigDecimal> entry : cachedTotals.entrySet()) {
             confirmButton.lore(
-                    Component.text("Value: " + plugin.getEconomyManager().format(entry.getValue(), entry.getKey()),
+                    Component.text("Value: " + plugin.getEconomyManager().getFormattedWithSymbol(entry.getValue(), entry.getKey()),
                             NamedTextColor.YELLOW));
         }
         confirmButton.lore(Component.text("Click to confirm", NamedTextColor.GRAY));
@@ -259,40 +261,40 @@ public class SellGUI extends GUIHolder {
     }
 
     private void performSell() {
-        Map<String, Double> finalTotals = new HashMap<>();
-        List<ItemStack> unsold = new ArrayList<>();
-
-        for (int i = 0; i < 45; i++) {
-            ItemStack item = inventory.getItem(i);
-            if (item != null && item.getType() != Material.AIR) {
-                String key = getItemKey(item);
-                double price = plugin.getMarketManager().getSellPrice(key);
-                String currency = plugin.getMarketManager().getCurrency(key);
-                if (price > 0) {
-                    finalTotals.put(currency, finalTotals.getOrDefault(currency, 0.0) + (price * item.getAmount()));
-                    inventory.setItem(i, null); // Remove sold item
-                    plugin.getMarketManager().onTransaction(key, false, item.getAmount()); // Trigger Market Supply Drop
-                } else {
-                    unsold.add(item); // Keep unsold
+        if (!cachedTotals.isEmpty()) {
+            Map<String, Integer> itemsToNotifyMarket = new HashMap<>();
+            
+            // Loop once to remove items and prepare market notifications
+            for (int i = 0; i < 45; i++) {
+                ItemStack item = inventory.getItem(i);
+                if (item != null && item.getType() != Material.AIR) {
+                    String key = getItemKey(item);
+                    BigDecimal price = plugin.getMarketManager().getSellPrice(key);
+                    if (price.compareTo(BigDecimal.ZERO) > 0) {
+                        itemsToNotifyMarket.put(key, itemsToNotifyMarket.getOrDefault(key, 0) + item.getAmount());
+                        inventory.setItem(i, null); // Remove sold item
+                    }
                 }
             }
-        }
 
-        if (!finalTotals.isEmpty()) {
-            for (Map.Entry<String, Double> entry : finalTotals.entrySet()) {
+            // Pay the player the cached amounts (exactly what was shown in preview)
+            for (Map.Entry<String, BigDecimal> entry : cachedTotals.entrySet()) {
                 plugin.getEconomyManager().deposit(player, entry.getValue(), entry.getKey());
-                player.sendMessage(Component.text(
-                        "Sold items for " + plugin.getEconomyManager().format(entry.getValue(), entry.getKey()),
-                        NamedTextColor.GREEN));
+                player.sendMessage(Component.text()
+                        .append(Component.text("Sold items for ", NamedTextColor.GREEN))
+                        .append(Component.text(plugin.getEconomyManager().getFormattedWithSymbol(entry.getValue(), entry.getKey()), NamedTextColor.GOLD))
+                        .build());
             }
+
+            // Notify Market Manager once per item type for the total quantity
+            itemsToNotifyMarket.forEach((key, quantity) -> {
+                plugin.getMarketManager().onTransaction(key, false, quantity);
+            });
+
             player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1);
+            cachedTotals.clear();
         }
 
-        // Return unsold items/close
-        // If we close, the InventoryCloseEvent should handle returning items left in
-        // top slots.
-        // But we just removed sold ones.
-        // So just close.
         player.closeInventory();
     }
 
@@ -303,7 +305,8 @@ public class SellGUI extends GUIHolder {
             ItemStack item = inv.getItem(i);
             if (item != null && item.getType() != Material.AIR) {
                 player.getInventory().addItem(item).forEach((k, v) -> {
-                    player.getWorld().dropItem(player.getLocation(), v);
+                    plugin.getAuctionManager().sendToCollectionBin(player.getUniqueId(), v);
+                    player.sendMessage(Component.text("Inventory full! " + v.getAmount() + "x " + v.getType().name() + " sent to /ah collect.", NamedTextColor.YELLOW));
                 });
             }
         }

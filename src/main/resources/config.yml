@@ -1,20 +1,17 @@
-# ╔═══════════════════════════════════════════════════╗
-# ║           AurelEconomy Configuration              ║
-# ║            v1.2.3 — Full Reference                ║
-# ╚═══════════════════════════════════════════════════╝
+# AurelEconomy Configuration (v1.4.0)
 
-# DO NOT EDIT — used by the plugin to auto-add new config keys on updates
+# Don't touch this, used for auto-migration
 config-version: 1
 
-# ─────────────── Database ───────────────
+# --- Database ---
 database:
-  # Supported types: sqlite, mysql
+  # sqlite or mysql
   type: sqlite
-  
-  # ---------- SQLite Settings ----------
+
+  # SQLite
   file: "database.db"
-  
-  # ---------- MySQL Settings ----------
+
+  # MySQL (only if type is mysql)
   mysql:
     host: "localhost"
     port: 3306
@@ -22,30 +19,24 @@ database:
     username: "root"
     password: "password"
 
-# ─────────────── Economy ───────────────
+# --- Economy ---
 economy:
-  # The default currency used for Vault, generic fallbacks, and migrated existing balances
   default-currency: "Aurels"
-  
-  # Configure all allowed currencies on your server here
+
   currencies:
     Aurels:
       symbol: "₳"
       starting-balance: 100.0
-    # Examples of how to add more currencies:
+    # Add more currencies here:
     # Dollars:
     #   symbol: "$"
     #   starting-balance: 0.0
-    # Euros:
-    #   symbol: "€"
-    #   starting-balance: 50.0
 
-  # Maximum balance a player can hold (-1 for no limit)
+  # -1 = no cap
   max-balance: -1
-  # Minimum amount allowed in a /pay transaction
   min-pay-amount: 0.01
 
-  # 💬 Messages (supports MiniMessage formatting)
+  # Messages (MiniMessage format)
   # Placeholders: %amount%, %symbol%, %player%, %currency%
   prefix: "<gold>[AurelEconomy] <gray>"
   balance: "Balance (%currency%): %amount%%symbol%"
@@ -57,48 +48,34 @@ economy:
   admin-take: "Took <red>%amount%%symbol%</red> (%currency%) from <yellow>%player%</yellow>."
   admin-set: "Set <yellow>%player%</yellow>'s balance to <green>%amount%%symbol%</green> (%currency%)."
 
-# ─────────────── Market (Admin Shop) ───────────────
+# --- Market ---
 market:
-  # Master switch: enable or disable the entire /market system
   enabled: true
-  # Which GUI to show when a player runs /market
-  # Options:
-  #   "classic" — Original plain chest inventory (MarketGUI)
-  #   "modern"  — Styled chest with gradient titles, glass borders, and MiniMessage lore (ShopGUI)
+  # "classic" = plain chest, "modern" = styled with borders and gradients
   gui-mode: modern
-  # Enable or disable the dynamic pricing algorithm
   dynamic-pricing: true
-  # Percentage to increase price when a player BUYS from the shop
+  # How much prices shift per transaction (0.001 = 0.1%)
   price-increase-per-buy: 0.001
-  # Percentage to decrease price when a player SELLS to the shop
   price-decrease-per-sell: 0.001
-  # Default sell price as a fraction of buy price for new items (0.5 = 50%)
+  # Sell price = buy price * this ratio
   default-sell-ratio: 0.5
 
-  # 📊 Price Stabilization
-  # Prevents auto-farms from permanently crashing item values
-  # Price can never drop below this % of the original base price (0.2 = 20%)
-  price-floor: 0.2
-  # Price can never rise above this % of the original base price (5.0 = 500%)
-  price-ceiling: 5.0
-  # Prices naturally drift back toward their base price over time
+  # Prevents auto-farms from tanking prices forever
+  price-floor: 0.2    # 20% of base = minimum price
+  price-ceiling: 5.0   # 500% of base = maximum price
+
+  # Prices slowly drift back to base over time
   price-recovery:
     enabled: true
-    # % of the gap to recover each cycle (0.01 = 1% closer to base per cycle)
-    rate: 0.01
-    # Minutes between recovery cycles
+    rate: 0.01           # 1% closer per cycle
     interval-minutes: 10
 
-  # 📉 Market Crash Alerts
-  # Broadcast a message when high-value items drop significantly in price
+  # Broadcast when expensive items crash in value
   alerts:
     enabled: true
-    # Percentage of base price at which to trigger an alert (0.5 = when price reaches 50% of base)
-    threshold: 0.5
-    # Items must have a base price above this to qualify for alerts
+    threshold: 0.5       # Alert at 50% of base price
     min-base-price: 200.0
 
-  # Items that cannot be bought or sold in the market
   blacklist:
     - BEDROCK
     - BARRIER
@@ -106,71 +83,48 @@ market:
     - STRUCTURE_VOID
     - LIGHT
 
-# ─────────────── Auction House ───────────────
+# --- Auction House ---
 auction-house:
-  # Master switch: enable or disable the entire /ah system
   enabled: true
-  # Default listing duration in seconds (86400 = 24 hours)
-  default-duration: 86400
-  # Maximum listing duration in seconds (604800 = 7 days)
-  max-duration: 604800
-  # Listing fee percentage (taken from player balance when listing)
+  default-duration: 86400    # 24 hours
+  max-duration: 604800       # 7 days
   listing-fee-percent: 2.0
-  # Sales tax percentage (taken from final sale price and given to the server as a sink)
   sales-tax-percent: 5.0
-  # Maximum number of active listings per player (-1 for unlimited)
   max-listings-per-player: -1
-  # Minimum price a player can list an item for
   min-listing-price: 1.0
 
-# ─────────────── Buy Orders ───────────────
+# --- Buy Orders ---
 buy-orders:
-  # Master switch: enable or disable the entire /orders system
   enabled: true
-  # Maximum number of active buy orders a single player can have at once
-  # Set to -1 for unlimited
   max-active-orders-per-player: 10
-  # Minimum price per item a player can offer
   min-price-per-piece: 0.1
-  # Maximum total value of a single order (-1 for no limit)
-  max-order-value: -1
-
-  # 💸 Taxes
-  # Fee to create an order (percentage of total order cost, taken as an economic sink)
+  max-order-value: -1        # -1 = no limit
   creation-fee-percent: 2.0
-  # Tax taken from the seller when they fulfill a buy order
-  # Tax taken from the seller when they fulfill a buy order
   sales-tax-percent: 5.0
 
-# ─────────────── Web Dashboard ───────────────
-# Serves a browser-based market interface (Modrinth-style)
-# Players use /web or /market (when gui-mode is "web") to get a clickable link
+# --- Web Dashboard ---
+# Browser-based market UI. Players run /web to get a link.
 web:
-  # Enable the web dashboard
   enabled: true
-  # Mode: "local" (embedded server, needs open port) or "cloud" (central Render server, works everywhere)
-  # Options:
-  #   "local" — Runs a web server inside the plugin. Requires an open port on this machine.
-  #   "cloud" — Syncs data to an external web server (Render). Works on shared hosting (MineKeep, Apex, etc.)
+  # "local" = runs a webserver inside the plugin (needs open port)
+  # "cloud" = syncs to external server (works on all hosts)
   mode: cloud
 
-  # ── Local mode settings (only used when mode is "local") ──
+  # Only used when mode is "local"
   local:
-    # The public IP or hostname players use to reach this server
-    # Examples: "play.myserver.com", "192.168.1.50", "localhost" (same machine)
     host: "localhost"
-    # Port to listen on (must be opened in your firewall)
     port: 8585
-    # Session timeout in minutes
     session-timeout-minutes: 10
+    cors-allowed-origins: []
 
-  # ── Cloud mode settings (only used when mode is "cloud") ──
+  # Only used when mode is "cloud"
   cloud:
-    # URL of the central web server (e.g. your Render deployment)
     url: "https://webaureliummc.onrender.com"
-    # Unique server ID (auto-generated on first run — do not share with anyone)
+    # Auto-generated on first run, don't share these
     server-id: ""
-    # API key for authentication (auto-generated on first run — do not share with anyone)
     api-key: ""
-    # How often to sync market data (in seconds)
     sync-interval: 30
+
+# --- Market Items (auto-generated, don't edit unless you know what you're doing) ---
+# Prices below are managed by the plugin. They update based on player activity.
+# Delete an entry to reset it to its default price on next restart.

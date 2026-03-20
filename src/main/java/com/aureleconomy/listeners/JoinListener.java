@@ -8,6 +8,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 
+import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -35,12 +36,12 @@ public class JoinListener implements Listener {
                 while (rs.next()) {
                     hasEarnings = true;
                     int id = rs.getInt("id");
-                    double amount = rs.getDouble("amount");
+                    BigDecimal amount = rs.getBigDecimal("amount");
                     String itemDisplay = rs.getString("item_display");
 
                     // Send message
                     event.getPlayer().sendMessage(Component.text("You earned ", NamedTextColor.GREEN)
-                            .append(Component.text(plugin.getEconomyManager().format(amount), NamedTextColor.GOLD))
+                            .append(Component.text(plugin.getEconomyManager().getFormattedWithSymbol(amount, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.GOLD))
                             .append(Component.text(" for selling ", NamedTextColor.GREEN))
                             .append(Component.text(itemDisplay, NamedTextColor.AQUA))
                             .append(Component.text(" while you were offline.", NamedTextColor.GREEN)));

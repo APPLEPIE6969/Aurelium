@@ -1,8 +1,40 @@
-# Aurelium Patch Notes
+# AurelEconomy - Patch Notes
 
-> **⚠️ EXPERIMENTAL WEB FEATURES ⚠️**
-> 
-> *The newly added Web Dashboard features are currently in active development. Please expect potential bugs or instability if you enable `web.enabled` in your configuration. The core in-game economy, GUI markets, and auction house are stable.*
+## v1.4.0 - Security, Enchantments & Cleanup
+
+### New
+- Enchantment books now have individual prices based on rarity and level (Mending = 35k, Sharpness V = 60k, etc.)
+- Added 1.21.11 enchantments: Breach, Density, Wind Burst
+- Web dashboard balance updates instantly after buying/selling in-game
+- `/bal` now suggests currencies and online players in tab
+- Auto database backups when the plugin updates
+- Auto schema migrations on startup
+
+### Fixes
+- `/bal` was checking the wrong permission — non-op players couldn't use it
+- SellGUI sometimes showed a different total than what you actually got paid
+- Market GUI prices now update right after a transaction instead of lagging behind
+- AH cancellation visual flicker on shift-click
+- Collection bin no longer drops items on the ground if your inventory is full
+- "All Items" button was showing items outside the configured categories
+- NullPointerException when browsing "All Items"
+- Cloud sync no longer spams HTML in console when the server is waking up
+
+### Security
+- Economy, market, and auction transactions are now atomic (no more duping from race conditions)
+- Auction bids use price-checked SQL to prevent out-of-order bid corruption
+- Web purchases are deduplicated to prevent double-spending
+- All GUIs lock down shift-click and drag to prevent inventory exploits
+- SellGUI locks the price at review time so it can't change mid-transaction
+- CORS is now a configurable whitelist instead of wildcard
+
+### Internal
+- All money math uses BigDecimal now (no more floating point drift)
+- Market item prices stored under `market-items` in config (moved from `market.items`)
+- Moved Beacon, Respawn Anchor, End Crystal back to Mob Drops & Magic
+- Web dashboard scroll performance improved with lazy rendering
+- Better error messages for network issues during cloud sync
+
 
 ## Version 1.3.2 — Web Dashboard Polish & Security (Minecraft 1.21.11)
 

@@ -11,13 +11,13 @@
 ### 🌐 Web Dashboard (Optional)
 Aurelium includes a modern, responsive web application that players can use to browse the Server Market, monitor stock trends, and engage with the Auction House from their browser.
 
-* **Server Market:** Fully functional directly from the web—purchase items and have them delivered instantly in-game!
-* **Auction House:** Fully interactive from the web—place bids and buyout items (BIN) securely. 
-* **Buy Orders:** Fully interactive from the web—fulfill player buy orders straight from your online inventory.
-* **Price Tracker:** An interactive chart tracking detailed item price histories. 
-* **Live Sync:** Changes in-game reflect instantly on the web, and vice-versa. Click any item for an **interactive chart** with 7-day price history, smooth bezier curves, gradient fills, and hover tooltips.
+* **Server Market:** Fully functional directly from the web—purchase items and have them delivered instantly in-game!![Web Market](https://cdn.modrinth.com/data/cached_images/b28a02ddb620b4a6b5bc54be95508d4adaabba29.png)
+* **Auction House:** Fully interactive from the web—place bids and buyout items (BIN) securely. ![Web Auction House](https://cdn.modrinth.com/data/cached_images/d27ae421656ac26b76fbdc269d9ead39b93c471c.png)
+* **Buy Orders:** Fully interactive from the web—fulfill player buy orders straight from your online inventory.![Web Buy Orders](https://cdn.modrinth.com/data/cached_images/709660b24ff769aaaf25b9f1c541577e372c7f6b.png)
+* **Price Tracker:** An interactive chart tracking detailed item price histories. ![Web Chart](https://cdn.modrinth.com/data/cached_images/6a6c7c0a5e5a3371120a40242bc91baef67cb6ce.png) 
+* **Live Sync:** Changes in-game reflect instantly on the web, and vice-versa. Click any item for an **interactive chart** with 7-day price history, smooth bezier curves, gradient fills, and hover tooltips.![Web Chart](https://cdn.modrinth.com/data/cached_images/101eff1a2a1ccb5f32ba6ffcc77c752f47dad4b3.png)
 - **Price History**: Prices are recorded every 10 minutes and stored for 7 days for charts.
-- **Cloud Mode**: Optional cloud hosting via Render for always-accessible dashboards.
+- **Cloud Mode**: Optional cloud hosting via Render for **almost** always-accessible dashboards.
 - **Multi-Currency UI**: Correctly displays custom currency symbols (e.g., `₳`, `$`, `€`) synced perfectly from your `config.yml`.
 - **Icon Fallbacks**: Robust image loading seamlessly falls back to older Minecraft versions (1.20, 1.19, 1.18) if modern icons aren't available from external APIs yet.
 - **Secure Sessions**: Players use `/web` in-game to get a time-limited clickable link. Sessions use a rolling 1-hour timeout that resets on activity. Visiting the dashboard without a session shows a friendly error screen with instructions.
@@ -113,7 +113,7 @@ A global request system that lets players buy things they want even while offlin
 
 ## ⚙️ Setup
 
-1.  Download `Aurelium-1.3.0.jar`.
+1.  Download `Aurelium-1.4.0.jar`.
 2.  Place it in your server's `plugins/` folder.
 3.  **Restart** the server.
     - *Note: If Vault is not detected, Aurelium will automatically extract and install it into your plugins folder for you upon first run.*
@@ -124,16 +124,15 @@ A global request system that lets players buy things they want even while offlin
 Control every price directly in the config:
 
 ```yaml
-market:
-  items:
-    DIAMOND:
-      buy: 5000.0    # Cost to buy from server
-      sell: 0.0      # 0.0 = Selling DISABLED
-    DIRT:
-      buy: 1.0
-      sell: 0.5      # Players can sell dirt for 0.5
-    BEDROCK:
-      buy: -1.0      # -1.0 = Buying DISABLED
+market-items:
+  DIAMOND:
+    buy: 5000.0    # Cost to buy from server
+    sell: 0.0      # 0.0 = Selling DISABLED
+  DIRT:
+    buy: 1.0
+    sell: 0.5      # Players can sell dirt for 0.5
+  BEDROCK:
+    buy: -1.0      # -1.0 = Buying DISABLED
 ```
 
 ### 🌐 Network Syncing (MySQL)
@@ -210,7 +209,7 @@ A `messages.yml` file is generated on startup.
 ## ❓ FAQ
 - **"Unknown Command"**: If `/market` or `/eco` says "Unknown command", the plugin failed to load.
     - Check your server console/logs for errors.
-    - Ensure you have `Aurelium-1.3.0.jar` in `plugins/`.
+    - Ensure you have `Aurelium-1.4.0.jar` in `plugins/`.
     - Ensure you are running **Paper 1.21.x**.
 - **"No Permission"**:
     - Ensure you are **OP** (`/op <player>`) or have the permission node `aureleconomy.admin`.

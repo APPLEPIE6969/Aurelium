@@ -6,6 +6,8 @@ import com.aureleconomy.market.MarketItems.MarketEntry;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,22 +17,21 @@ public class MarketManager {
     private final AurelEconomy plugin;
     private final Set<Material> blacklist = ConcurrentHashMap.newKeySet();
     private final Map<String, MarketEntry> entryCache = new ConcurrentHashMap<>();
-    private final Map<String, Double> buyPrices = new ConcurrentHashMap<>(); // Key: Material name OR Custom Name
-    private final Map<String, Double> sellPrices = new ConcurrentHashMap<>();
+    private final Map<String, BigDecimal> buyPrices = new ConcurrentHashMap<>();
+    private final Map<String, BigDecimal> sellPrices = new ConcurrentHashMap<>();
     private final Map<String, String> itemCurrencies = new ConcurrentHashMap<>();
     private final Set<String> alertedItems = ConcurrentHashMap.newKeySet();
-    private double priceIncreaseRate;
-    private double priceDecreaseRate;
+    private BigDecimal priceIncreaseRate;
+    private BigDecimal priceDecreaseRate;
     private boolean dynamicPricing;
     private boolean alertsEnabled;
-    private double alertMinBasePrice;
-    private double alertThresholdPercent;
+    private BigDecimal alertMinBasePrice;
+    private BigDecimal alertThresholdPercent;
     private boolean configModified = false;
-    // Stabilization
-    private double priceFloorPercent;
-    private double priceCeilingPercent;
+    private BigDecimal priceFloorPercent;
+    private BigDecimal priceCeilingPercent;
     private boolean recoveryEnabled;
-    private double recoveryRate;
+    private BigDecimal recoveryRate;
 
     public MarketManager(AurelEconomy plugin) {
         this.plugin = plugin;
@@ -42,13 +43,12 @@ public class MarketManager {
     private void cacheAlertSettings() {
         dynamicPricing = plugin.getConfig().getBoolean("market.dynamic-pricing", true);
         alertsEnabled = plugin.getConfig().getBoolean("market.alerts.enabled", true);
-        alertMinBasePrice = plugin.getConfig().getDouble("market.alerts.min-base-price", 200.0);
-        alertThresholdPercent = plugin.getConfig().getDouble("market.alerts.threshold", 0.5);
-        // Stabilization
-        priceFloorPercent = plugin.getConfig().getDouble("market.price-floor", 0.2);
-        priceCeilingPercent = plugin.getConfig().getDouble("market.price-ceiling", 5.0);
+        alertMinBasePrice = BigDecimal.valueOf(plugin.getConfig().getDouble("market.alerts.min-base-price", 200.0));
+        alertThresholdPercent = BigDecimal.valueOf(plugin.getConfig().getDouble("market.alerts.threshold", 0.5));
+        priceFloorPercent = BigDecimal.valueOf(plugin.getConfig().getDouble("market.price-floor", 0.2));
+        priceCeilingPercent = BigDecimal.valueOf(plugin.getConfig().getDouble("market.price-ceiling", 5.0));
         recoveryEnabled = plugin.getConfig().getBoolean("market.price-recovery.enabled", true);
-        recoveryRate = plugin.getConfig().getDouble("market.price-recovery.rate", 0.01);
+        recoveryRate = BigDecimal.valueOf(plugin.getConfig().getDouble("market.price-recovery.rate", 0.01));
         int recoveryInterval = plugin.getConfig().getInt("market.price-recovery.interval-minutes", 10);
 
         // Schedule passive price recovery
@@ -71,69 +71,64 @@ public class MarketManager {
 
     private void initializePrices() {
         FileConfiguration config = plugin.getConfig();
-        boolean saveNeeded = false;
 
-        // Cache rates
-        priceIncreaseRate = config.getDouble("market.price-increase-per-buy", 0.001);
-        priceDecreaseRate = config.getDouble("market.price-decrease-per-sell", 0.001);
+        priceIncreaseRate = BigDecimal.valueOf(config.getDouble("market.price-increase-per-buy", 0.001));
+        priceDecreaseRate = BigDecimal.valueOf(config.getDouble("market.price-decrease-per-sell", 0.001));
 
-        // Iterate through all MarketItems and load/save prices
-        // First pass: Specific categories
         for (Category cat : Category.values()) {
-            if (cat == Category.ALL_ITEMS)
-                continue;
+            if (cat == Category.ALL_ITEMS) continue;
             for (MarketEntry entry : MarketItems.getItems(cat)) {
                 processEntry(entry, config);
             }
         }
-        // Second pass: ALL_ITEMS (only for items not already processed)
         for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
-            String key = (entry.customName != null && entry.material == Material.SPAWNER) ? entry.customName
+            String key = (entry.customName != null) ? entry.material.name() + "_" + entry.customName.replace(" ", "_").toUpperCase()
                     : entry.material.name();
             if (!entryCache.containsKey(key)) {
                 processEntry(entry, config);
             }
         }
 
-        if (configModified || saveNeeded) {
+        if (configModified) {
             plugin.saveConfig();
+            configModified = false;
         }
     }
 
     private void processEntry(MarketEntry entry, FileConfiguration config) {
-        // Determine the Key for this item
         String key = entry.material.name();
-        if (entry.customName != null && entry.material == Material.SPAWNER) {
-            key = entry.customName;
+        if (entry.customName != null) {
+            key = entry.material.name() + "_" + entry.customName.replace(" ", "_").toUpperCase();
         }
 
-        // Add to entry cache for O(1) lookups
         entryCache.put(key, entry);
 
-        // Config path (replace spaces with underscores for clean YAML)
-        String basePath = "market.items." + key.replace(" ", "_").toUpperCase();
+        String basePath = "market-items." + key.replace(" ", "_").toUpperCase();
 
-        // Buy Price
+        BigDecimal configBuy = config.contains(basePath + ".buy") ? BigDecimal.valueOf(config.getDouble(basePath + ".buy")) : BigDecimal.ZERO;
         if (!config.contains(basePath + ".buy")
-                || (config.getDouble(basePath + ".buy") == 1.0 && entry.price > 1.0)) {
-            config.set(basePath + ".buy", entry.price);
+                || (configBuy.compareTo(BigDecimal.ONE) == 0 && entry.price.compareTo(BigDecimal.ONE) > 0)) {
+            config.set(basePath + ".buy", entry.price.doubleValue());
             configModified = true;
+            configBuy = entry.price;
         }
 
+        BigDecimal configSell;
         if (!config.contains(basePath + ".sell")) {
-            double sellPrice;
             if (entry.customSellPrice != null) {
-                sellPrice = entry.customSellPrice;
+                configSell = entry.customSellPrice;
             } else {
-                double sellRatio = plugin.getConfig().getDouble("market.default-sell-ratio", 0.5);
-                sellPrice = entry.price * sellRatio;
+                BigDecimal sellRatio = BigDecimal.valueOf(plugin.getConfig().getDouble("market.default-sell-ratio", 0.5));
+                configSell = entry.price.multiply(sellRatio);
             }
-            config.set(basePath + ".sell", sellPrice);
+            config.set(basePath + ".sell", configSell.doubleValue());
             configModified = true;
+        } else {
+            configSell = BigDecimal.valueOf(config.getDouble(basePath + ".sell"));
         }
 
-        buyPrices.put(key, config.getDouble(basePath + ".buy"));
-        sellPrices.put(key, config.getDouble(basePath + ".sell"));
+        buyPrices.put(key, configBuy);
+        sellPrices.put(key, configSell);
 
         String curPath = basePath + ".currency";
         if (!config.contains(curPath)) {
@@ -148,39 +143,41 @@ public class MarketManager {
             return;
         }
 
-        // Only manipulate the buy price. Sell price is mathematically bound to it.
-        double currentBuy = getBuyPrice(materialName);
+        buyPrices.compute(materialName, (key, currentBuy) -> {
+            if (currentBuy == null) currentBuy = BigDecimal.ZERO;
+            
+            BigDecimal updatedPrice;
+            if (isBuy) {
+                // Demand up -> Price up
+                double multiplier = Math.pow(1 + priceIncreaseRate.doubleValue(), amount);
+                updatedPrice = currentBuy.multiply(BigDecimal.valueOf(multiplier));
+            } else {
+                // Supply up -> Price down
+                double multiplier = Math.pow(1 - priceDecreaseRate.doubleValue(), amount);
+                updatedPrice = currentBuy.multiply(BigDecimal.valueOf(multiplier));
+            }
 
-        if (isBuy) {
-            // Demand up -> Price up
-            currentBuy *= Math.pow(1 + priceIncreaseRate, amount);
-        } else {
-            // Supply up -> Price down
-            currentBuy *= Math.pow(1 - priceDecreaseRate, amount);
-        }
+            // Clamp to floor/ceiling
+            MarketEntry entry = entryCache.get(materialName);
+            if (entry != null) {
+                BigDecimal floor = entry.price.multiply(priceFloorPercent);
+                BigDecimal ceiling = entry.price.multiply(priceCeilingPercent);
+                if (updatedPrice.compareTo(floor) < 0) updatedPrice = floor;
+                if (updatedPrice.compareTo(ceiling) > 0) updatedPrice = ceiling;
+            }
 
-        // Enforce floor & ceiling relative to original base price
-        MarketEntry entry = entryCache.get(materialName);
-        if (entry != null) {
-            double floor = entry.price * priceFloorPercent;
-            double ceiling = entry.price * priceCeilingPercent;
-            currentBuy = Math.max(currentBuy, floor);
-            currentBuy = Math.min(currentBuy, ceiling);
-        }
+            String basePath = "market-items." + materialName.replace(" ", "_").toUpperCase();
+            plugin.getConfig().set(basePath + ".buy", updatedPrice.doubleValue());
+            configModified = true;
 
-        // Save new buy price to memory
-        buyPrices.put(materialName, currentBuy);
+            // Check for alerts
+            checkPriceAlert(materialName, updatedPrice);
 
-        // Check for alerts
-        checkPriceAlert(materialName, currentBuy);
-
-        // Update config in memory, but don't save to disk yet (batching optimization)
-        String basePath = "market.items." + materialName.replace(" ", "_").toUpperCase();
-        plugin.getConfig().set(basePath + ".buy", currentBuy);
-        configModified = true;
+            return updatedPrice;
+        });
     }
 
-    private void checkPriceAlert(String key, double newPrice) {
+    private void checkPriceAlert(String key, BigDecimal newPrice) {
         if (!alertsEnabled) {
             return;
         }
@@ -189,14 +186,14 @@ public class MarketManager {
         if (entry == null)
             return;
 
-        if (entry.price < alertMinBasePrice) {
+        if (entry.price.compareTo(alertMinBasePrice) < 0) {
             return;
         }
 
-        double alertThreshold = entry.price * alertThresholdPercent;
-        double resetThreshold = entry.price * (alertThresholdPercent + 0.1);
+        BigDecimal alertThreshold = entry.price.multiply(alertThresholdPercent);
+        BigDecimal resetThreshold = entry.price.multiply(alertThresholdPercent.add(BigDecimal.valueOf(0.1)));
 
-        if (newPrice <= alertThreshold && !alertedItems.contains(key)) {
+        if (newPrice.compareTo(alertThreshold) <= 0 && !alertedItems.contains(key)) {
             // Broadcast crash
             String displayName = entry.customName != null ? entry.customName : entry.material.name().replace("_", " ");
             net.kyori.adventure.text.Component message = net.kyori.adventure.text.Component.text()
@@ -208,13 +205,13 @@ public class MarketManager {
                             net.kyori.adventure.text.format.NamedTextColor.AQUA))
                     .append(net.kyori.adventure.text.Component.text(" is now at a massive discount! ",
                             net.kyori.adventure.text.format.NamedTextColor.GRAY))
-                    .append(net.kyori.adventure.text.Component.text(plugin.getEconomyManager().format(newPrice),
+                    .append(net.kyori.adventure.text.Component.text(plugin.getEconomyManager().getFormattedWithSymbol(newPrice, plugin.getEconomyManager().getDefaultCurrency()),
                             net.kyori.adventure.text.format.NamedTextColor.GREEN))
                     .build();
 
             plugin.getServer().broadcast(message);
             alertedItems.add(key);
-        } else if (newPrice > resetThreshold && alertedItems.contains(key)) {
+        } else if (newPrice.compareTo(resetThreshold) > 0 && alertedItems.contains(key)) {
             // Reset alert for next time
             alertedItems.remove(key);
         }
@@ -227,30 +224,27 @@ public class MarketManager {
         }
     }
 
-    /**
-     * Passive price recovery: nudge all prices back toward their original base.
-     * Called on a repeating timer.
-     */
     private void recoverPrices() {
         for (Map.Entry<String, MarketEntry> e : entryCache.entrySet()) {
             String key = e.getKey();
-            double basePrice = e.getValue().price;
-            double currentPrice = getBuyPrice(key);
+            BigDecimal basePrice = e.getValue().price;
+            BigDecimal currentPrice = getBuyPrice(key);
 
-            if (currentPrice == basePrice)
+            if (currentPrice.compareTo(basePrice) == 0)
                 continue;
 
-            // Move current price toward base by recoveryRate % of the gap
-            double newPrice = currentPrice + (basePrice - currentPrice) * recoveryRate;
+            BigDecimal gap = basePrice.subtract(currentPrice);
+            BigDecimal adjustment = gap.multiply(recoveryRate);
+            BigDecimal newPrice = currentPrice.add(adjustment);
 
-            // Snap to base if close enough (avoid floating-point drift)
-            if (Math.abs(newPrice - basePrice) < 0.01) {
+            // Snap to base if close enough
+            if (gap.abs().compareTo(BigDecimal.valueOf(0.01)) < 0) {
                 newPrice = basePrice;
             }
 
             buyPrices.put(key, newPrice);
-            String basePath = "market.items." + key.replace(" ", "_").toUpperCase();
-            plugin.getConfig().set(basePath + ".buy", newPrice);
+            String basePath = "market-items." + key.replace(" ", "_").toUpperCase();
+            plugin.getConfig().set(basePath + ".buy", newPrice.doubleValue());
             configModified = true;
         }
     }
@@ -263,58 +257,45 @@ public class MarketManager {
         return blacklist.contains(material);
     }
 
-    /**
-     * Get buy price for a standard material.
-     */
-    public double getBuyPrice(Material material) {
+    public BigDecimal getBuyPrice(Material material) {
         return getBuyPrice(material.name());
     }
 
-    /**
-     * Get buy price for a specific key (Material name or Custom Name).
-     */
-    public double getBuyPrice(String key) {
-        return buyPrices.getOrDefault(key, 0.0);
+    public BigDecimal getBuyPrice(String key) {
+        return buyPrices.getOrDefault(key, BigDecimal.ZERO);
     }
 
-    public double getSellPrice(Material material) {
+    public BigDecimal getSellPrice(Material material) {
         return getSellPrice(material.name());
     }
 
-    public double getSellPrice(String key) {
-        // If it was explicitly disabled/set to 0 in config by admin, honor it
-        // immediately
-        double configSell = sellPrices.getOrDefault(key, 0.0);
-        if (configSell <= 0.0)
-            return 0.0;
+    public BigDecimal getSellPrice(String key) {
+        BigDecimal configSell = sellPrices.getOrDefault(key, BigDecimal.ZERO);
+        if (configSell.compareTo(BigDecimal.ZERO) <= 0)
+            return BigDecimal.ZERO;
 
         MarketEntry entry = entryCache.get(key);
         if (entry == null)
             return configSell;
 
-        double baseBuyPrice = entry.price;
-        if (baseBuyPrice <= 0)
-            return 0.0;
+        BigDecimal baseBuyPrice = entry.price;
+        if (baseBuyPrice.compareTo(BigDecimal.ZERO) <= 0)
+            return BigDecimal.ZERO;
 
-        double currentBuyPrice = getBuyPrice(key);
+        BigDecimal currentBuyPrice = getBuyPrice(key);
 
         // Calculate the ratio saved in config
-        double ratio = configSell / baseBuyPrice;
+        BigDecimal ratio = configSell.divide(baseBuyPrice, 4, RoundingMode.HALF_UP);
 
-        // If the saved ratio is identical to 1.0 (or very close), it's a bug from an
-        // older version
-        // of the plugin where buy=sell. Force it to use the global default ratio to fix
-        // the economy.
-        if (ratio > 0.95) {
-            ratio = plugin.getConfig().getDouble("market.default-sell-ratio", 0.5);
+        if (ratio.compareTo(BigDecimal.valueOf(0.95)) > 0) {
+            ratio = BigDecimal.valueOf(plugin.getConfig().getDouble("market.default-sell-ratio", 0.5));
         }
 
-        // Apply exactly the same stock market multiplier to the base sell price
-        double dynamicSellPrice = currentBuyPrice * ratio;
+        BigDecimal dynamicSellPrice = currentBuyPrice.multiply(ratio);
 
-        // Anti-exploit safeguard: dynamic sell can never exceed dynamic buy
-        if (dynamicSellPrice >= currentBuyPrice) {
-            dynamicSellPrice = currentBuyPrice * 0.99; // Cap it just underneath buy price
+        // Sell can never exceed buy
+        if (dynamicSellPrice.compareTo(currentBuyPrice) >= 0) {
+            dynamicSellPrice = currentBuyPrice.multiply(BigDecimal.valueOf(0.99));
         }
 
         return dynamicSellPrice;
@@ -331,7 +312,7 @@ public class MarketManager {
     public java.util.List<MarketEntry> getItemsByCategory(String categoryName) {
         for (Category cat : Category.values()) {
             if (cat.name.equalsIgnoreCase(categoryName) || cat.name().equalsIgnoreCase(categoryName)) {
-                return com.aureleconomy.market.MarketItems.getItems(cat);
+                return MarketItems.getItems(cat);
             }
         }
         return new java.util.ArrayList<>();
@@ -340,7 +321,7 @@ public class MarketManager {
     public java.util.List<MarketEntry> getOrderItemsByCategory(String categoryName) {
         for (Category cat : Category.values()) {
             if (cat.name.equalsIgnoreCase(categoryName) || cat.name().equalsIgnoreCase(categoryName)) {
-                return com.aureleconomy.market.MarketItems.getOrderItems(cat);
+                return MarketItems.getOrderItems(cat);
             }
         }
         return new java.util.ArrayList<>();

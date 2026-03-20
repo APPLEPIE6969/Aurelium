@@ -15,6 +15,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -64,9 +65,9 @@ public class StocksGUI extends GUIHolder {
     private void loadPrices() {
         for (StockItem stock : stocks) {
             MarketEntry entry = stock.entry;
-            double basePrice = entry.price;
-            double currentPrice;
-            double sellPrice;
+            BigDecimal basePrice = entry.price;
+            BigDecimal currentPrice;
+            BigDecimal sellPrice;
 
             String priceKey = (entry.customName != null)
                     ? entry.customName
@@ -77,20 +78,21 @@ public class StocksGUI extends GUIHolder {
 
             // If it's a non-market item (base price 1.0 from ALL_ITEMS dynamic init), check
             // last sold
-            if (basePrice == 1.0 && currentPrice == 1.0) {
-                Double lastSold = plugin.getOrderManager().getLastSoldPrice(priceKey);
+            if (basePrice.compareTo(BigDecimal.ONE) == 0 && currentPrice.compareTo(BigDecimal.ONE) == 0) {
+                BigDecimal lastSold = plugin.getOrderManager().getLastSoldPrice(priceKey);
                 if (lastSold != null) {
                     currentPrice = lastSold;
                     sellPrice = lastSold; // No separate sell price for non-market items, just actual value
                 } else {
-                    currentPrice = 0.0; // Unvalued
-                    sellPrice = 0.0;
+                    currentPrice = BigDecimal.ZERO; // Unvalued
+                    sellPrice = BigDecimal.ZERO;
                 }
             }
 
             double change = 0;
-            if (basePrice > 0 && currentPrice > 0 && basePrice != 1.0) {
-                change = ((currentPrice - basePrice) / basePrice) * 100;
+            if (basePrice.compareTo(BigDecimal.ZERO) > 0 && currentPrice.compareTo(BigDecimal.ZERO) > 0 && basePrice.compareTo(BigDecimal.ONE) != 0) {
+                // ((currentPrice - basePrice) / basePrice) * 100
+                change = currentPrice.subtract(basePrice).divide(basePrice, 4, java.math.RoundingMode.HALF_UP).doubleValue() * 100;
             }
 
             stock.currentPrice = currentPrice;
@@ -116,8 +118,8 @@ public class StocksGUI extends GUIHolder {
                 })
                 .sorted((a, b) -> {
                     // Priority 1: Market Items vs Non-Market (ALL_ITEMS have base price 1.0)
-                    boolean aIsMarket = a.entry.price != 1.0;
-                    boolean bIsMarket = b.entry.price != 1.0;
+                    boolean aIsMarket = a.entry.price.compareTo(BigDecimal.ONE) != 0;
+                    boolean bIsMarket = b.entry.price.compareTo(BigDecimal.ONE) != 0;
 
                     if (aIsMarket && !bIsMarket)
                         return -1;
@@ -179,22 +181,19 @@ public class StocksGUI extends GUIHolder {
 
             List<Component> lore = new ArrayList<>();
 
-            if (stock.entry.price == 1.0) {
+            if (stock.entry.price.compareTo(BigDecimal.ONE) == 0) {
                 // Formatting for non-market items (Prices pulled from Order/Auction history)
-                if (stock.currentPrice > 0) {
-                    lore.add(Component.text("Last Sold For: " + String.format("%.2f", stock.currentPrice) + " "
-                            + plugin.getConfig().getString("economy.currency-symbol"), NamedTextColor.GOLD));
+                if (stock.currentPrice.compareTo(BigDecimal.ZERO) > 0) {
+                    lore.add(Component.text("Last Sold For: " + plugin.getEconomyManager().getFormattedWithSymbol(stock.currentPrice, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.GOLD));
                 } else {
                     lore.add(Component.text("Last Sold For: Unvalued", NamedTextColor.DARK_GRAY));
                 }
                 lore.add(Component.text("Base Price: Unvalued (Not in Market)", NamedTextColor.DARK_GRAY));
             } else {
                 // Formatting for real market items
-                lore.add(Component.text("Current Buy Price: " + String.format("%.2f", stock.currentPrice) + " "
-                        + plugin.getConfig().getString("economy.currency-symbol"), NamedTextColor.GREEN));
-                lore.add(Component.text("Current Sell Price: " + String.format("%.2f", stock.sellPrice) + " "
-                        + plugin.getConfig().getString("economy.currency-symbol"), NamedTextColor.RED));
-                lore.add(Component.text("Base Price: " + String.format("%.2f", stock.entry.price),
+                lore.add(Component.text("Current Buy Price: " + plugin.getEconomyManager().getFormattedWithSymbol(stock.currentPrice, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.GREEN));
+                lore.add(Component.text("Current Sell Price: " + plugin.getEconomyManager().getFormattedWithSymbol(stock.sellPrice, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.RED));
+                lore.add(Component.text("Base Price: " + plugin.getEconomyManager().getFormattedWithSymbol(stock.entry.price, plugin.getEconomyManager().getDefaultCurrency()),
                         NamedTextColor.DARK_GRAY));
 
                 if (dynamicPricing && stock.change != 0) {
@@ -288,8 +287,8 @@ public class StocksGUI extends GUIHolder {
 
     private static class StockItem {
         final MarketEntry entry;
-        double currentPrice;
-        double sellPrice;
+        BigDecimal currentPrice;
+        BigDecimal sellPrice;
         double change;
 
         StockItem(MarketEntry entry) {

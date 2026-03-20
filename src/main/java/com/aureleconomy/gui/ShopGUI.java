@@ -18,6 +18,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -246,7 +247,7 @@ public class ShopGUI extends GUIHolder {
             itemSlots.put(slot, entry);
 
             // ── Price & Currency ──
-            double buyPrice;
+            BigDecimal buyPrice;
             String currency;
             if (entry.material == Material.SPAWNER && entry.customName != null) {
                 buyPrice = plugin.getMarketManager().getBuyPrice(entry.customName);
@@ -259,6 +260,7 @@ public class ShopGUI extends GUIHolder {
             // ── Build the display item ──
             ItemStack display = buildDisplayItem(entry);
             ItemMeta meta = display.getItemMeta();
+            if (meta == null) continue;
 
             // ── Item name ──
             Component displayName = entry.customName != null
@@ -272,9 +274,9 @@ public class ShopGUI extends GUIHolder {
             List<Component> lore = new ArrayList<>();
             lore.add(Component.empty());
 
-            if (buyPrice > 0) {
+            if (buyPrice.compareTo(BigDecimal.ZERO) > 0) {
                 lore.add(MM
-                        .deserialize("<gray>Price: <green>" + plugin.getEconomyManager().format(buyPrice, currency)
+                        .deserialize("<gray>Price: <green>" + plugin.getEconomyManager().getFormattedWithSymbol(buyPrice, currency)
                                 + "</green></gray>")
                         .decoration(TextDecoration.ITALIC, false));
                 lore.add(Component.empty());
@@ -401,7 +403,7 @@ public class ShopGUI extends GUIHolder {
         int amount = bulk ? 64 : 1;
 
         // Resolve price + currency
-        double unitPrice;
+        BigDecimal unitPrice;
         String currency;
         if (entry.material == Material.SPAWNER && entry.customName != null) {
             unitPrice = plugin.getMarketManager().getBuyPrice(entry.customName);
@@ -411,18 +413,18 @@ public class ShopGUI extends GUIHolder {
             currency = plugin.getMarketManager().getCurrency(entry.material);
         }
 
-        if (unitPrice <= 0) {
+        if (unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
             buyer.sendMessage(MM.deserialize("<red>This item is not for sale.</red>"));
             buyer.playSound(buyer.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
             return;
         }
 
-        double totalPrice = unitPrice * amount;
+        BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
 
         // Funds check
         if (!plugin.getEconomyManager().has(buyer, totalPrice, currency)) {
             buyer.sendMessage(MM.deserialize("<red><bold>✖</bold> Not enough funds!</red> <gray>You need "
-                    + plugin.getEconomyManager().format(totalPrice, currency) + "</gray>"));
+                    + plugin.getEconomyManager().getFormattedWithSymbol(totalPrice, currency) + "</gray>"));
             buyer.playSound(buyer.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
             return;
         }
@@ -451,8 +453,15 @@ public class ShopGUI extends GUIHolder {
         // Feedback
         String itemName = entry.customName != null ? entry.customName : entry.material.name().replace("_", " ");
         buyer.sendMessage(MM.deserialize("<green><bold>✔</bold> Purchased <white>" + amount + "x " + itemName
-                + "</white> for <gold>" + plugin.getEconomyManager().format(totalPrice, currency) + "</gold></green>"));
+                + "</white> for <gold>" + plugin.getEconomyManager().getFormattedWithSymbol(totalPrice, currency) + "</gold></green>"));
         buyer.playSound(buyer.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.2f);
+        
+        // Refresh GUI to update prices visually
+        refreshItems();
+        // Push balance update to web dashboard
+        if (plugin.getCloudSync() != null) {
+            plugin.getCloudSync().updatePlayerBalance(buyer);
+        }
     }
 
     // ╔═══════════════════════════════════════════════════════════════╗

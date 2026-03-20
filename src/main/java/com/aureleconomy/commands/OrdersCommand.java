@@ -11,6 +11,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -87,10 +88,10 @@ public class OrdersCommand implements TabExecutor {
             return;
         }
 
-        double pricePerPiece;
+        BigDecimal pricePerPiece;
         try {
-            pricePerPiece = Double.parseDouble(args[3]);
-            if (pricePerPiece <= 0)
+            pricePerPiece = new BigDecimal(args[3]);
+            if (pricePerPiece.compareTo(BigDecimal.ZERO) <= 0)
                 throw new NumberFormatException();
         } catch (NumberFormatException e) {
             player.sendMessage(Component.text("Price must be a positive number.", NamedTextColor.RED));
@@ -180,7 +181,7 @@ public class OrdersCommand implements TabExecutor {
                                     NamedTextColor.GREEN))
                             .append(Component.text(" @ ", NamedTextColor.GRAY))
                             .append(Component.text(
-                                    plugin.getEconomyManager().format(order.getPricePerPiece(), order.getCurrency())
+                                    plugin.getEconomyManager().getFormattedWithSymbol(order.getPricePerPiece(), order.getCurrency())
                                             + " each",
                                     NamedTextColor.WHITE)));
         }
@@ -219,7 +220,7 @@ public class OrdersCommand implements TabExecutor {
                             .append(Component.text(order.getAmountRemaining() + " needed", NamedTextColor.GREEN))
                             .append(Component.text(" @ ", NamedTextColor.GRAY))
                             .append(Component.text(
-                                    plugin.getEconomyManager().format(order.getPricePerPiece(), order.getCurrency())
+                                    plugin.getEconomyManager().getFormattedWithSymbol(order.getPricePerPiece(), order.getCurrency())
                                             + " each",
                                     NamedTextColor.WHITE)));
         }

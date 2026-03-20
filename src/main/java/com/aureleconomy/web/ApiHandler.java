@@ -12,6 +12,7 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import java.math.BigDecimal;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URLDecoder;
@@ -36,8 +37,17 @@ public class ApiHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        // CORS headers
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        // CORS Security: Whitelist-based validation
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        List<String> allowedOrigins = plugin.getConfig().getStringList("web.local.cors-allowed-origins");
+        
+        if (origin != null && !allowedOrigins.isEmpty()) {
+            if (allowedOrigins.contains(origin)) {
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
+                exchange.getResponseHeaders().set("Vary", "Origin");
+            }
+        }
+
         exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
@@ -83,7 +93,7 @@ public class ApiHandler implements HttpHandler {
         Map<String, Object> currencies = new LinkedHashMap<>();
 
         // Default currency balance
-        double defaultBal = plugin.getEconomyManager().getBalance(player, defaultCurrency);
+        BigDecimal defaultBal = plugin.getEconomyManager().getBalance(player, defaultCurrency);
         currencies.put(defaultCurrency, defaultBal);
 
         // Additional currencies from config
@@ -91,7 +101,7 @@ public class ApiHandler implements HttpHandler {
             for (String currencyName : plugin.getConfig().getConfigurationSection("economy.currencies")
                     .getKeys(false)) {
                 if (!currencyName.equals(defaultCurrency)) {
-                    double bal = plugin.getEconomyManager().getBalance(player, currencyName);
+                    BigDecimal bal = plugin.getEconomyManager().getBalance(player, currencyName);
                     currencies.put(currencyName, bal);
                 }
             }
@@ -208,7 +218,7 @@ public class ApiHandler implements HttpHandler {
             amount = 1;
 
         // Resolve the item
-        double buyPrice;
+        BigDecimal buyPrice;
         String currency;
         Material material;
 
@@ -223,22 +233,22 @@ public class ApiHandler implements HttpHandler {
             material = Material.SPAWNER; // Custom named items are typically spawners
         }
 
-        if (buyPrice <= 0) {
+        if (buyPrice.compareTo(BigDecimal.ZERO) <= 0) {
             sendJson(exchange, 400, "{\"error\":\"Item not for sale\"}");
             return;
         }
 
-        double totalCost = buyPrice * amount;
+        BigDecimal totalCost = buyPrice.multiply(BigDecimal.valueOf(amount));
         OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerUuid);
 
         if (!plugin.getEconomyManager().has(offlinePlayer, totalCost, currency)) {
-            String formatted = plugin.getEconomyManager().format(totalCost, currency);
+            String formatted = plugin.getEconomyManager().getFormattedWithSymbol(totalCost, currency);
             sendJson(exchange, 400, "{\"error\":\"Not enough funds. You need " + escapeJson(formatted) + "\"}");
             return;
         }
 
         // Execute on main thread
-        final double finalCost = totalCost;
+        final BigDecimal finalCost = totalCost;
         final int finalAmount = amount;
         final String finalCurrency = currency;
         final Material finalMaterial = material;
@@ -264,9 +274,9 @@ public class ApiHandler implements HttpHandler {
             onlinePlayer.getInventory().addItem(toGive);
             plugin.getMarketManager().onTransaction(finalItemKey, true, finalAmount);
 
-            double newBalance = plugin.getEconomyManager().getBalance(onlinePlayer, finalCurrency);
-            String formatted = plugin.getEconomyManager().format(finalCost, finalCurrency);
-            String balFormatted = plugin.getEconomyManager().format(newBalance, finalCurrency);
+            BigDecimal newBalance = plugin.getEconomyManager().getBalance(onlinePlayer, finalCurrency);
+            String formatted = plugin.getEconomyManager().getFormattedWithSymbol(finalCost, finalCurrency);
+            String balFormatted = plugin.getEconomyManager().getFormattedWithSymbol(newBalance, finalCurrency);
 
             onlinePlayer.sendMessage(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(
                     "<green><bold>✔</bold> Web purchase: <white>" + finalAmount + "x "
@@ -306,7 +316,7 @@ public class ApiHandler implements HttpHandler {
                     : entry.material.name();
             String displayName = entry.customName != null ? entry.customName
                     : entry.material.name().replace("_", " ");
-            double buyPrice = (entry.material == Material.SPAWNER && entry.customName != null)
+            BigDecimal buyPrice = (entry.material == Material.SPAWNER && entry.customName != null)
                     ? plugin.getMarketManager().getBuyPrice(entry.customName)
                     : plugin.getMarketManager().getBuyPrice(entry.material);
             String currency = (entry.material == Material.SPAWNER && entry.customName != null)
@@ -316,8 +326,8 @@ public class ApiHandler implements HttpHandler {
             json.append("{\"key\":").append(jsonStr(key));
             json.append(",\"material\":").append(jsonStr(entry.material.name().toLowerCase()));
             json.append(",\"name\":").append(jsonStr(displayName));
-            json.append(",\"price\":").append(buyPrice);
-            json.append(",\"priceFormatted\":").append(jsonStr(plugin.getEconomyManager().format(buyPrice, currency)));
+            json.append(",\"price\":").append(buyPrice.toString());
+            json.append(",\"priceFormatted\":").append(jsonStr(plugin.getEconomyManager().getFormattedWithSymbol(buyPrice, currency)));
             json.append(",\"currency\":").append(jsonStr(currency));
             json.append("}");
         }

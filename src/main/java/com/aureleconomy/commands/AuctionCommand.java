@@ -12,6 +12,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.bukkit.command.TabExecutor;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -78,7 +80,7 @@ public class AuctionCommand implements TabExecutor {
             }
             try {
                 int id = Integer.parseInt(args[1]);
-                double amount = Double.parseDouble(args[2]);
+                BigDecimal amount = new BigDecimal(args[2]);
                 AuctionItem ai = plugin.getAuctionManager().getAuctionById(id);
                 if (ai == null) {
                     player.sendMessage(Component.text("Auction not found.", NamedTextColor.RED));
@@ -108,15 +110,15 @@ public class AuctionCommand implements TabExecutor {
                 return true;
             }
 
-            double price;
+            BigDecimal price;
             try {
-                price = Double.parseDouble(args[1]);
+                price = new BigDecimal(args[1]);
             } catch (NumberFormatException e) {
                 player.sendMessage(Component.text("Invalid price.", NamedTextColor.RED));
                 return true;
             }
 
-            if (price <= 0) {
+            if (price.compareTo(BigDecimal.ZERO) <= 0) {
                 player.sendMessage(Component.text("Price must be positive.", NamedTextColor.RED));
                 return true;
             }
@@ -152,17 +154,17 @@ public class AuctionCommand implements TabExecutor {
             }
 
             // Listing fee
-            double feeRate = plugin.getConfig().getDouble("auction-house.listing-fee-percent", 2.0) / 100.0;
-            double days = durationMillis / (1000.0 * 60 * 60 * 24);
+            BigDecimal feeRate = BigDecimal.valueOf(plugin.getConfig().getDouble("auction-house.listing-fee-percent", 2.0)).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+            BigDecimal days = BigDecimal.valueOf(durationMillis).divide(BigDecimal.valueOf(86400000L), 4, RoundingMode.HALF_UP);
             // Scaling formula: Base% * (1 + (Days - 1) * 0.05)
-            double scalingMultiplier = 1.0 + (Math.max(0, days - 1) * 0.05);
-            double feeAmount = price * feeRate * scalingMultiplier;
+            BigDecimal scalingMultiplier = BigDecimal.ONE.add(days.subtract(BigDecimal.ONE).max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(0.05)));
+            BigDecimal feeAmount = price.multiply(feeRate).multiply(scalingMultiplier).setScale(2, RoundingMode.HALF_UP);
 
             if (!plugin.getEconomyManager().has(player, feeAmount, currency)) {
                 player.sendMessage(
                         Component.text(
                                 "You cannot afford the listing fee of "
-                                        + plugin.getEconomyManager().format(feeAmount, currency),
+                                        + plugin.getEconomyManager().getFormattedWithSymbol(feeAmount, currency),
                                 NamedTextColor.RED));
                 return true;
             }
@@ -176,7 +178,7 @@ public class AuctionCommand implements TabExecutor {
             player.getInventory().setItemInMainHand(null);
 
             player.sendMessage(
-                    Component.text("Item listed for " + price + " (Fee: " + String.format("%.2f", feeAmount) + ")",
+                    Component.text("Item listed for " + plugin.getEconomyManager().getFormattedWithSymbol(price, currency) + " (Fee: " + plugin.getEconomyManager().getFormattedWithSymbol(feeAmount, currency) + ")",
                             NamedTextColor.GREEN));
         }
 

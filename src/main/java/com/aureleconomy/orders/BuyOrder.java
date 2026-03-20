@@ -1,6 +1,7 @@
 package com.aureleconomy.orders;
 
 import org.bukkit.Material;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 public class BuyOrder {
@@ -9,12 +10,12 @@ public class BuyOrder {
     private final Material material;
     private final int amountRequested;
     private int amountFilled;
-    private final double pricePerPiece;
+    private final BigDecimal pricePerPiece;
     private final String currency;
     private String status;
 
     public BuyOrder(int id, UUID buyerUuid, Material material, int amountRequested, int amountFilled,
-            double pricePerPiece, String currency, String status) {
+            BigDecimal pricePerPiece, String currency, String status) {
         this.id = id;
         this.buyerUuid = buyerUuid;
         this.material = material;
@@ -45,7 +46,7 @@ public class BuyOrder {
         return amountFilled;
     }
 
-    public double getPricePerPiece() {
+    public BigDecimal getPricePerPiece() {
         return pricePerPiece;
     }
 

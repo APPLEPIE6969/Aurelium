@@ -1,6 +1,7 @@
 package com.aureleconomy.market;
 
 import org.bukkit.Material;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -41,31 +42,31 @@ public class MarketItems {
                 }
         }
 
-        public static class MarketEntry {
-                public final Material material;
-                public final double price;
-                public final Double customSellPrice;
-                public final String customName;
+public static class MarketEntry {
+    public final Material material;
+    public final BigDecimal price;
+    public final BigDecimal customSellPrice;
+    public final String customName;
 
-                public MarketEntry(Material material, double price) {
-                        this(material, price, null, null);
-                }
+    public MarketEntry(Material material, double price) {
+        this(material, price, null, null);
+    }
 
-                public MarketEntry(Material material, double price, double sellPrice) {
-                        this(material, price, sellPrice, null);
-                }
+    public MarketEntry(Material material, double price, double sellPrice) {
+        this(material, price, sellPrice, null);
+    }
 
-                public MarketEntry(Material material, double price, String customName) {
-                        this(material, price, null, customName);
-                }
+    public MarketEntry(Material material, double price, String customName) {
+        this(material, price, null, customName);
+    }
 
-                public MarketEntry(Material material, double price, Double sellPrice, String customName) {
-                        this.material = material;
-                        this.price = price;
-                        this.customSellPrice = sellPrice;
-                        this.customName = customName;
-                }
-        }
+    public MarketEntry(Material material, double price, Double sellPrice, String customName) {
+        this.material = material;
+        this.price = BigDecimal.valueOf(price);
+        this.customSellPrice = (sellPrice != null) ? BigDecimal.valueOf(sellPrice) : null;
+        this.customName = customName;
+    }
+}
 
         public static ItemStack createEnchantedBook(String name) {
                 ItemStack book = new ItemStack(Material.ENCHANTED_BOOK);
@@ -131,14 +132,7 @@ public class MarketItems {
                         items.put(cat, new ArrayList<>());
                 }
 
-                // Dynamically populate ALL_ITEMS with all survival-obtainable items
-                List<MarketEntry> allItemsList = new ArrayList<>();
-                for (Material mat : Material.values()) {
-                        if (mat.isItem() && isObtainable(mat)) {
-                                allItemsList.add(new MarketEntry(mat, 1.0));
-                        }
-                }
-                items.put(Category.ALL_ITEMS, allItemsList);
+                // Category.ALL_ITEMS is populated at the end of the static block by merging all other categories.
 
                 // ⚔️ Tools, Weapons & Armor
                 add(Category.TOOLS_WEAPONS,
@@ -250,6 +244,9 @@ public class MarketItems {
                                 new MarketEntry(Material.PHANTOM_MEMBRANE, 150),
                                 new MarketEntry(Material.SHULKER_SHELL, 1000),
                                 new MarketEntry(Material.TOTEM_OF_UNDYING, 25000),
+                                new MarketEntry(Material.BEACON, 80000),
+                                new MarketEntry(Material.RESPAWN_ANCHOR, 5000),
+                                new MarketEntry(Material.END_CRYSTAL, 1500),
                                 new MarketEntry(Material.TRIAL_KEY, 1500),
                                 new MarketEntry(Material.OMINOUS_TRIAL_KEY, 3000),
                                 // Enchanting
@@ -1154,12 +1151,9 @@ public class MarketItems {
                                 new MarketEntry(Material.PAINTING, 30), new MarketEntry(Material.ITEM_FRAME, 15),
                                 new MarketEntry(Material.GLOW_ITEM_FRAME, 40),
                                 new MarketEntry(Material.ARMOR_STAND, 50),
-                                new MarketEntry(Material.BEACON, 80000),
                                 new MarketEntry(Material.CONDUIT, 25000),
                                 new MarketEntry(Material.HEART_OF_THE_SEA, 15000),
                                 new MarketEntry(Material.LODESTONE, 15000),
-                                new MarketEntry(Material.RESPAWN_ANCHOR, 5000),
-                                new MarketEntry(Material.END_CRYSTAL, 1500),
                                 // Heads
                                 new MarketEntry(Material.CREEPER_HEAD, 2500),
 
@@ -1177,130 +1171,150 @@ public class MarketItems {
                                 new MarketEntry(Material.MUSIC_DISC_PIGSTEP, 10000),
                                 new MarketEntry(Material.DISC_FRAGMENT_5, 1000));
 
-                // 📖 Enchantment Books
+                // Enchantment Books
                 add(Category.ENCHANTMENTS,
-                                // Protection
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Protection I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Protection II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Protection III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Protection IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Fire Protection I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Fire Protection II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Fire Protection III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Fire Protection IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Blast Protection I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Blast Protection II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Blast Protection III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Blast Protection IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Projectile Protection I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Projectile Protection II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Projectile Protection III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Projectile Protection IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Thorns I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Thorns II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 350, "Thorns III"),
+                // Protection
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Protection I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 4500, "Protection II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 10000, "Protection III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 25000, "Protection IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1500, "Fire Protection I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 3200, "Fire Protection II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 7500, "Fire Protection III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 16000, "Fire Protection IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1500, "Blast Protection I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 3200, "Blast Protection II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 7500, "Blast Protection III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 16000, "Blast Protection IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1500, "Projectile Protection I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 3200, "Projectile Protection II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 7500, "Projectile Protection III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 16000, "Projectile Protection IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 3000, "Thorns I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 8000, "Thorns II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 20000, "Thorns III"),
+
                                 // Weapon Enchants
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Sharpness I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Sharpness II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Sharpness III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Sharpness IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Sharpness V"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Smite I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Smite II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Smite III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Smite IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Smite V"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Bane of Arthropods I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Bane of Arthropods II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Bane of Arthropods III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Bane of Arthropods IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Bane of Arthropods V"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 75, "Knockback I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Knockback II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 75, "Fire Aspect I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Fire Aspect II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Looting I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Looting II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 400, "Looting III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 75, "Sweeping Edge I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Sweeping Edge II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 300, "Sweeping Edge III"),
-                                // Bow Enchants
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Power I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Power II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Power III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Power IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Power V"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 75, "Punch I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Punch II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Flame"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Infinity"),
-                                // Crossbow
-                                new MarketEntry(Material.ENCHANTED_BOOK, 75, "Quick Charge I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Quick Charge II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 300, "Quick Charge III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Multishot"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Piercing I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Piercing II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Piercing III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 350, "Piercing IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Sharpness I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 4500, "Sharpness II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 10000, "Sharpness III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 25000, "Sharpness IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 60000, "Sharpness V"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1500, "Smite I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 3500, "Smite II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 8000, "Smite III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 18000, "Smite IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 40000, "Smite V"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1000, "Bane of Arthropods I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2200, "Bane of Arthropods II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Bane of Arthropods III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Bane of Arthropods IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 28000, "Bane of Arthropods V"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1500, "Knockback I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 4000, "Knockback II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 4000, "Fire Aspect I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 10000, "Fire Aspect II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Looting I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Looting II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 30000, "Looting III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Sweeping Edge I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Sweeping Edge II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Sweeping Edge III"),
+
+                                // Bow & Crossbow
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Power I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 4500, "Power II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 10000, "Power III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 25000, "Power IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 60000, "Power V"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Punch I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Punch II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 10000, "Flame"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 25000, "Infinity"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Quick Charge I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 6000, "Quick Charge II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 15000, "Quick Charge III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Multishot"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1000, "Piercing I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2500, "Piercing II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 6000, "Piercing III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 15000, "Piercing IV"),
+
                                 // Tool Enchants
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Efficiency I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Efficiency II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Efficiency III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Efficiency IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Efficiency V"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Silk Touch"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Fortune I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Fortune II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 400, "Fortune III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1500, "Efficiency I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 3500, "Efficiency II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 8000, "Efficiency III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 18000, "Efficiency IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 40000, "Efficiency V"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 15000, "Silk Touch"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Fortune I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Fortune II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 30000, "Fortune III"),
+
                                 // Universal
-                                new MarketEntry(Material.ENCHANTED_BOOK, 50, "Unbreaking I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Unbreaking II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Unbreaking III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Mending"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Curse of Vanishing"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Curse of Binding"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Unbreaking I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Unbreaking II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Unbreaking III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 35000, "Mending"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Curse of Vanishing"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Curse of Binding"),
+
                                 // Armor Misc
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Respiration I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Respiration II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 350, "Respiration III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Aqua Affinity"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Depth Strider I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Depth Strider II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 350, "Depth Strider III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Frost Walker I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Frost Walker II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Feather Falling I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Feather Falling II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Feather Falling III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 350, "Feather Falling IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Soul Speed I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 350, "Soul Speed II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Soul Speed III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Swift Sneak I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 350, "Swift Sneak II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 500, "Swift Sneak III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Respiration I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Respiration II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Respiration III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Aqua Affinity"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Depth Strider I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Depth Strider II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Depth Strider III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 3000, "Frost Walker I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 8000, "Frost Walker II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Feather Falling I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 4500, "Feather Falling II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 10000, "Feather Falling III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 25000, "Feather Falling IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Soul Speed I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Soul Speed II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 30000, "Soul Speed III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Swift Sneak I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Swift Sneak II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 30000, "Swift Sneak III"),
+
                                 // Fishing
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Luck of the Sea I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Luck of the Sea II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 400, "Luck of the Sea III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 100, "Lure I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Lure II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 350, "Lure III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Luck of the Sea I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Luck of the Sea II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Luck of the Sea III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 2000, "Lure I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Lure II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Lure III"),
+
                                 // Trident
-                                new MarketEntry(Material.ENCHANTED_BOOK, 150, "Impaling I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 200, "Impaling II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 300, "Impaling III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 400, "Impaling IV"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 600, "Impaling V"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Riptide I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 400, "Riptide II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 600, "Riptide III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 250, "Loyalty I"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 400, "Loyalty II"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 600, "Loyalty III"),
-                                new MarketEntry(Material.ENCHANTED_BOOK, 400, "Channeling"));
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1500, "Impaling I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 4000, "Impaling II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 10000, "Impaling III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 25000, "Impaling IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 60000, "Impaling V"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Riptide I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Riptide II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 30000, "Riptide III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 5000, "Loyalty I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 12000, "Loyalty II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 30000, "Loyalty III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 15000, "Channeling"),
+
+                                // 1.21.11 - Mace & Trial Chamber Enchants
+                                new MarketEntry(Material.ENCHANTED_BOOK, 3000, "Breach I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 8000, "Breach II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 20000, "Breach III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 50000, "Breach IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 1500, "Density I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 4000, "Density II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 10000, "Density III"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 25000, "Density IV"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 60000, "Density V"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 25000, "Wind Burst I"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 60000, "Wind Burst II"),
+                                new MarketEntry(Material.ENCHANTED_BOOK, 150000, "Wind Burst III"));
 
                 // --- 1.21.11 NATURE ITEMS (Dynamic) ---
                 String[] natureItems = {
@@ -1341,6 +1355,19 @@ public class MarketItems {
                         Material mat = Material.matchMaterial(parts[0]);
                         if (mat != null) {
                                 items.get(Category.COPPER).add(new MarketEntry(mat, Double.parseDouble(parts[1])));
+                        }
+                }
+
+                // Populate ALL_ITEMS with all configured items from other categories
+                List<MarketEntry> allItems = items.get(Category.ALL_ITEMS);
+                java.util.Set<Material> added = new java.util.HashSet<>();
+                for (Category cat : Category.values()) {
+                        if (cat == Category.ALL_ITEMS)
+                                continue;
+                        for (MarketEntry entry : items.get(cat)) {
+                                if (added.add(entry.material)) {
+                                        allItems.add(entry);
+                                }
                         }
                 }
         }
@@ -1398,6 +1425,10 @@ public class MarketItems {
                                 || name.equals("TRIAL_SPAWNER") ||
                                 name.equals("VAULT") || name.equals("OMINOUS_VAULT") || name.equals("SPAWNER")
                                 || name.equals("END_PORTAL_FRAME")) {
+                        return false;
+                }
+
+                if (material.isAir() || !material.isItem()) {
                         return false;
                 }
 

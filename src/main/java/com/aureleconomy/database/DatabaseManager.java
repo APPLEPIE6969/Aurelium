@@ -20,20 +20,48 @@ public class DatabaseManager {
         this.databaseType = plugin.getConfig().getString("database.type", "sqlite").toLowerCase();
     }
 
+    private static final int LATEST_SCHEMA_VERSION = 1;
+
     public boolean initialize() {
         try {
             if ("mysql".equals(databaseType)) {
-                return initializeMySQL();
+                initializeMySQL();
             } else {
-                return initializeSQLite();
+                initializeSQLite();
             }
+            createTables();
+            runMigrations();
+            return true;
         } catch (SQLException e) {
             plugin.getComponentLogger().error("Could not initialize database (" + databaseType + ")!", e);
             return false;
         }
     }
 
-    private boolean initializeSQLite() throws SQLException {
+    public void backupDatabase(String version) {
+        if (!"sqlite".equals(databaseType))
+            return;
+
+        File dbFile = new File(plugin.getDataFolder(), plugin.getConfig().getString("database.file", "database.db"));
+        if (!dbFile.exists())
+            return;
+
+        File backupFolder = new File(plugin.getDataFolder(), "backups");
+        if (!backupFolder.exists()) {
+            backupFolder.mkdirs();
+        }
+
+        File backupFile = new File(backupFolder, "database_v" + version + "_" + System.currentTimeMillis() + ".db");
+        try {
+            java.nio.file.Files.copy(dbFile.toPath(), backupFile.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            plugin.getComponentLogger().info("Database backup created: " + backupFile.getName());
+        } catch (java.io.IOException e) {
+            plugin.getComponentLogger().error("Failed to create database backup!", e);
+        }
+    }
+
+    private void initializeSQLite() throws SQLException {
         File dataFolder = new File(plugin.getDataFolder(),
                 plugin.getConfig().getString("database.file", "database.db"));
         if (!dataFolder.getParentFile().exists()) {
@@ -42,16 +70,20 @@ public class DatabaseManager {
 
         connection = DriverManager.getConnection("jdbc:sqlite:" + dataFolder.getAbsolutePath());
 
-        // Enable WAL mode for better concurrent read/write performance
-        try (Statement walStmt = connection.createStatement()) {
-            walStmt.execute("PRAGMA journal_mode=WAL;");
+        // Enable WAL mode and optimize SQLite for concurrent access
+        try (Statement stmt = connection.createStatement()) {
+            // WAL mode allows concurrent reads during writes
+            stmt.execute("PRAGMA journal_mode=WAL;");
+            // Busy timeout: wait up to 30 seconds for locks to clear
+            stmt.execute("PRAGMA busy_timeout=30000;");
+            // Synchronous mode for balance between safety and performance
+            stmt.execute("PRAGMA synchronous=NORMAL;");
+            // Increase cache size for better performance
+            stmt.execute("PRAGMA cache_size=-10000;");
         }
-
-        createTables();
-        return true;
     }
 
-    private boolean initializeMySQL() throws SQLException {
+    private void initializeMySQL() throws SQLException {
         FileConfiguration config = plugin.getConfig();
         String host = config.getString("database.mysql.host", "localhost");
         int port = config.getInt("database.mysql.port", 3306);
@@ -61,9 +93,6 @@ public class DatabaseManager {
 
         String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false";
         connection = DriverManager.getConnection(url, username, password);
-
-        createTables();
-        return true;
     }
 
     private void createTables() {
@@ -71,15 +100,17 @@ public class DatabaseManager {
                 : "INTEGER PRIMARY KEY AUTOINCREMENT";
 
         try (Statement statement = connection.createStatement()) {
+            // Internal versioning table
+            statement.execute("CREATE TABLE IF NOT EXISTS database_info (" +
+                    "version INTEGER PRIMARY KEY" +
+                    ");");
+
             // Players table
             statement.execute("CREATE TABLE IF NOT EXISTS players (" +
                     "uuid VARCHAR(36) PRIMARY KEY, " +
                     "name VARCHAR(16), " +
                     "gui_style VARCHAR(16) DEFAULT 'MODERN'" +
                     ");");
-
-            // Migration for existing tables
-            addColumnIfNotExists("players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
 
             // Player Balances table
             statement.execute("CREATE TABLE IF NOT EXISTS player_balances (" +
@@ -96,7 +127,7 @@ public class DatabaseManager {
             statement.execute("CREATE TABLE IF NOT EXISTS auctions (" +
                     "id " + autoIncrement + ", " +
                     "seller_uuid VARCHAR(36), " +
-                    "item_data TEXT, " + // Serialized item
+                    "item_data TEXT, " +
                     "price DOUBLE, " +
                     "currency VARCHAR(32), " +
                     "is_bin BOOLEAN, " +
@@ -107,9 +138,6 @@ public class DatabaseManager {
                     "listing_fee DOUBLE DEFAULT 0.0, " +
                     "start_time LONG" +
                     ");");
-            addColumnIfNotExists("auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
-            addColumnIfNotExists("auctions", "start_time", "LONG");
-            addColumnIfNotExists("auctions", "currency", "VARCHAR(32)");
 
             // Offline Earnings table
             statement.execute("CREATE TABLE IF NOT EXISTS offline_earnings (" +
@@ -120,7 +148,6 @@ public class DatabaseManager {
                     "item_display VARCHAR(64), " +
                     "timestamp LONG" +
                     ");");
-            addColumnIfNotExists("offline_earnings", "currency", "VARCHAR(32)");
 
             // Buy Orders table
             statement.execute("CREATE TABLE IF NOT EXISTS buy_orders (" +
@@ -133,9 +160,8 @@ public class DatabaseManager {
                     "currency VARCHAR(32), " +
                     "status VARCHAR(16) DEFAULT 'ACTIVE'" +
                     ");");
-            addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
 
-            // Price History table (for stock charts)
+            // Price History table
             statement.execute("CREATE TABLE IF NOT EXISTS price_history (" +
                     "id " + autoIncrement + ", " +
                     "item_key VARCHAR(128), " +
@@ -151,6 +177,74 @@ public class DatabaseManager {
         }
     }
 
+    private void runMigrations() {
+        int currentVersion = getDatabaseVersion();
+        if (currentVersion >= LATEST_SCHEMA_VERSION)
+            return;
+
+        plugin.getComponentLogger().info("Database outdated (v" + currentVersion
+                + "). Starting automatic migration to v" + LATEST_SCHEMA_VERSION + "...");
+
+        try {
+            // Disable auto-commit for atomicity if supported
+            connection.setAutoCommit(false);
+
+            for (int i = currentVersion + 1; i <= LATEST_SCHEMA_VERSION; i++) {
+                plugin.getComponentLogger().info("Applying database migration v" + i + "...");
+                applyMigration(i);
+            }
+
+            updateDatabaseVersion(LATEST_SCHEMA_VERSION);
+            connection.commit();
+            plugin.getComponentLogger().info("Database migration completed successfully.");
+        } catch (SQLException e) {
+            try {
+                connection.rollback();
+            } catch (SQLException ex) {
+                /* ignored */ }
+            plugin.getComponentLogger().error("Database migration FAILED! Some features might be broken.", e);
+        } finally {
+            try {
+                connection.setAutoCommit(true);
+            } catch (SQLException ex) {
+                /* ignored */ }
+        }
+    }
+
+    private int getDatabaseVersion() {
+        try (Statement statement = connection.createStatement()) {
+            var rs = statement.executeQuery("SELECT version FROM database_info LIMIT 1");
+            if (rs.next())
+                return rs.getInt("version");
+        } catch (SQLException e) {
+            // Likely fresh database or first update to versioning system
+        }
+        return 0;
+    }
+
+    private void updateDatabaseVersion(int version) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("DELETE FROM database_info;");
+            statement.execute("INSERT INTO database_info (version) VALUES (" + version + ");");
+        }
+    }
+
+    private void applyMigration(int version) throws SQLException {
+        switch (version) {
+            case 1:
+                // Migration to version 1: Ensure all legacy patch columns exist
+                // This consolidates all previous addColumnIfNotExists calls
+                addColumnIfNotExists("players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
+                addColumnIfNotExists("auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
+                addColumnIfNotExists("auctions", "start_time", "LONG");
+                addColumnIfNotExists("auctions", "currency", "VARCHAR(32)");
+                addColumnIfNotExists("offline_earnings", "currency", "VARCHAR(32)");
+                addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
+                addColumnIfNotExists("auction_offers", "currency", "VARCHAR(32)");
+                break;
+        }
+    }
+
     private void createOffersTable(String autoIncrement) {
         try (Statement statement = connection.createStatement()) {
             statement.execute("CREATE TABLE IF NOT EXISTS auction_offers (" +
@@ -163,36 +257,39 @@ public class DatabaseManager {
                     "timestamp LONG, " +
                     "FOREIGN KEY(auction_id) REFERENCES auctions(id)" +
                     ");");
-            addColumnIfNotExists("auction_offers", "currency", "VARCHAR(32)");
         } catch (SQLException e) {
             plugin.getComponentLogger().error("Could not create offers table for " + databaseType + "!", e);
         }
     }
 
+    private boolean migrationChecked = false;
+
     private void migrateLegacyBalances() {
-        // Attempt to select balance from players. if it doesn't error out, it means we
-        // need to migrate
+        if (migrationChecked)
+            return;
+        migrationChecked = true;
+
         try (Statement statement = connection.createStatement()) {
             statement.executeQuery("SELECT balance FROM players LIMIT 1");
 
-            // If we got here, the column exists and we need to migrate
             plugin.getComponentLogger()
                     .info("Legacy single-currency database detected. Migrating to multi-currency system...");
-
             String defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
 
-            // Insert into new table
-            statement.execute("INSERT IGNORE INTO player_balances (uuid, currency, balance) " +
-                    "SELECT uuid, '" + defaultCurrency + "', balance FROM players;");
+            // Use direct insert for compatibility
+            statement.execute("INSERT INTO player_balances (uuid, currency, balance) " +
+                    "SELECT uuid, '" + defaultCurrency + "', balance FROM players " +
+                    "WHERE uuid NOT IN (SELECT uuid FROM player_balances WHERE currency = '" + defaultCurrency + "');");
 
-            // Drop the old column to prevent the migration check from passing again.
-            // Modern SQLite (3.35.0+) supports DROP COLUMN.
-            statement.execute("ALTER TABLE players DROP COLUMN balance;");
+            try {
+                statement.execute("ALTER TABLE players DROP COLUMN balance;");
+            } catch (SQLException dropError) {
+                // If drop fails (old SQLite), migrationChecked flag handles it
+            }
 
             plugin.getComponentLogger().info("Multi-currency database migration completed successfully.");
         } catch (SQLException e) {
-            // "balance" column doesn't exist anymore, which means migration already
-            // happened or this is a fresh DB. Safe to ignore.
+            // column missing = already migrated
         }
     }
 
@@ -221,22 +318,15 @@ public class DatabaseManager {
         }
     }
 
-    private void addColumnIfNotExists(String table, String column, String type) {
+    private void addColumnIfNotExists(String table, String column, String type) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            // Check if column exists
             try {
                 statement.executeQuery("SELECT " + column + " FROM " + table + " LIMIT 1");
-                return; // Column exists
+                return;
             } catch (SQLException e) {
-                // Column likely doesn't exist
+                // missing
             }
-
-            // Add column
             statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
-            // Ignore dialect specific info prints for cleaner console output
-        } catch (SQLException e) {
-            // Silently fail if column manipulation isn't supported on backend
         }
     }
-
 }

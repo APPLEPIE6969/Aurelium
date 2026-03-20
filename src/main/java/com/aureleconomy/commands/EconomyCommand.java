@@ -1,6 +1,7 @@
 package com.aureleconomy.commands;
 
 import com.aureleconomy.AurelEconomy;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -55,7 +56,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleBalance(CommandSender sender, String[] args) {
-        if (!sender.hasPermission("aureleconomy.money")) {
+        if (!sender.hasPermission("aureleconomy.bal")) {
             sender.sendMessage(Component.text("No permission.", NamedTextColor.RED));
             return;
         }
@@ -92,17 +93,18 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             OfflinePlayer target = Bukkit.getOfflinePlayer(targetName);
-            double bal = plugin.getEconomyManager().getBalance(target, finalCurrency);
-            String symbol = plugin.getConfig().getString("economy.currencies." + finalCurrency + ".symbol", "$");
+            BigDecimal bal = plugin.getEconomyManager().getBalance(target, finalCurrency);
             String prefix = plugin.getConfig().getString("prefix", "<gold>[AurelEconomy] <gray>");
 
             Bukkit.getScheduler().runTask(plugin, () -> {
+                String formatted = plugin.getEconomyManager().format(bal, finalCurrency);
+                String symbol = plugin.getEconomyManager().getCurrencySymbol(finalCurrency);
                 if (sender instanceof Player p && target.getUniqueId().equals(p.getUniqueId())) {
                     String msg = plugin.getConfig().getString("economy.balance",
                             "Balance (%currency%): %amount%%symbol%");
                     sender.sendMessage(mm.deserialize(prefix + msg
                             .replace("%currency%", finalCurrency)
-                            .replace("%amount%", String.format("%.2f", bal))
+                            .replace("%amount%", formatted)
                             .replace("%symbol%", symbol)));
                 } else {
                     String msg = plugin.getConfig().getString("economy.balance-other",
@@ -110,7 +112,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(mm.deserialize(prefix + msg
                             .replace("%player%", target.getName() != null ? target.getName() : targetName)
                             .replace("%currency%", finalCurrency)
-                            .replace("%amount%", String.format("%.2f", bal))
+                            .replace("%amount%", formatted)
                             .replace("%symbol%", symbol)));
                 }
             });
@@ -133,15 +135,15 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        double amount;
+        BigDecimal amount;
         try {
-            amount = Double.parseDouble(args[1]);
+            amount = new BigDecimal(args[1]);
         } catch (NumberFormatException e) {
             player.sendMessage(Component.text("Invalid amount."));
             return;
         }
 
-        if (amount <= 0) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             player.sendMessage(Component.text("Amount must be positive.", NamedTextColor.RED));
             return;
         }
@@ -169,17 +171,26 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
                     plugin.getEconomyManager().withdraw(player, amount, currency);
                     plugin.getEconomyManager().deposit(target, amount, currency);
                     String formatted = plugin.getEconomyManager().format(amount, currency);
+                    String symbol = plugin.getEconomyManager().getCurrencySymbol(currency);
 
-                    player.sendMessage(mm.deserialize(
-                            "<green>You paid <white>" + (target.getName() != null ? target.getName() : targetName)
-                                    + " <yellow>" + formatted));
+                    String payMsg = plugin.getConfig().getString("economy.paid",
+                            "<green>You paid <white>%player% <yellow>%amount%%symbol%")
+                            .replace("%player%", target.getName() != null ? target.getName() : targetName)
+                            .replace("%amount%", formatted)
+                            .replace("%symbol%", symbol)
+                            .replace("%currency%", currency);
+                    player.sendMessage(mm.deserialize(payMsg));
 
                     if (target.isOnline()) {
                         Player op = target.getPlayer();
                         if (op != null) {
-                            op.sendMessage(mm.deserialize(
-                                    "<green>You received <yellow>" + formatted + " <green>from <white>"
-                                            + player.getName()));
+                            String recvMsg = plugin.getConfig().getString("economy.received",
+                                    "<green>You received <yellow>%amount%%symbol% <green>from <white>%player%")
+                                    .replace("%player%", player.getName())
+                                    .replace("%amount%", formatted)
+                                    .replace("%symbol%", symbol)
+                                    .replace("%currency%", currency);
+                            op.sendMessage(mm.deserialize(recvMsg));
                         }
                     }
                 } else {
@@ -202,11 +213,11 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
 
         String action = args[0].toLowerCase();
         OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-        double amount;
+        BigDecimal amount;
 
         try {
-            amount = Double.parseDouble(args[2]);
-            if (amount <= 0) {
+            amount = new BigDecimal(args[2]);
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
                 sender.sendMessage(Component.text("Amount must be positive.", NamedTextColor.RED));
                 return;
             }
@@ -221,36 +232,35 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        String symbol = plugin.getConfig().getString("economy.currencies." + currency + ".symbol", "$");
-        String prefix = plugin.getConfig().getString("prefix");
+        String prefix = plugin.getConfig().getString("prefix", "[AurelEconomy] ");
 
         switch (action) {
             case "give":
                 plugin.getEconomyManager().deposit(target, amount, currency);
                 sender.sendMessage(mm.deserialize(prefix +
-                        plugin.getConfig().getString("economy.admin-give")
+                        plugin.getConfig().getString("economy.admin-give", "Gave %player% %amount% (%currency%)")
                                 .replace("%player%", target.getName() != null ? target.getName() : "You")
                                 .replace("%currency%", currency)
-                                .replace("%symbol%", symbol)
-                                .replace("%amount%", String.valueOf(amount))));
+                                .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
+                                .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
                 break;
             case "take":
                 plugin.getEconomyManager().withdraw(target, amount, currency);
                 sender.sendMessage(mm.deserialize(prefix +
-                        plugin.getConfig().getString("economy.admin-take")
+                        plugin.getConfig().getString("economy.admin-take", "Took %amount% (%currency%) from %player%")
                                 .replace("%player%", target.getName() != null ? target.getName() : "You")
                                 .replace("%currency%", currency)
-                                .replace("%symbol%", symbol)
-                                .replace("%amount%", String.valueOf(amount))));
+                                .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
+                                .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
                 break;
             case "set":
                 plugin.getEconomyManager().setBalance(target, amount, currency);
                 sender.sendMessage(mm.deserialize(prefix +
-                        plugin.getConfig().getString("economy.admin-set")
+                        plugin.getConfig().getString("economy.admin-set", "Set balance of %player% to %amount% (%currency%)")
                                 .replace("%player%", target.getName() != null ? target.getName() : "You")
                                 .replace("%currency%", currency)
-                                .replace("%symbol%", symbol)
-                                .replace("%amount%", String.valueOf(amount))));
+                                .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
+                                .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
                 break;
             default:
                 sender.sendMessage(Component.text("Unknown action: " + action));
@@ -264,6 +274,13 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
                 plugin.getConfig().getConfigurationSection("economy.currencies").getKeys(false));
 
         if (label.equalsIgnoreCase("bal") || label.equalsIgnoreCase("balance") || label.equalsIgnoreCase("money")) {
+            if (args.length == 1) {
+                List<String> suggestions = new ArrayList<>(currencies);
+                for (Player p : Bukkit.getOnlinePlayers()) {
+                    suggestions.add(p.getName());
+                }
+                return suggestions;
+            }
             if (args.length == 2)
                 return currencies; // player, [currency]
         }

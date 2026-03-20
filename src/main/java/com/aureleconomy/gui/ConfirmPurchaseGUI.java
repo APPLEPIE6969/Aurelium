@@ -3,6 +3,9 @@ package com.aureleconomy.gui;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
 import com.aureleconomy.utils.ItemBuilder;
+import com.aureleconomy.utils.InventoryUtils;
+import java.math.BigDecimal;
+import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -12,17 +15,19 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.List;
-
+/**
+ * Confirmation GUI for purchases and bids.
+ * Refactored to use BigDecimal for transaction amounts.
+ */
 public class ConfirmPurchaseGUI extends GUIHolder {
 
     private final AurelEconomy plugin;
     private final Player player;
     private final AuctionItem auction;
-    private final double amount;
+    private final BigDecimal amount;
     private final boolean isBid;
 
-    public ConfirmPurchaseGUI(AurelEconomy plugin, Player player, AuctionItem auction, double amount, boolean isBid) {
+    public ConfirmPurchaseGUI(AurelEconomy plugin, Player player, AuctionItem auction, BigDecimal amount, boolean isBid) {
         this.plugin = plugin;
         this.player = player;
         this.auction = auction;
@@ -44,8 +49,7 @@ public class ConfirmPurchaseGUI extends GUIHolder {
         display.editMeta(meta -> {
             meta.lore(List.of(
                     Component.text("Action: " + (isBid ? "Place Bid" : "Buy It Now"), NamedTextColor.GOLD),
-                    Component.text("Cost: " + amount + " " + plugin.getConfig().getString("economy.currency-symbol"),
-                            NamedTextColor.YELLOW)));
+                    Component.text("Cost: " + plugin.getEconomyManager().getFormattedWithSymbol(amount, auction.getCurrency()), NamedTextColor.YELLOW)));
         });
         inventory.setItem(4, display);
 
@@ -65,62 +69,66 @@ public class ConfirmPurchaseGUI extends GUIHolder {
         return inventory;
     }
 
+    @Override
     public void handleClick(InventoryClickEvent event) {
+        event.setCancelled(true);
         Player player = (Player) event.getWhoClicked();
+        if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) return;
+
         int slot = event.getSlot();
 
-        // Prevent clicking in bottom inventory entirely
-        if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) {
-            event.setCancelled(true);
-            return;
-        }
-
-        event.setCancelled(true);
-
-        // Prevent double click dupe
         if (auction.isEnded()) {
-            player.sendMessage(Component.text("Transaction already processing.", NamedTextColor.RED));
+            player.sendMessage(Component.text("Transaction already processing or expired.", NamedTextColor.RED));
             player.closeInventory();
             return;
         }
 
         if (slot == 11) { // Confirm
-            if (plugin.getEconomyManager().has(player, amount)) {
-                if (isBid) {
-                    plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
-                    player.sendMessage(Component.text("Bid placed successfully!", NamedTextColor.GREEN));
-                    new AuctionGUI(plugin, player, false).open();
-                } else {
-                    // Check capacity
-                    if (!com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), auction.getItem(),
-                            auction.getItem().getAmount())) {
-                        player.sendMessage(Component.text("Not enough space in inventory.", NamedTextColor.RED));
-                        player.closeInventory();
-                        return;
-                    }
-
-                    // Finalize Buy It Now
-                    auction.setEnded(true);
-                    plugin.getEconomyManager().withdraw(player, amount);
-                    plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
-                    plugin.getAuctionManager().endAuction(auction);
-
-                    player.getInventory().addItem(auction.getItem().clone());
-                    plugin.getAuctionManager().markCollected(auction.getId());
-                    player.sendMessage(Component.text("Successfully purchased " + auction.getItem().getType().name(),
-                            NamedTextColor.GREEN));
-                    new AuctionGUI(plugin, player, false).open();
-                }
-            } else {
-                player.sendMessage(Component.text("Insufficient funds!", NamedTextColor.RED));
-                new AuctionGUI(plugin, player, false).open();
-            }
+            handleConfirm(player);
         } else if (slot == 15) { // Cancel
             if (isBid) {
-                new BidGUI(plugin, player, auction).open(); // Go back to configuring bid
+                new BidGUI(plugin, player, auction).open();
             } else {
-                new AuctionGUI(plugin, player, false).open(); // Go back to main AH
+                new AuctionGUI(plugin, player, false).open();
             }
+        }
+    }
+
+    private void handleConfirm(Player player) {
+        if (!plugin.getEconomyManager().has(player, amount, auction.getCurrency())) {
+            player.sendMessage(Component.text("Insufficient funds!", NamedTextColor.RED));
+            new AuctionGUI(plugin, player, false).open();
+            return;
+        }
+
+        if (isBid) {
+            plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
+            player.sendMessage(Component.text("Bid placed successfully!", NamedTextColor.GREEN));
+            new AuctionGUI(plugin, player, false).open();
+        } else {
+            // Check inventory capacity
+            if (!InventoryUtils.hasSpace(player.getInventory(), auction.getItem(), auction.getItem().getAmount())) {
+                player.sendMessage(Component.text("Not enough space in inventory.", NamedTextColor.RED));
+                player.closeInventory();
+                return;
+            }
+
+            // Finalize Buy It Now (Atomic State Transition)
+            if (plugin.getAuctionManager().claimAuctionAtomic(auction.getId())) {
+                plugin.getEconomyManager().withdraw(player, amount, auction.getCurrency());
+                
+                // Record the "final bid" by buyer for logging/internal logic
+                plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
+                plugin.getAuctionManager().endAuction(auction);
+
+                player.getInventory().addItem(auction.getItem().clone());
+                plugin.getAuctionManager().markCollected(auction.getId());
+                
+                player.sendMessage(Component.text("Successfully purchased " + auction.getItem().getType().name(), NamedTextColor.GREEN));
+            } else {
+                player.sendMessage(Component.text("This item was already purchased or expired!", NamedTextColor.RED));
+            }
+            new AuctionGUI(plugin, player, false).open();
         }
     }
 }
