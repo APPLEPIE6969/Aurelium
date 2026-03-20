@@ -1,4 +1,4 @@
-prefix: "<gradient:#FFD700:#FFA500>AurelEconomy</gradient> <dark_gray>» <gray>"
+prefix: "<gradient:#FFD700:#FFA500>Aurelium</gradient> <dark_gray>» <gray>"
 
 economy:
   balance: "Your balance: <gold>%amount% %symbol%</gold>"

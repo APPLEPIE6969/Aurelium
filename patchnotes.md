@@ -1,4 +1,4 @@
-# AurelEconomy - Patch Notes
+# Aurelium - Patch Notes
 
 ## v1.4.1 - Web Stability Hotfix
 
