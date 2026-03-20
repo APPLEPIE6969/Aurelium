@@ -1,5 +1,10 @@
 # AurelEconomy - Patch Notes
 
+## v1.4.1 - Web Stability Hotfix
+
+### Fixes
+- Cloud sync now automatically reconnects to the web dashboard if the render server restarts (Fixes 403 Invalid server ID error)
+
 ## v1.4.0 - Security, Enchantments & Cleanup
 
 ### New

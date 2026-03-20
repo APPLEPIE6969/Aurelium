@@ -858,6 +858,11 @@ public class CloudSyncManager {
                 throw new RuntimeException("Dashboard Waitlist active. Waiting in queue (Position: " + pos + ").");
             }
 
+            // If Render server restarted, it loses memory and returns 403. Force re-registration.
+            if (resp.statusCode() == 403 && body.contains("Invalid server ID or API key")) {
+                this.registered = false;
+            }
+
             // Truncate body if it's too long (Prevents HTML spam in logs)
             String snippet = body.length() > 200 ? body.substring(0, 200) + "..." : body;
             throw new RuntimeException("HTTP " + resp.statusCode() + " (" + endpoint + "): " + snippet);
