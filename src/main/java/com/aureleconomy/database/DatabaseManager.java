@@ -90,8 +90,9 @@ public class DatabaseManager {
         String database = config.getString("database.mysql.database", "aurelium");
         String username = config.getString("database.mysql.username", "root");
         String password = config.getString("database.mysql.password", "");
+        boolean useSSL = config.getBoolean("database.mysql.use-ssl", true);
 
-        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false";
+        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=" + useSSL;
         connection = DriverManager.getConnection(url, username, password);
     }
 
