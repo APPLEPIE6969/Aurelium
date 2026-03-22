@@ -91,6 +91,7 @@ public class CloudSyncManager {
                     try {
                         syncMarketData();
                     } catch (Exception ignored) {
+                        // Initial sync failure is handled by the periodic sync task
                     }
                     return;
                 } catch (Exception e) {
@@ -99,6 +100,7 @@ public class CloudSyncManager {
                         try {
                             Thread.sleep(15_000);
                         } catch (InterruptedException ignored) {
+                            // Interruption during sleep between registration retries
                             return;
                         }
                     }
@@ -117,6 +119,7 @@ public class CloudSyncManager {
                     registered = true;
                     plugin.getComponentLogger().info("Cloud dashboard registered (late) — server ID: " + serverId);
                 } catch (Exception ignored) {
+                    // Late registration attempt failure during periodic sync
                     return;
                 }
             }
@@ -154,7 +157,9 @@ public class CloudSyncManager {
                         CompletableFuture.runAsync(() -> {
                             try {
                                 syncMarketData();
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // Optional immediate sync failure after purchase
+                            }
                         });
                     }
                 });
@@ -626,7 +631,9 @@ public class CloudSyncManager {
         } else if (purchase.get("auctionId") instanceof String) {
             try {
                 auctionId = Integer.parseInt(purchase.get("auctionId").toString());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // Fallback parsing for auctionId
+            }
         }
 
         BigDecimal amount = BigDecimal.ZERO;
@@ -635,7 +642,9 @@ public class CloudSyncManager {
         } else if (purchase.get("amount") instanceof String) {
             try {
                 amount = new BigDecimal(purchase.get("amount").toString());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // Fallback parsing for amount
+            }
         }
 
         com.aureleconomy.auction.AuctionItem auction = plugin.getAuctionManager().getAuctionById(auctionId);
@@ -757,6 +766,7 @@ public class CloudSyncManager {
             try {
                 orderId = Integer.parseInt((String) purchase.get("orderId"));
             } catch (Exception ignored) {
+                // Fallback parsing for orderId
             }
         }
 
@@ -767,6 +777,7 @@ public class CloudSyncManager {
             try {
                 amount = Integer.parseInt((String) purchase.get("amount"));
             } catch (Exception ignored) {
+                // Fallback parsing for amount
             }
         }
 
