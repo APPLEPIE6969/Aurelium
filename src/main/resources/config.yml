@@ -18,6 +18,7 @@ database:
     database: "aurelium"
     username: "root"
     password: "password"
+    use-ssl: true
 
 # --- Economy ---
 economy:
