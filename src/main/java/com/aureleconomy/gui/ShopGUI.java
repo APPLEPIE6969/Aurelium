@@ -474,11 +474,12 @@ public class ShopGUI extends GUIHolder {
             ItemStack spawner = new ItemStack(Material.SPAWNER);
             BlockStateMeta meta = (BlockStateMeta) spawner.getItemMeta();
             CreatureSpawner cs = (CreatureSpawner) meta.getBlockState();
+            String mobName = entry.customName.replace(" Spawner", "").toUpperCase().replace(" ", "_");
             try {
-                String mobName = entry.customName.replace(" Spawner", "").toUpperCase().replace(" ", "_");
                 cs.setSpawnedType(EntityType.valueOf(mobName));
                 meta.setBlockState(cs);
-            } catch (IllegalArgumentException ignored) {
+            } catch (IllegalArgumentException e) {
+                plugin.getComponentLogger().warn("Failed to set spawner type for mob: " + mobName);
             }
             spawner.setItemMeta(meta);
             return spawner;
@@ -492,11 +493,12 @@ public class ShopGUI extends GUIHolder {
             ItemStack spawner = new ItemStack(Material.SPAWNER);
             BlockStateMeta meta = (BlockStateMeta) spawner.getItemMeta();
             CreatureSpawner cs = (CreatureSpawner) meta.getBlockState();
+            String mobName = entry.customName.replace(" Spawner", "").toUpperCase().replace(" ", "_");
             try {
-                String mobName = entry.customName.replace(" Spawner", "").toUpperCase().replace(" ", "_");
                 cs.setSpawnedType(EntityType.valueOf(mobName));
                 meta.setBlockState(cs);
-            } catch (IllegalArgumentException ignored) {
+            } catch (IllegalArgumentException e) {
+                plugin.getComponentLogger().warn("Failed to set spawner type for mob: " + mobName);
             }
             meta.displayName(Component.text(entry.customName, NamedTextColor.AQUA));
             spawner.setItemMeta(meta);
