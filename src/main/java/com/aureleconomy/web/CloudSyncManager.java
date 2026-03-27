@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.security.SecureRandom;
 
 /**
  * Manages all communication between the MC plugin and the central
@@ -34,6 +35,7 @@ import java.util.concurrent.CompletableFuture;
 public class CloudSyncManager {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final AurelEconomy plugin;
     private final HttpClient http;
     private final String baseUrl;
@@ -192,7 +194,9 @@ public class CloudSyncManager {
 
     /** Build the dashboard URL for a player session. Posts session data async. */
     public String createSessionUrl(Player player) {
-        String token = UUID.randomUUID().toString().replace("-", "");
+        byte[] tokenBytes = new byte[32];
+        SECURE_RANDOM.nextBytes(tokenBytes);
+        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
 
         // Post session to Render asynchronously — frontend will retry until ready
         CompletableFuture.runAsync(() -> {
