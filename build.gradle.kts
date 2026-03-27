@@ -20,6 +20,15 @@ dependencies {
     compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
         exclude(group = "org.bukkit", module = "bukkit")
     }
+
+    testImplementation("io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT")
+    testImplementation("com.github.MilkBowl:VaultAPI:1.7") {
+        exclude(group = "org.bukkit", module = "bukkit")
+    }
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.1")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.1")
+    testImplementation("org.mockito:mockito-core:5.8.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.8.0")
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -29,4 +38,8 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.withType<ProcessResources>().configureEach {
     filteringCharset = Charsets.UTF_8.name()
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }
