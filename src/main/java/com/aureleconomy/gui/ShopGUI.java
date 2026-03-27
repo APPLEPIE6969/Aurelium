@@ -479,6 +479,7 @@ public class ShopGUI extends GUIHolder {
                 cs.setSpawnedType(EntityType.valueOf(mobName));
                 meta.setBlockState(cs);
             } catch (IllegalArgumentException ignored) {
+                plugin.getComponentLogger().warn("Failed to set spawner type: " + entry.customName, ignored);
             }
             spawner.setItemMeta(meta);
             return spawner;
@@ -497,6 +498,7 @@ public class ShopGUI extends GUIHolder {
                 cs.setSpawnedType(EntityType.valueOf(mobName));
                 meta.setBlockState(cs);
             } catch (IllegalArgumentException ignored) {
+                plugin.getComponentLogger().warn("Failed to set spawner type: " + entry.customName, ignored);
             }
             meta.displayName(Component.text(entry.customName, NamedTextColor.AQUA));
             spawner.setItemMeta(meta);
