@@ -51,7 +51,13 @@
         amountPlus: $('amount-plus'),
     };
 
-    // ── Init ─────────────────────────────────────────────────────────
+    /**
+     * Initialize the dashboard by reading the session token, starting initial data loads, and attaching UI event handlers.
+     *
+     * If the session token is missing, an error overlay is shown and initialization stops. When the token is present,
+     * player and category data are fetched concurrently; on successful load the loading overlay is hidden. Event handlers
+     * for the UI are bound during initialization.
+     */
 
     function init() {
         // Parse token from URL
@@ -77,7 +83,13 @@
         bindEvents();
     }
 
-    // ── API ──────────────────────────────────────────────────────────
+    /**
+     * Send an HTTP request to the specified API endpoint and return the parsed JSON response.
+     * @param {string} endpoint - The API endpoint path; existing query parameters are preserved and the session token will be appended.
+     * @param {string} [method='GET'] - HTTP method to use for the request.
+     * @returns {any} The parsed JSON response body.
+     * @throws {Error} When the response status is not OK; message is taken from `data.error` if provided, otherwise "Request failed".
+     */
 
     function api(endpoint, method = 'GET') {
         const sep = endpoint.includes('?') ? '&' : '?';
@@ -90,6 +102,12 @@
             }));
     }
 
+    /**
+     * Load current player data and update application state and player UI.
+     *
+     * Stores the fetched player object in `state.player`, sets the player name text,
+     * updates the avatar background image, and updates the displayed default currency balance.
+     */
     async function fetchPlayer() {
         const data = await api('/api/player');
         state.player = data;
@@ -101,12 +119,20 @@
         dom.balanceAmt.textContent = formatBal(data);
     }
 
+    /**
+     * Format a player's balance for their default currency.
+     * @param {Object} player - Player object with `defaultCurrency` (string) and `balances` (mapping of currency codes to numeric balances).
+     * @returns {string} The player's balance for the default currency formatted with two decimal places using the en-US locale.
+     */
     function formatBal(player) {
         const cur = player.defaultCurrency;
         const bal = player.balances[cur] ?? 0;
         return bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    /**
+     * Fetches the list of categories from the API, stores them in application state, renders the sidebar, and selects the first category if any exist.
+     */
     async function fetchCategories() {
         const data = await api('/api/categories');
         state.categories = data;
@@ -118,6 +144,11 @@
         }
     }
 
+    /**
+     * Load items for the given category and update the rendered item grid and pagination state.
+     * @param {{id: string|number}} category - Category object whose `id` will be used to request items.
+     * @param {number} [page=0] - Zero-based page index to fetch.
+     */
     async function fetchItems(category, page = 0) {
         const endpoint = `/api/items?category=${encodeURIComponent(category.id)}&page=${page}`;
         const data = await api(endpoint);
@@ -127,6 +158,11 @@
         updatePagination();
     }
 
+    /**
+     * Fetches items matching a search query, renders the results, and updates pagination state.
+     * @param {string} query - The search string to query the catalog.
+     * @param {number} [page=0] - Zero-based page index to request.
+     */
     async function searchItems(query, page = 0) {
         const endpoint = `/api/search?q=${encodeURIComponent(query)}&page=${page}`;
         const data = await api(endpoint);
@@ -136,13 +172,25 @@
         updatePagination();
     }
 
+    /**
+     * Send a purchase request for a specific item and return the server response.
+     * @param {string} itemKey - The item's unique key or identifier.
+     * @param {number} amount - The quantity to purchase.
+     * @returns {Object} The parsed JSON response payload from the server for the purchase request.
+     */
     async function buyItem(itemKey, amount) {
         const endpoint = `/api/buy?item=${encodeURIComponent(itemKey)}&amount=${amount}`;
         const data = await api(endpoint, 'POST');
         return data;
     }
 
-    // ── Render ───────────────────────────────────────────────────────
+    /**
+     * Render the sidebar category list from the current application state.
+     *
+     * Clears the sidebar container and creates a `.sidebar-item` element for each
+     * entry in `state.categories`, showing the category icon, name, and item count.
+     * Each item receives a click handler that selects the corresponding category.
+     */
 
     function renderSidebar() {
         dom.sidebar.innerHTML = '';
@@ -159,6 +207,14 @@
         });
     }
 
+    /**
+     * Render a list of items into the items grid and update empty-state visibility.
+     *
+     * Populates the grid with item cards from the provided response, hides the empty-state when items exist, and shows the empty-state when the list is empty. Each rendered card is clickable and opens the purchase modal for that item.
+     *
+     * @param {Object} data - Response object from the items/search API.
+     * @param {Array<Object>} data.items - Array of item objects to render. Each item is expected to include at least `name`, `material`, `priceFormatted`, `currency`, and `key`.
+     */
     function renderItems(data) {
         dom.grid.innerHTML = '';
 
@@ -192,6 +248,12 @@
         });
     }
 
+    /**
+     * Update pagination control visibility, enabled state, and displayed page info based on current pagination state.
+     *
+     * Hides the pagination when there is only one or zero pages. When visible, disables the previous button on the first page,
+     * disables the next button on the last page, and sets the page info text to "Page X / Y".
+     */
     function updatePagination() {
         if (state.totalPages <= 1) {
             dom.pagination.style.display = 'none';
@@ -203,6 +265,14 @@
         dom.pageInfo.textContent = `Page ${state.currentPage + 1} / ${state.totalPages}`;
     }
 
+    /**
+     * Update the breadcrumb trail to reflect the current search, selected category, or the default view.
+     *
+     * Updates the DOM breadcrumb element's HTML to show:
+     * - a clickable "All Categories" segment that clears the search when applicable,
+     * - and an active segment containing either the current search query or the current category name.
+     * User-provided text shown in the breadcrumb is HTML-escaped.
+     */
     function updateBreadcrumb() {
         let html = '';
         if (state.searchQuery) {
@@ -219,7 +289,13 @@
         dom.breadcrumb.innerHTML = html;
     }
 
-    // ── Category Selection ───────────────────────────────────────────
+    /**
+     * Selects a category for browsing and loads its first page of items.
+     *
+     * Clears any active search, resets pagination, updates the sidebar and breadcrumb,
+     * and fetches items for the chosen category.
+     * @param {Object} cat - Category object to select (should match an entry in state.categories).
+     */
 
     function selectCategory(cat) {
         state.currentCategory = cat;
@@ -236,7 +312,10 @@
         fetchItems(cat, 0);
     }
 
-    // ── Search ───────────────────────────────────────────────────────
+    /**
+     * Apply a search query: update search state, reset pagination, clear sidebar selection, refresh the breadcrumb, and perform a search when the query is non-empty.
+     * @param {string} query - The search string to apply; an empty string clears the search and restores the current category view if one is selected.
+     */
 
     function handleSearch(query) {
         state.searchQuery = query;
@@ -257,7 +336,10 @@
         searchItems(query, 0);
     }
 
-    // ── Buy Modal ────────────────────────────────────────────────────
+    /**
+     * Open the purchase modal for the given item and initialize its fields.
+     * @param {{ key?: string, name: string, price: number, priceFormatted: string, material?: string }} item - Item data used to populate the modal. Required fields: `name` (display name) and `priceFormatted` (formatted per-item price). Optional fields: `key`, `price`, and `material` (used for the icon).
+     */
 
     function openBuyModal(item) {
         state.selectedItem = item;
@@ -273,11 +355,22 @@
         dom.buyModal.style.display = '';
     }
 
+    /**
+     * Closes the purchase modal and clears the currently selected item.
+     *
+     * Hides the buy modal UI and sets `state.selectedItem` to `null`.
+     */
     function closeModal() {
         dom.buyModal.style.display = 'none';
         state.selectedItem = null;
     }
 
+    /**
+     * Update the buy modal's displayed total price from the currently selected item's price and the amount input.
+     *
+     * If no item is selected the function does nothing. It reads the amount input (defaults to 1 on invalid values),
+     * multiplies by the selected item's price, and writes the result to `dom.modalTotal.textContent` formatted to two decimal places.
+     */
     function updateModalTotal() {
         if (!state.selectedItem) return;
         const amount = parseInt(dom.amountInput.value) || 1;
@@ -288,6 +381,13 @@
         });
     }
 
+    /**
+     * Process the purchase from the buy modal: submit the order, update UI, and show feedback.
+     *
+     * Disables the buy button and shows a processing state, reads the requested amount (defaults to 1),
+     * attempts the purchase, displays a success toast and updates the visible balance and closes the modal on success,
+     * displays an error toast on failure, and always re-enables the buy button and restores its label.
+     */
     async function handleBuy() {
         if (!state.selectedItem) return;
         const amount = parseInt(dom.amountInput.value) || 1;
@@ -312,7 +412,11 @@
         }
     }
 
-    // ── Events ───────────────────────────────────────────────────────
+    /**
+     * Attach UI event listeners for search, pagination, modal interactions, quantity controls, and keyboard shortcuts.
+     *
+     * Sets up a debounced (300ms) search input and Escape key behavior to clear the search; prev/next pagination handlers that fetch either search results or category items depending on current state; modal controls for close, cancel, buy, and backdrop click; quantity stepper and input handling that clamp values between 1 and 64 and update the modal total; and global keyboard shortcuts that focus the search input on `/` and close the modal on `Escape`.
+     */
 
     function bindEvents() {
         // Search with debounce
@@ -397,7 +501,15 @@
         }
     };
 
-    // ── Helpers ──────────────────────────────────────────────────────
+    /**
+     * Show a temporary toast notification in the page's toast container.
+     *
+     * Appends a div with class `toast` and the provided `type` to `#toast-container`,
+     * sets its text to `message`, fades it out after 4 seconds with a 0.3s transition,
+     * and then removes it from the DOM.
+     * @param {string} type - Toast category used as an additional CSS class (e.g. "success", "error", "info") to control styling.
+     * @param {string} message - The plaintext message to display inside the toast.
+     */
 
     function toast(type, message) {
         const container = document.getElementById('toast-container');
@@ -412,6 +524,10 @@
         }, 4000);
     }
 
+    /**
+     * Replace the loading overlay with a styled error panel showing the provided message.
+     * @param {string} message - The error text to display (will be HTML-escaped).
+     */
     function showError(message) {
         const overlay = dom.loading;
         overlay.innerHTML = `<div style="color:#ef4444;font-size:16px;text-align:center;padding:20px;">
@@ -420,13 +536,22 @@
         </div>`;
     }
 
+    /**
+     * Escape HTML special characters in a string so it can be safely inserted into HTML.
+     * @param {string} s - The input string to escape.
+     * @returns {string} The escaped string with HTML entities substituted for reserved characters.
+     */
     function escHtml(s) {
         const div = document.createElement('div');
         div.textContent = s;
         return div.innerHTML;
     }
 
-    /** Map a material name to an emoji icon for the sidebar. */
+    /**
+     * Return an emoji representing a material identifier for use in the UI.
+     * @param {string} material - Material identifier (e.g., "diamond_sword", "oak_log").
+     * @returns {string} Emoji for the given material, or the package emoji `📦` when no match is found.
+     */
     function getIcon(material) {
         const icons = {
             diamond_sword: '⚔️', golden_carrot: '🥕', diamond: '💎',
