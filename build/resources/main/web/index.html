@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Market</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="loader"></div>
+        <p>Connecting to server...</p>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="header-left">
+            <div class="logo">
+                <span class="logo-icon">⛏</span>
+                <span class="logo-text">Server Market</span>
+            </div>
+        </div>
+        <div class="header-center">
+            <div class="search-bar">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                <input type="text" id="search-input" placeholder="Search items..." autocomplete="off">
+                <kbd class="search-kbd">ESC</kbd>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="balance-display" id="balance-display">
+                <span class="balance-label">Balance</span>
+                <span class="balance-amount" id="balance-amount">Loading...</span>
+            </div>
+            <div class="player-info" id="player-info">
+                <div class="player-avatar" id="player-avatar"></div>
+                <span class="player-name" id="player-name">...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main layout -->
+    <div class="layout">
+        <!-- Sidebar -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">Categories</div>
+            <div class="sidebar-items" id="sidebar-categories">
+                <!-- Filled by JS -->
+            </div>
+        </nav>
+
+        <!-- Content area -->
+        <main class="content">
+            <!-- Breadcrumb -->
+            <div class="breadcrumb" id="breadcrumb">
+                <span class="breadcrumb-item active">All Categories</span>
+            </div>
+
+            <!-- Items grid -->
+            <div class="items-grid" id="items-grid">
+                <!-- Filled by JS -->
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination" style="display:none;">
+                <button class="page-btn" id="prev-page" disabled>← Previous</button>
+                <span class="page-info" id="page-info">Page 1 / 1</span>
+                <button class="page-btn" id="next-page" disabled>Next →</button>
+            </div>
+
+            <!-- Empty state -->
+            <div class="empty-state" id="empty-state" style="display:none;">
+                <div class="empty-icon">🔍</div>
+                <h3>No items found</h3>
+                <p>Try a different search or category.</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Buy modal -->
+    <div class="modal-overlay" id="buy-modal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Buy Item</h3>
+                <button class="modal-close" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-item-preview">
+                    <div class="modal-item-icon" id="modal-icon"></div>
+                    <div class="modal-item-info">
+                        <div class="modal-item-name" id="modal-item-name">Diamond</div>
+                        <div class="modal-item-price" id="modal-item-price">$500.00</div>
+                    </div>
+                </div>
+                <div class="amount-selector">
+                    <label>Amount</label>
+                    <div class="amount-controls">
+                        <button class="amount-btn" id="amount-minus">−</button>
+                        <input type="number" id="amount-input" value="1" min="1" max="64">
+                        <button class="amount-btn" id="amount-plus">+</button>
+                    </div>
+                </div>
+                <div class="modal-total">
+                    <span>Total:</span>
+                    <span class="total-price" id="modal-total">$500.00</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" id="modal-cancel">Cancel</button>
+                <button class="btn-buy" id="modal-buy">
+                    <span class="btn-buy-text">Purchase</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
