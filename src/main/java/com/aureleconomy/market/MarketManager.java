@@ -32,6 +32,7 @@ public class MarketManager {
     private BigDecimal priceCeilingPercent;
     private boolean recoveryEnabled;
     private BigDecimal recoveryRate;
+    private BigDecimal defaultSellRatio;
 
     public MarketManager(AurelEconomy plugin) {
         this.plugin = plugin;
@@ -50,6 +51,7 @@ public class MarketManager {
         recoveryEnabled = plugin.getConfig().getBoolean("market.price-recovery.enabled", true);
         recoveryRate = BigDecimal.valueOf(plugin.getConfig().getDouble("market.price-recovery.rate", 0.01));
         int recoveryInterval = plugin.getConfig().getInt("market.price-recovery.interval-minutes", 10);
+        defaultSellRatio = BigDecimal.valueOf(plugin.getConfig().getDouble("market.default-sell-ratio", 0.5));
 
         // Schedule passive price recovery
         if (recoveryEnabled && dynamicPricing) {
@@ -288,7 +290,7 @@ public class MarketManager {
         BigDecimal ratio = configSell.divide(baseBuyPrice, 4, RoundingMode.HALF_UP);
 
         if (ratio.compareTo(BigDecimal.valueOf(0.95)) > 0) {
-            ratio = BigDecimal.valueOf(plugin.getConfig().getDouble("market.default-sell-ratio", 0.5));
+            ratio = defaultSellRatio;
         }
 
         BigDecimal dynamicSellPrice = currentBuyPrice.multiply(ratio);
