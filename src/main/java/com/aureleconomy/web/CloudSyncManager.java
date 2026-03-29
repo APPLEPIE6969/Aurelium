@@ -82,34 +82,7 @@ public class CloudSyncManager {
     public void start() {
         // Register asynchronously with retries (Render free tier can take 30-60s to
         // wake)
-        CompletableFuture.runAsync(() -> {
-            for (int attempt = 1; attempt <= 5; attempt++) {
-                try {
-                    plugin.getComponentLogger().info("Cloud dashboard: registering (attempt " + attempt + "/5)...");
-                    register();
-                    registered = true;
-                    plugin.getComponentLogger().info("Cloud dashboard registered — server ID: " + serverId);
-                    // Do an initial sync immediately
-                    try {
-                        syncMarketData();
-                    } catch (Exception ignored) {
-                        // Initial sync failure is handled by the periodic sync task
-                    }
-                    return;
-                } catch (Exception e) {
-                    plugin.getComponentLogger().warn("Registration attempt " + attempt + " failed: " + e.getMessage());
-                    if (attempt < 5) {
-                        try {
-                            Thread.sleep(15_000);
-                        } catch (InterruptedException ignored) {
-                            // Interruption during sleep between registration retries
-                            return;
-                        }
-                    }
-                }
-            }
-            plugin.getComponentLogger().error("Failed to register with cloud dashboard after 5 attempts at " + baseUrl);
-        });
+        attemptRegistration(1);
 
         // Sync market data periodically (async) — also retries registration if needed
         long syncTicks = syncInterval * 20L;
@@ -178,6 +151,30 @@ public class CloudSyncManager {
                 plugin.getComponentLogger().warn("Price history snapshot failed: " + e.getMessage());
             }
         }, 200L, 12000L); // Start after 10s, repeat every 10 min
+    }
+
+
+    private void attemptRegistration(int attempt) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                plugin.getComponentLogger().info("Cloud dashboard: registering (attempt " + attempt + "/5)...");
+                register();
+                registered = true;
+                plugin.getComponentLogger().info("Cloud dashboard registered — server ID: " + serverId);
+                // Do an initial sync immediately
+                try {
+                    syncMarketData();
+                } catch (Exception ignored) {
+                }
+            } catch (Exception e) {
+                plugin.getComponentLogger().warn("Registration attempt " + attempt + " failed: " + e.getMessage());
+                if (attempt < 5) {
+                    Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> attemptRegistration(attempt + 1), 300L);
+                } else {
+                    plugin.getComponentLogger().error("Failed to register with cloud dashboard after 5 attempts at " + baseUrl);
+                }
+            }
+        });
     }
 
     public void stop() {
