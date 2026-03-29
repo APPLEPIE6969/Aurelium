@@ -135,7 +135,7 @@ public class AuctionGUI extends GUIHolder {
                 break;
 
             ItemStack display = ai.getItem().clone();
-            String sellerName = Bukkit.getOfflinePlayer(ai.getSeller()).getName();
+            String sellerName = com.aureleconomy.utils.UUIDNameCache.getName(ai.getSeller());
             String priceFormatted = plugin.getEconomyManager().getFormattedWithSymbol(ai.getPrice(), ai.getCurrency());
             String priceLine = (ai.isBin() ? "Buy It Now: " : "Current Bid: ") + priceFormatted;
             String timeLeft = formatTime(ai.getExpiration() - System.currentTimeMillis());

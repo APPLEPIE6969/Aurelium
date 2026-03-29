@@ -69,7 +69,7 @@ public class OrdersGUI extends GUIHolder {
 
             BuyOrder order = filtered.get(startIdx + i);
             String displayMat = order.getMaterial().name().replace("_", " ").toLowerCase();
-            String playerName = Bukkit.getOfflinePlayer(order.getBuyerUuid()).getName();
+            String playerName = com.aureleconomy.utils.UUIDNameCache.getName(order.getBuyerUuid());
             if (playerName == null)
                 playerName = "Unknown";
 
