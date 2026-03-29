@@ -81,14 +81,9 @@ public class MarketGUI extends GUIHolder {
         List<MarketEntry> matches = new java.util.ArrayList<>();
         String query = searchQuery.toLowerCase();
 
-        for (Category cat : Category.values()) {
-            if (cat == Category.ALL_ITEMS)
-                continue;
-            for (MarketEntry entry : MarketItems.getItems(cat)) {
-                String name = (entry.customName != null ? entry.customName : entry.material.name()).toLowerCase();
-                if (name.contains(query)) {
-                    matches.add(entry);
-                }
+        for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
+            if (entry.searchName.contains(query)) {
+                matches.add(entry);
             }
         }
 
@@ -231,14 +226,9 @@ public class MarketGUI extends GUIHolder {
                 if (searchQuery != null) {
                     allItems = new java.util.ArrayList<>();
                     String query = searchQuery.toLowerCase();
-                    for (Category cat : Category.values()) {
-                        if (cat == Category.ALL_ITEMS)
-                            continue;
-                        for (MarketEntry entry : MarketItems.getItems(cat)) {
-                            String name = (entry.customName != null ? entry.customName : entry.material.name())
-                                    .toLowerCase();
-                            if (name.contains(query))
-                                allItems.add(entry);
+                    for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
+                        if (entry.searchName.contains(query)) {
+                            allItems.add(entry);
                         }
                     }
                 } else {

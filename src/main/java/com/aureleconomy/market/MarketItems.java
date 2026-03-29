@@ -47,6 +47,7 @@ public static class MarketEntry {
     public final BigDecimal price;
     public final BigDecimal customSellPrice;
     public final String customName;
+    public final String searchName;
 
     public MarketEntry(Material material, double price) {
         this(material, price, null, null);
@@ -65,6 +66,7 @@ public static class MarketEntry {
         this.price = BigDecimal.valueOf(price);
         this.customSellPrice = (sellPrice != null) ? BigDecimal.valueOf(sellPrice) : null;
         this.customName = customName;
+        this.searchName = (customName != null ? customName : material.name()).toLowerCase();
     }
 }
 
@@ -1360,12 +1362,12 @@ public static class MarketEntry {
 
                 // Populate ALL_ITEMS with all configured items from other categories
                 List<MarketEntry> allItems = items.get(Category.ALL_ITEMS);
-                java.util.Set<Material> added = new java.util.HashSet<>();
+                java.util.Set<String> added = new java.util.HashSet<>();
                 for (Category cat : Category.values()) {
                         if (cat == Category.ALL_ITEMS)
                                 continue;
                         for (MarketEntry entry : items.get(cat)) {
-                                if (added.add(entry.material)) {
+                                if (added.add(entry.searchName)) {
                                         allItems.add(entry);
                                 }
                         }
