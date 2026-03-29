@@ -25,13 +25,17 @@ public class EconomyManager {
     private final AurelEconomy plugin;
     // Cache: Map<UUID, Map<CurrencyName, Balance>>
     private final Map<UUID, Map<String, BigDecimal>> balanceCache = new ConcurrentHashMap<>();
+    private String defaultCurrency;
 
     public EconomyManager(AurelEconomy plugin) {
         this.plugin = plugin;
     }
 
     public String getDefaultCurrency() {
-        return plugin.getConfig().getString("economy.default-currency", "Aurels");
+        if (this.defaultCurrency == null) {
+            this.defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
+        }
+        return this.defaultCurrency;
     }
 
     public BigDecimal getBalance(OfflinePlayer player) {
