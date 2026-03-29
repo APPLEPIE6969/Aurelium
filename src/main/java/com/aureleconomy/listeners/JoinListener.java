@@ -25,6 +25,8 @@ public class JoinListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
+        
+        plugin.getEconomyManager().invalidateCache(uuid);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()

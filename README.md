@@ -135,8 +135,16 @@ market-items:
     buy: -1.0      # -1.0 = Buying DISABLED
 ```
 
-### 🌐 Network Syncing (MySQL)
-Aurelium supports cross-server synchronization for BungeeCord and Velocity networks. By simply pointing all your servers (e.g., Survival, Skyblock) to the exact same MySQL database in their `config.yml`, players will instantly share the same balance, Auction House, and dynamic Market prices across the entire network.
+### 🌐 Network Syncing (MySQL Required)
+Aurelium supports cross-server synchronization for **BungeeCord** and **Velocity** networks. 
+
+> [!IMPORTANT]
+> **MySQL IS REQUIRED** for synchronization. SQLite does not support cross-server data sharing.
+
+By pointing all your backend servers (e.g., Survival, Skyblock) to the **same MySQL database** in their `config.yml`, the following data will be shared instantly:
+*   💰 **Global Balances**: Player balances are refreshed on join, ensuring they carry their money across your entire network.
+*   ⚖️ **Global Auction House**: All active auctions and the collection bin are shared across all linked servers.
+*   🏪 **Per-Server Markets**: Currently, dynamic Market prices are stored in each server's local `config.yml`. This allows you to have different economies (e.g., a "Hardcore" survival market vs. a "Creative" skyblock market) while players keep the same wallet.
 
 ### Global
 Control the plugin's behavior in `config.yml`:

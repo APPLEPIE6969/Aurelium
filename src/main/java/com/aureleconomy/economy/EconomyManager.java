@@ -223,4 +223,8 @@ public class EconomyManager {
             }
         });
     }
+
+    public void invalidateCache(UUID uuid) {
+        balanceCache.remove(uuid);
+    }
 }

@@ -12,6 +12,11 @@
 ### Fixes
 - Added proper exception logging to previously empty `catch` blocks in `ShopGUI` and `CloudSyncManager`, making debugging much easier (PR #5)
 - Fixed a bug in `ShopGUI` where `target` was used instead of `clicker` for certain player interactions (PR #5)
+- **BungeeCord/Velocity Sync**: Fixed a major bug where player balances could stay "stale" when switching servers due to permanent RAM caching. Player data is now refreshed from MySQL immediately upon joining a new server instance.
+
+### Internal
+- Bumped version in `pom.xml` to `1.4.2` to ensure consistent builds across Maven and Gradle.
+- Updated `README.md` to clarify that MySQL is mandatory for cross-server synchronization and that Market Prices remain per-server for regional economy support.
 
 ## v1.4.1 - Web Stability Hotfix
 
