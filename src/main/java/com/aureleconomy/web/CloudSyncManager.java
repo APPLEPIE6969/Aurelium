@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.security.SecureRandom;
 
 /**
  * Manages all communication between the MC plugin and the central
@@ -34,6 +35,7 @@ import java.util.concurrent.CompletableFuture;
 public class CloudSyncManager {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private final AurelEconomy plugin;
     private final HttpClient http;
     private final String baseUrl;
@@ -92,6 +94,7 @@ public class CloudSyncManager {
                     registered = true;
                     plugin.getComponentLogger().info("Cloud dashboard registered (late) — server ID: " + serverId);
                 } catch (Exception ignored) {
+                    // Late registration attempt failure during periodic sync
                     return;
                 }
             }
@@ -129,7 +132,9 @@ public class CloudSyncManager {
                         CompletableFuture.runAsync(() -> {
                             try {
                                 syncMarketData();
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // Optional immediate sync failure after purchase
+                            }
                         });
                     }
                 });
@@ -146,30 +151,6 @@ public class CloudSyncManager {
                 plugin.getComponentLogger().warn("Price history snapshot failed: " + e.getMessage());
             }
         }, 200L, 12000L); // Start after 10s, repeat every 10 min
-    }
-
-
-    private void attemptRegistration(int attempt) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                plugin.getComponentLogger().info("Cloud dashboard: registering (attempt " + attempt + "/5)...");
-                register();
-                registered = true;
-                plugin.getComponentLogger().info("Cloud dashboard registered — server ID: " + serverId);
-                // Do an initial sync immediately
-                try {
-                    syncMarketData();
-                } catch (Exception ignored) {
-                }
-            } catch (Exception e) {
-                plugin.getComponentLogger().warn("Registration attempt " + attempt + " failed: " + e.getMessage());
-                if (attempt < 5) {
-                    Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> attemptRegistration(attempt + 1), 300L);
-                } else {
-                    plugin.getComponentLogger().error("Failed to register with cloud dashboard after 5 attempts at " + baseUrl);
-                }
-            }
-        });
     }
 
 
@@ -215,7 +196,9 @@ public class CloudSyncManager {
 
     /** Build the dashboard URL for a player session. Posts session data async. */
     public String createSessionUrl(Player player) {
-        String token = UUID.randomUUID().toString().replace("-", "");
+        byte[] tokenBytes = new byte[32];
+        SECURE_RANDOM.nextBytes(tokenBytes);
+        String token = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
 
         // Post session to Render asynchronously — frontend will retry until ready
         CompletableFuture.runAsync(() -> {
@@ -649,7 +632,9 @@ public class CloudSyncManager {
         } else if (purchase.get("auctionId") instanceof String) {
             try {
                 auctionId = Integer.parseInt(purchase.get("auctionId").toString());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // Fallback parsing for auctionId
+            }
         }
 
         BigDecimal amount = BigDecimal.ZERO;
@@ -658,7 +643,9 @@ public class CloudSyncManager {
         } else if (purchase.get("amount") instanceof String) {
             try {
                 amount = new BigDecimal(purchase.get("amount").toString());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // Fallback parsing for amount
+            }
         }
 
         com.aureleconomy.auction.AuctionItem auction = plugin.getAuctionManager().getAuctionById(auctionId);
@@ -780,6 +767,7 @@ public class CloudSyncManager {
             try {
                 orderId = Integer.parseInt((String) purchase.get("orderId"));
             } catch (Exception ignored) {
+                // Fallback parsing for orderId
             }
         }
 
@@ -790,6 +778,7 @@ public class CloudSyncManager {
             try {
                 amount = Integer.parseInt((String) purchase.get("amount"));
             } catch (Exception ignored) {
+                // Fallback parsing for amount
             }
         }
 
