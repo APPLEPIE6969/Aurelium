@@ -35,7 +35,6 @@ public class JoinListener implements Listener {
                 boolean hasEarnings = false;
                 while (rs.next()) {
                     hasEarnings = true;
-                    int id = rs.getInt("id");
                     BigDecimal amount = rs.getBigDecimal("amount");
                     String itemDisplay = rs.getString("item_display");
 
@@ -46,11 +45,12 @@ public class JoinListener implements Listener {
                             .append(Component.text(itemDisplay, NamedTextColor.AQUA))
                             .append(Component.text(" while you were offline.", NamedTextColor.GREEN)));
 
-                    // Delete record
-                    deleteRecord(id);
                 }
 
                 if (hasEarnings) {
+                    // Delete all processed records for this UUID
+                    deleteAllRecordsForUUID(uuid);
+
                     event.getPlayer().sendMessage(
                             Component.text("--------------------------------------------------", NamedTextColor.GOLD));
                 }
@@ -61,13 +61,13 @@ public class JoinListener implements Listener {
         });
     }
 
-    private void deleteRecord(int id) {
+    private void deleteAllRecordsForUUID(UUID uuid) {
         try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
-                .prepareStatement("DELETE FROM offline_earnings WHERE id = ?")) {
-            ps.setInt(1, id);
+                .prepareStatement("DELETE FROM offline_earnings WHERE uuid = ?")) {
+            ps.setString(1, uuid.toString());
             ps.executeUpdate();
         } catch (SQLException e) {
-            e.printStackTrace();
+            plugin.getComponentLogger().error("Database error while deleting offline earnings for " + uuid, e);
         }
     }
 }
