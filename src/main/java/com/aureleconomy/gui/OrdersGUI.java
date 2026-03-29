@@ -69,9 +69,9 @@ public class OrdersGUI extends GUIHolder {
 
             BuyOrder order = filtered.get(startIdx + i);
             String displayMat = order.getMaterial().name().replace("_", " ").toLowerCase();
-            String playerName = Bukkit.getOfflinePlayer(order.getBuyerUuid()).getName();
-            if (playerName == null)
-                playerName = "Unknown";
+            String playerName = com.aureleconomy.utils.PlayerNameCache.getName(order.getBuyerUuid());
+
+
 
             inventory.setItem(i, new ItemBuilder(order.getMaterial())
                     .name(Component.text("Buying: " + displayMat, NamedTextColor.GOLD, TextDecoration.BOLD))

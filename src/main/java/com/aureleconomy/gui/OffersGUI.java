@@ -54,7 +54,7 @@ public class OffersGUI extends GUIHolder {
                     if (ai == null) continue;
 
                     ItemStack display = ai.getItem().clone();
-                    String bidderName = Bukkit.getOfflinePlayer(offer.getBidder()).getName();
+                    String bidderName = com.aureleconomy.utils.PlayerNameCache.getName(offer.getBidder());
                     String amountFormatted = plugin.getEconomyManager().format(offer.getAmount(), ai.getCurrency());
 
                     display.editMeta(meta -> {
