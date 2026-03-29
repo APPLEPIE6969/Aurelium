@@ -149,9 +149,10 @@
 * All purchases are executed on the main server thread for thread-safety.
 * Configuration:
   web:
+  ```
     enabled: false
     port: 8585
-    # Session timeout: rolling 1 hour of inactivity (hardcoded)
+     # Session timeout: rolling 1 hour of inactivity (hardcoded)
   ```
 
 ### 📚 Enchanted Books
