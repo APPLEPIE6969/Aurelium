@@ -4,11 +4,14 @@
 > 
 > *The newly added Web Dashboard features are currently in active development. Please expect potential bugs or instability if you enable `web.enabled` in your configuration. The core in-game economy, GUI markets, and auction house are mostly stable.*
 
-**Aurelium** is a comprehensive, standalone economy plugin for Minecraft Paper 1.21.11. It features a multi-currency system, a flexible Server Market with three interface modes (classic chest, modern styled, or browser-based web dashboard), a player-driven Auction House, Buy Orders, and seamless Vault integration.
+**Aurelium** is a comprehensive, standalone economy plugin for Minecraft Paper 1.21.11.
+> **Compatibility**: Paper, Purpur, Pufferfish, Leaves (1.21.x)
 
-## ✨ Features
+It features a multi-currency system, a flexible Server Market with three interface modes (classic chest, modern styled, or browser-based web dashboard), a player-driven Auction House, Buy Orders, and seamless Vault integration.
 
-### 🌐 Web Dashboard (Optional)
+## Features
+
+### Web Dashboard (Optional)
 Aurelium includes a modern, responsive web application that players can use to browse the Server Market, monitor stock trends, and engage with the Auction House from their browser.
 
 * **Server Market:** Fully functional directly from the web—purchase items and have them delivered instantly in-game!![Web Market](https://cdn.modrinth.com/data/cached_images/b28a02ddb620b4a6b5bc54be95508d4adaabba29.png)
@@ -19,21 +22,21 @@ Aurelium includes a modern, responsive web application that players can use to b
 - **Price History**: Prices are recorded every 10 minutes and stored for 7 days for charts.
 - **Cloud Mode**: Optional cloud hosting via Render for **almost** always-accessible dashboards.
 - **Multi-Currency UI**: Correctly displays custom currency symbols (e.g., `₳`, `$`, `€`) synced perfectly from your `config.yml`.
-- **Icon Fallbacks**: Robust image loading seamlessly falls back to older Minecraft versions (1.20, 1.19, 1.18) if modern icons aren't available from external APIs yet.
+- **Icon Fallbacks**: Robust image loading seamlessly falls back to older Minecraft versions (1.21, 1.20, 1.19, 1.18) if modern icons aren't available from external APIs yet.
 - **Secure Sessions**: Players use `/web` in-game to get a time-limited clickable link. Sessions use a rolling 1-hour timeout that resets on activity. Visiting the dashboard without a session shows a friendly error screen with instructions.
 - **Tab Sleep Mode**: When a player switches to another browser tab or minimizes the window, the entire dashboard goes to sleep — no network requests, no CPU usage. When they return, it instantly wakes up and loads fresh data.
 - **RAM Optimized**: Bulk data (auctions, orders, stocks, price history) is cached as raw JSON strings, keeping per-server memory usage under 1MB.
 - **Activation Queue**: If the cloud server reaches its 500MB RAM limit, new server registrations are fairly waitlisted until memory frees up.
 - **Configurable**: Port and enable/disable toggle in `config.yml`.
 
-### 💰 Economy
+### Economy
 - **Multi-Currency**: Define multiple currencies (e.g., Aurels ₳, Dollars $, Euros €) with unique symbols and starting balances.
 - **Per-Item Currency**: Assign specific currencies to individual market items.
 - **Vault Support**: Fully compatible with Vault-dependent plugins (ShopGUI+, Essentials, etc.).
 - **Database**: SQLite or MySQL storage with automatic migration support.
 - **Offline Earnings**: Get paid for auction sales even when you're offline.
 
-### 🏪 Market
+### Market
 A server-owned shop that functions like a **Stock Market**, with **three interface modes**:
 - **Classic**: Traditional chest-based inventory GUI.
 - **Modern**: Styled chest GUI with MiniMessage gradient titles, glass-pane borders, and formatted lore.
@@ -51,7 +54,7 @@ A server-owned shop that functions like a **Stock Market**, with **three interfa
 - **Smart Inventory Logistics**: Purchasing items securely fills your existing partial stacks instead of strictly demanding empty inventory slots.
 - **Massive Catalog**: Includes **ALL Building Blocks** (Stones, Deepslate, Wood, Glass, Nature, etc.) and over **60+ Mob Spawners**. 
 
-### ⚖️ Auction
+### Auction
 A fully self-contained player-driven exchange:
 - **100% GUI Driven**: Complex chat commands are a thing of the past. You can effortlessly **Sell Items**, **Place Custom Bids**, and **Make Private Offers** directly via intuitive chat-prompt buttons inside the menus.
 - **Safety Confirmations**: Never accidentally bankrupt yourself again. Both *Buy It Now* and *Bidding* feature a dedicated **Confirmation Screen** before deducting funds.
@@ -60,7 +63,7 @@ A fully self-contained player-driven exchange:
 - **Auto-Refunds**: Placed a bid and got outbid? Your money is **instantly returned** to your balance.
 - **Pro-Tip**: Almost every command below (like `/ah search`, `/sell`, and `/ah offer`) can also be triggered by simply **clicking the intuitive buttons** (Compass, Emerald, or Books) directly inside the GUIs!
 
-### 🛒 Buy Orders
+### Buy Orders
 A global request system that lets players buy things they want even while offline:
 - **Global Requests**: Request any item in the game (including all 120+ Enchanted Books and Ingots) at your specific custom price.
 - **Automated Fulfillment**: Other players can browse active orders and fulfill them instantly directly from their inventory.
@@ -69,11 +72,11 @@ A global request system that lets players buy things they want even while offlin
 - **Buyer Notifications**: Get notified in real-time when someone fills your order, or on your next login if you were offline.
 - **Intelligent Searching**: The `/orders` GUI features dynamic search buttons (Compass and Sign icons) allowing you to filter specific categories or search the entire Minecraft catalog for any valid item.
 
-### 📊 Market Stabilization
+### Market Stabilization
 - **Price Floor & Ceiling**: Prices can never crash below 20% or inflate above 500% of the original base value (both configurable).
 - **Natural Recovery**: Prices passively drift back toward their base value every 10 minutes, preventing permanent crashes from auto-farms.
 
-### 📈 Stocks
+### Stocks
 - **Real-time Tracking**: View the incredibly accurate *Current Buy Price* and *Current Sell Price* of every item in the market.
 - **Trends**:
     - **Green (▲ +%)**: Demand is peaking.
@@ -111,14 +114,14 @@ A global request system that lets players buy things they want even while offlin
 | :--- | :--- | :--- |
 | `/eco <give/take/set> <player> <amount> [currency]` | Modify player balances. | `aureleconomy.admin` |
 
-## ⚙️ Setup
+## Setup
 
 1.  Download `Aurelium-1.4.2.jar`.
 2.  Place it in your server's `plugins/` folder.
 3.  **Restart** the server.
     - *Note: If Vault is not detected, Aurelium will automatically extract and install it into your plugins folder for you upon first run.*
 
-## 🔧 Config
+## Config
 
 ### Items
 Control every price directly in the config:
@@ -135,16 +138,16 @@ market-items:
     buy: -1.0      # -1.0 = Buying DISABLED
 ```
 
-### 🌐 Network Syncing (MySQL Required)
+### Network Syncing (MySQL Required)
 Aurelium supports cross-server synchronization for **BungeeCord** and **Velocity** networks. 
 
 > [!IMPORTANT]
 > **MySQL IS REQUIRED** for synchronization. SQLite does not support cross-server data sharing.
 
 By pointing all your backend servers (e.g., Survival, Skyblock) to the **same MySQL database** in their `config.yml`, the following data will be shared instantly:
-*   💰 **Global Balances**: Player balances are refreshed on join, ensuring they carry their money across your entire network.
-*   ⚖️ **Global Auction House**: All active auctions and the collection bin are shared across all linked servers.
-*   🏪 **Per-Server Markets**: Currently, dynamic Market prices are stored in each server's local `config.yml`. This allows you to have different economies (e.g., a "Hardcore" survival market vs. a "Creative" skyblock market) while players keep the same wallet.
+*    **Global Balances**: Player balances are refreshed on join, ensuring they carry their money across your entire network.
+*    **Global Auction House**: All active auctions and the collection bin are shared across all linked servers.
+*    **Per-Server Markets**: Currently, dynamic Market prices are stored in each server's local `config.yml`. This allows you to have different economies (e.g., a "Hardcore" survival market vs. a "Creative" skyblock market) while players keep the same wallet.
 
 ### Global
 Control the plugin's behavior in `config.yml`:
@@ -209,16 +212,16 @@ web:
   # Session timeout: rolling 1 hour of inactivity (hardcoded)
 ```
 
-### 🌍 Language
+### Language
 A `messages.yml` file is generated on startup.
 - **Translate**: Change any message to your language.
 - **Color Codes**: Use MiniMessage formatting (e.g., `<green>`) or legacy `&` codes.
 
-## ❓ FAQ
+## FAQ
 - **"Unknown Command"**: If `/market` or `/eco` says "Unknown command", the plugin failed to load.
     - Check your server console/logs for errors.
     - Ensure you have `Aurelium-1.4.2.jar` in `plugins/`.
-    - Ensure you are running **Paper 1.21.x**.
+    - Ensure you are running **Paper 1.21.x** (or compatible forks: Purpur, Pufferfish, Leaves).
 - **"No Permission"**:
     - Ensure you are **OP** (`/op <player>`) or have the permission node `aureleconomy.admin`.
     - Note: Standard player commands (`/bal`, `/market`, `/ah`, `/sell`) are enabled for everyone by default.

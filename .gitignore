@@ -7,8 +7,10 @@ gradle/
 gradlew
 gradlew.bat
 gradle-*
+gradle-*/
 *.class
 *.log
+current_build*.log
 *.zip
 *.tar.gz
 *.pyc
@@ -16,6 +18,7 @@ gradle-*
 .classpath
 .settings/
 .idea/
+.vscode/
 *.iml
 *.iws
 *.ipr
@@ -25,3 +28,24 @@ update_cloudsync.py
 gitlog.txt
 testimg.png
 to-do_list.md
+Untitled-*.txt
+
+# Maven
+apache-maven*/
+mvnw
+mvnw.cmd
+dependency-reduced-pom.xml
+
+# Kilo/AI
+.agent/
+.agents/
+kilo.json
+
+# Backup directories
+_aurelium_*/
+recovery_tmp/
+
+# Misc
+package com.aureleconomy.web;
+hs_err_pid*.log
+build.log
