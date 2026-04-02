@@ -97,7 +97,6 @@ public class OrdersGUI extends GUIHolder {
                     .build());
         }
 
-        // Bottom Row navigation
         inventory.setItem(45,
                 new ItemBuilder(Material.PAPER)
                         .name(Component.text("Create Buy Order", NamedTextColor.GREEN, TextDecoration.BOLD))
@@ -132,9 +131,9 @@ public class OrdersGUI extends GUIHolder {
             return;
 
         int slot = event.getRawSlot();
-        if (slot == 45) { // Create Buy Order
+        if (slot == 45) { 
             new OrderCategoryGUI(plugin, player).open();
-        } else if (slot == 46) { // Search Orders
+        } else if (slot == 46) { 
             player.closeInventory();
             player.sendMessage(
                     Component.text("Enter an item name to search for (e.g. 'diamond'):", NamedTextColor.YELLOW));
@@ -152,7 +151,7 @@ public class OrdersGUI extends GUIHolder {
                     return;
                 }
                 setSearchQuery(query);
-                new OrdersGUI(plugin, player, 0).open(); // Open a fresh GUI so the new search applies
+                new OrdersGUI(plugin, player, 0).open(); 
             });
         } else if (slot == 48 && page > 0) {
             page--;
@@ -162,10 +161,9 @@ public class OrdersGUI extends GUIHolder {
         } else if (slot == 50 && (page * 45) + 45 < allOrders.size()) {
             page++;
             refresh();
-        } else if (slot == 53) { // My Orders
+        } else if (slot == 53) { 
             new MyOrdersGUI(plugin, player, 0).open();
         } else if (slot < 45) {
-            // Fulfillment logic handled here
             List<BuyOrder> filtered = allOrders;
             if (searchQuery != null && !searchQuery.isBlank()) {
                 final String q = searchQuery.toLowerCase();
@@ -178,13 +176,11 @@ public class OrdersGUI extends GUIHolder {
             if (orderIndex < filtered.size()) {
                 BuyOrder order = filtered.get(orderIndex);
 
-                // Check if player is the buyer
                 if (order.getBuyerUuid().equals(player.getUniqueId())) {
                     player.sendMessage(Component.text("You cannot fulfill your own buy order.", NamedTextColor.RED));
                     return;
                 }
 
-                // Trigger fulfillment prompt
                 player.closeInventory();
 
                 String itemName = order.getMaterial().name().replace("_", " ").toLowerCase();
@@ -204,7 +200,6 @@ public class OrdersGUI extends GUIHolder {
                         if (amount <= 0)
                             throw new NumberFormatException();
 
-                        // Execute fulfillment
                         plugin.getOrderManager().fillOrder(player, order.getId(), amount);
 
                     } catch (NumberFormatException ex) {

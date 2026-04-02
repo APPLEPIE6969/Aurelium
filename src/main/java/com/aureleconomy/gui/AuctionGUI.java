@@ -16,10 +16,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
-/**
- * Main GUI for the Auction House and Collection Bin.
- * Updated to use BigDecimal for all financial calculations and formatting.
- */
 public class AuctionGUI extends GUIHolder {
 
     private static final String KEY_AUCTION_ID = "auction_id";
@@ -66,7 +62,6 @@ public class AuctionGUI extends GUIHolder {
     }
 
     private void setupItems() {
-        // Navigation / Utility items
         inventory.setItem(49,
                 new ItemBuilder(Material.BARRIER).name(Component.text("Close", NamedTextColor.RED)).build());
 
@@ -93,7 +88,6 @@ public class AuctionGUI extends GUIHolder {
     }
 
     private void setupAuctionHouse() {
-        // Auction House side buttons
         inventory.setItem(51, new ItemBuilder(Material.EMERALD)
                 .name(Component.text("Sell Item", NamedTextColor.GREEN))
                 .lore(Component.text("Click to list an item", NamedTextColor.GRAY)).build());
@@ -178,7 +172,6 @@ public class AuctionGUI extends GUIHolder {
         event.setCancelled(true);
         Player player = (Player) event.getWhoClicked();
 
-        // Anti-flicker: Clear client-side predicted moves for shift-clicks
         if (event.isShiftClick()) {
             player.updateInventory();
         }
@@ -284,22 +277,17 @@ public class AuctionGUI extends GUIHolder {
             meta.getPersistentDataContainer().remove(auctionIdKey);
         });
 
-        // Strict Pre-Check: Never drop on ground
         if (!com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), give, give.getAmount())) {
             player.sendMessage(Component.text("Cannot collect: Your inventory is full!", NamedTextColor.RED));
             return;
         }
 
-        // Atomic check: Only proceed if this thread successfully marks the item as
-        // collected
-        // This prevents item duplication from rapid clicking
         if (!plugin.getAuctionManager().markCollectedAtomic(id)) {
             player.sendMessage(Component.text("This item has already been collected!", NamedTextColor.RED));
             refresh();
             return;
         }
 
-        // Proceed with removal and collection
         inventory.setItem(slot, null);
         player.getInventory().addItem(give);
 

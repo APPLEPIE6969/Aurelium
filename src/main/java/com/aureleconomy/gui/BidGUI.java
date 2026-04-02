@@ -15,10 +15,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-/**
- * GUI for placing bids on auctions.
- * Refactored to use BigDecimal for precise bid calculations and multipliers.
- */
 public class BidGUI extends GUIHolder {
 
     private static final BigDecimal MULTIPLIER_10 = new BigDecimal("1.10");
@@ -34,7 +30,6 @@ public class BidGUI extends GUIHolder {
         this.plugin = plugin;
         this.player = player;
         this.auction = auction;
-        // Default next bid is +10%
         this.currentBid = auction.getPrice().multiply(MULTIPLIER_10).setScale(2, RoundingMode.HALF_UP);
         this.inventory = Bukkit.createInventory(this, 27,
                 Component.text("Place bid: " + auction.getItem().getType().name()));
@@ -48,7 +43,6 @@ public class BidGUI extends GUIHolder {
     private void setupItems() {
         inventory.clear();
 
-        // Item info display
         ItemStack itemDisplay = auction.getItem().clone();
         itemDisplay.editMeta(meta -> {
             meta.lore(List.of(
@@ -57,7 +51,6 @@ public class BidGUI extends GUIHolder {
         });
         inventory.setItem(4, itemDisplay);
 
-        // Quick bid percentage buttons
         addBidButton(11, "+10%", MULTIPLIER_10);
         addBidButton(12, "+50%", MULTIPLIER_50);
         addBidButton(13, "+100%", MULTIPLIER_100);
@@ -66,7 +59,6 @@ public class BidGUI extends GUIHolder {
                 .name(Component.text("Custom Bid", NamedTextColor.AQUA))
                 .lore(Component.text("Enter amount in chat", NamedTextColor.GRAY)).build());
 
-        // Confirm / Back buttons
         inventory.setItem(22, new ItemBuilder(Material.GREEN_WOOL)
                 .name(Component.text("Confirm Bid", NamedTextColor.GREEN))
                 .lore(Component.text("Amount: " + plugin.getEconomyManager().getFormattedWithSymbol(currentBid, auction.getCurrency()), NamedTextColor.GRAY)).build());

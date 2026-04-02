@@ -31,7 +31,6 @@ public class OrderCategoryGUI extends GUIHolder {
     }
 
     private void setupItems() {
-        // Row 1 (slots 10-16)
         inventory.setItem(10, new ItemBuilder(Material.DIAMOND_SWORD)
                 .name(Component.text("Tools & Combat", NamedTextColor.RED, TextDecoration.BOLD)).build());
         inventory.setItem(11, new ItemBuilder(Material.GRASS_BLOCK)
@@ -47,7 +46,6 @@ public class OrderCategoryGUI extends GUIHolder {
         inventory.setItem(16, new ItemBuilder(Material.REDSTONE)
                 .name(Component.text("Redstone", NamedTextColor.RED, TextDecoration.BOLD)).build());
 
-        // Row 2 (slots 19-25)
         inventory.setItem(19, new ItemBuilder(Material.BRICKS)
                 .name(Component.text("Building", NamedTextColor.GRAY, TextDecoration.BOLD)).build());
         inventory.setItem(20, new ItemBuilder(Material.COPPER_BLOCK)
@@ -61,12 +59,9 @@ public class OrderCategoryGUI extends GUIHolder {
         inventory.setItem(24, new ItemBuilder(Material.ENCHANTED_BOOK)
                 .name(Component.text("Enchantments", NamedTextColor.DARK_AQUA, TextDecoration.BOLD)).build());
 
-        // Feature Button
         inventory.setItem(31, new ItemBuilder(Material.COMPASS)
                 .name(Component.text("Search All Items", NamedTextColor.AQUA, TextDecoration.BOLD))
                 .lore(Component.text("Browse or search the entire Minecraft catalog", NamedTextColor.GRAY)).build());
-
-        // Bottom
         inventory.setItem(40,
                 new ItemBuilder(Material.BARRIER).name(Component.text("Back", NamedTextColor.RED)).build());
     }

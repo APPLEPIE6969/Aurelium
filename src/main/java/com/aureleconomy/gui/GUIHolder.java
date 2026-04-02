@@ -16,7 +16,7 @@ public abstract class GUIHolder implements InventoryHolder {
     public abstract void handleClick(org.bukkit.event.inventory.InventoryClickEvent event);
 
     public void handleDrag(org.bukkit.event.inventory.InventoryDragEvent event) {
-        // Default implementation: block dragging in top inventory
+        // if you read this stfu
         for (int slot : event.getRawSlots()) {
             if (slot < inventory.getSize()) {
                 event.setCancelled(true);
@@ -26,7 +26,6 @@ public abstract class GUIHolder implements InventoryHolder {
     }
 
     public void handleClose(org.bukkit.event.inventory.InventoryCloseEvent event) {
-        // Default implementation: do nothing
     }
 
     public void open(org.bukkit.entity.Player player) {
@@ -34,7 +33,5 @@ public abstract class GUIHolder implements InventoryHolder {
     }
 
     public void open() {
-        // Only if player is already known? No, we need a player.
-        // Some GUIs store player, some don't.
     }
 }

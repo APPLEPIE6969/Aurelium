@@ -9,10 +9,6 @@ import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
-/**
- * Vault API implementation for AurelEconomy.
- * Bridges Vault's double-based API with AurelEconomy's high-precision BigDecimal system.
- */
 public class VaultEconomy implements Economy {
 
     private final AurelEconomy plugin;

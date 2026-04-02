@@ -15,10 +15,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-/**
- * Confirmation GUI for purchases and bids.
- * Refactored to use BigDecimal for transaction amounts.
- */
 public class ConfirmPurchaseGUI extends GUIHolder {
 
     private final AurelEconomy plugin;
@@ -44,7 +40,6 @@ public class ConfirmPurchaseGUI extends GUIHolder {
     private void setupItems() {
         inventory.clear();
 
-        // Target Item Information
         ItemStack display = auction.getItem().clone();
         display.editMeta(meta -> {
             meta.lore(List.of(
@@ -53,12 +48,9 @@ public class ConfirmPurchaseGUI extends GUIHolder {
         });
         inventory.setItem(4, display);
 
-        // Confirm Button
         inventory.setItem(11, new ItemBuilder(Material.LIME_WOOL)
                 .name(Component.text("✔ CONFIRM", NamedTextColor.GREEN))
                 .lore(Component.text("Click to proceed", NamedTextColor.GRAY)).build());
-
-        // Cancel Button
         inventory.setItem(15, new ItemBuilder(Material.RED_WOOL)
                 .name(Component.text("✖ CANCEL", NamedTextColor.RED))
                 .lore(Component.text("Click to go back", NamedTextColor.GRAY)).build());
@@ -83,9 +75,9 @@ public class ConfirmPurchaseGUI extends GUIHolder {
             return;
         }
 
-        if (slot == 11) { // Confirm
+        if (slot == 11) { 
             handleConfirm(player);
-        } else if (slot == 15) { // Cancel
+        } else if (slot == 15) { 
             if (isBid) {
                 new BidGUI(plugin, player, auction).open();
             } else {
@@ -106,18 +98,15 @@ public class ConfirmPurchaseGUI extends GUIHolder {
             player.sendMessage(Component.text("Bid placed successfully!", NamedTextColor.GREEN));
             new AuctionGUI(plugin, player, false).open();
         } else {
-            // Check inventory capacity
             if (!InventoryUtils.hasSpace(player.getInventory(), auction.getItem(), auction.getItem().getAmount())) {
                 player.sendMessage(Component.text("Not enough space in inventory.", NamedTextColor.RED));
                 player.closeInventory();
                 return;
             }
 
-            // Finalize Buy It Now (Atomic State Transition)
             if (plugin.getAuctionManager().claimAuctionAtomic(auction.getId())) {
                 plugin.getEconomyManager().withdraw(player, amount, auction.getCurrency());
                 
-                // Record the "final bid" by buyer for logging/internal logic
                 plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
                 plugin.getAuctionManager().endAuction(auction);
 

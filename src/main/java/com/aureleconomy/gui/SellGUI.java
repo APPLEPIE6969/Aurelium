@@ -30,46 +30,21 @@ public class SellGUI extends GUIHolder {
     }
 
     private void setupInterface() {
-        // Bottom row (45-53) is for controls.
-        // 45-53 excluding 49 (Confirm) and 45 (Cancel/Exit) can be filler or just
-        // empty?
-        // Let's use gray glass for the bottom row filler.
         ItemStack filler = new ItemBuilder(Material.GRAY_STAINED_GLASS_PANE).name(Component.empty()).build();
 
         for (int i = 45; i < 54; i++) {
             inventory.setItem(i, filler);
         }
 
-        // Cancel Button (45)
         inventory.setItem(45, new ItemBuilder(Material.RED_STAINED_GLASS_PANE)
                 .name(Component.text("Cancel & Return Items", NamedTextColor.RED))
                 .build());
-
-        // Confirm Button (49) -> We will update this dynamically?
-        // Actually, let's make it a static 'Click to Sell' button, and we calc total on
-        // click.
-        // Updating lore every slot change is expensive/complex with GUIHolder logic
-        // unless we listen to all events.
-        // Simple approach: Click confirm -> Calc total -> Ask "Sold for X?" or just
-        // sell.
-        // User asked: "ask are you sure... click yes or no".
-        // So:
-        // 1. User drags items.
-        // 2. User clicks "Review/Sell" (Slot 49).
-        // 3. GUI changes to "Confirm? Total: $XXX" (Yes/No).
-        // OR: Slot 49 just says "Click to Sell All".
-        // Let's do: Slot 49 is "Sell All". Click it -> Checks items, Calc Total.
-        // If > 0, sell immediately? Or pop up confirmation?
-        // User said: "it will ask are you sure you want to sell this and you click yes
-        // or no".
-        // So we need a confirmation state.
 
         inventory.setItem(49, new ItemBuilder(Material.EMERALD_BLOCK)
                 .name(Component.text("Sell All", NamedTextColor.GREEN))
                 .lore(Component.text("Click to calculate value", NamedTextColor.GRAY))
                 .build());
 
-        // Sell Matching (Hopper) - Slot 53
         inventory.setItem(53, new ItemBuilder(Material.HOPPER)
                 .name(Component.text("Sell Matching", NamedTextColor.AQUA))
                 .lore(Component.text("Drag an item here to", NamedTextColor.GRAY),
@@ -83,16 +58,15 @@ public class SellGUI extends GUIHolder {
     public void handleClick(InventoryClickEvent event) {
         int slot = event.getSlot();
 
-        // Allow top interaction (0-44)
         if (slot < 45 && slot >= 0) {
             if (isConfirming) {
                 event.setCancelled(true);
                 return;
             }
-            return; // Allow
+            return; 
         }
 
-        event.setCancelled(true); // Cancel bottom row clicks
+        event.setCancelled(true); 
 
         if (slot == 45) {
             player.closeInventory();
@@ -107,16 +81,11 @@ public class SellGUI extends GUIHolder {
             }
         }
 
-        // Sell Matching Logic (Slot 53)
         if (slot == 53 && !isConfirming) {
-            // Check cursor item
             ItemStack cursor = event.getCursor();
             if (cursor != null && cursor.getType() != Material.AIR) {
                 pullMatchingItems(cursor);
             } else {
-                // Should we allow clicking if they have nothing on cursor?
-                // Instructions said "drag your item on that".
-                // So we expect a cursor item.
                 player.sendMessage(
                         Component.text("Drag an item here to sell all matching types!", NamedTextColor.YELLOW));
             }
@@ -125,42 +94,24 @@ public class SellGUI extends GUIHolder {
 
     private void pullMatchingItems(ItemStack template) {
         Material type = template.getType();
-        // Iterate player inventory
         Inventory pInv = player.getInventory();
         int addedCount = 0;
 
         for (int i = 0; i < pInv.getSize(); i++) {
             ItemStack item = pInv.getItem(i);
             if (item != null && item.getType() == type) {
-                // Try to add to GUI
-                // We should NOT remove the one being dragged (the cursor).
-                // But the cursor is technically 'held' by player?
-                // Actually, if they click Slot 53, the event carries the cursor.
-                // We shouldn't take the cursor item itself, just the others?
-                // "sell all of the same item".
-                // Let's take all from inventory.
-                // The cursor item remains on cursor unless we set it to air.
-                // If we want to include the cursor item, we just add it to the GUI and set
-                // cursor air.
-
-                // Let's move inventory items first.
-                // Find first empty slot in GUI (0-44)
-
-                // We need to loop and fit as many as possible.
                 HashMap<Integer, ItemStack> leftover = inventory.addItem(item);
                 if (leftover.isEmpty()) {
-                    pInv.setItem(i, null); // Successfully moved
+                    pInv.setItem(i, null); 
                     addedCount += item.getAmount();
                 } else {
-                    // Full
-                    pInv.setItem(i, leftover.get(0)); // Put back remainder
+                    pInv.setItem(i, leftover.get(0)); 
                     addedCount += (item.getAmount() - leftover.get(0).getAmount());
-                    break; // GUI Full
+                    break; 
                 }
             }
         }
 
-        // Include cursor item?
         HashMap<Integer, ItemStack> cursorLeftover = inventory.addItem(template);
         if (cursorLeftover.isEmpty()) {
             player.setItemOnCursor(new ItemStack(Material.AIR));
@@ -264,7 +215,6 @@ public class SellGUI extends GUIHolder {
         if (!cachedTotals.isEmpty()) {
             Map<String, Integer> itemsToNotifyMarket = new HashMap<>();
             
-            // Loop once to remove items and prepare market notifications
             for (int i = 0; i < 45; i++) {
                 ItemStack item = inventory.getItem(i);
                 if (item != null && item.getType() != Material.AIR) {
@@ -272,12 +222,11 @@ public class SellGUI extends GUIHolder {
                     BigDecimal price = plugin.getMarketManager().getSellPrice(key);
                     if (price.compareTo(BigDecimal.ZERO) > 0) {
                         itemsToNotifyMarket.put(key, itemsToNotifyMarket.getOrDefault(key, 0) + item.getAmount());
-                        inventory.setItem(i, null); // Remove sold item
+                        inventory.setItem(i, null); 
                     }
                 }
             }
 
-            // Pay the player the cached amounts (exactly what was shown in preview)
             for (Map.Entry<String, BigDecimal> entry : cachedTotals.entrySet()) {
                 plugin.getEconomyManager().deposit(player, entry.getValue(), entry.getKey());
                 player.sendMessage(Component.text()
@@ -286,7 +235,6 @@ public class SellGUI extends GUIHolder {
                         .build());
             }
 
-            // Notify Market Manager once per item type for the total quantity
             itemsToNotifyMarket.forEach((key, quantity) -> {
                 plugin.getMarketManager().onTransaction(key, false, quantity);
             });
@@ -299,7 +247,6 @@ public class SellGUI extends GUIHolder {
     }
 
     public void handleClose(InventoryCloseEvent event) {
-        // Return matching items from top slots (0-44)
         Inventory inv = event.getInventory();
         for (int i = 0; i < 45; i++) {
             ItemStack item = inv.getItem(i);

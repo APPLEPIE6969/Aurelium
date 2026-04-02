@@ -33,14 +33,13 @@ public class StocksGUI extends GUIHolder {
         this.player = player;
         this.inventory = Bukkit.createInventory(this, 54, Component.text("📈 Market Stocks"));
         initializeStocks();
-        refresh(); // Initial price load
+        refresh();
         updateInventory();
     }
 
     private void initializeStocks() {
         java.util.Set<String> processedKeys = new java.util.HashSet<>();
 
-        // Priority 1: Specific categories (Tools, Food, Minerals, etc.)
         for (Category cat : Category.values()) {
             if (cat == Category.ALL_ITEMS)
                 continue;
@@ -53,9 +52,8 @@ public class StocksGUI extends GUIHolder {
             }
         }
 
-        // Priority 2: ALL_ITEMS (for everything else survival-obtainable)
         for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
-            String key = entry.material.name(); // ALL_ITEMS generally doesn't have custom names in its init
+            String key = entry.material.name();
             if (processedKeys.add(key)) {
                 stocks.add(new StockItem(entry));
             }
@@ -76,22 +74,19 @@ public class StocksGUI extends GUIHolder {
             currentPrice = plugin.getMarketManager().getBuyPrice(priceKey);
             sellPrice = plugin.getMarketManager().getSellPrice(priceKey);
 
-            // If it's a non-market item (base price 1.0 from ALL_ITEMS dynamic init), check
-            // last sold
             if (basePrice.compareTo(BigDecimal.ONE) == 0 && currentPrice.compareTo(BigDecimal.ONE) == 0) {
                 BigDecimal lastSold = plugin.getOrderManager().getLastSoldPrice(priceKey);
                 if (lastSold != null) {
                     currentPrice = lastSold;
-                    sellPrice = lastSold; // No separate sell price for non-market items, just actual value
+                    sellPrice = lastSold;
                 } else {
-                    currentPrice = BigDecimal.ZERO; // Unvalued
+                    currentPrice = BigDecimal.ZERO;
                     sellPrice = BigDecimal.ZERO;
                 }
             }
 
             double change = 0;
             if (basePrice.compareTo(BigDecimal.ZERO) > 0 && currentPrice.compareTo(BigDecimal.ZERO) > 0 && basePrice.compareTo(BigDecimal.ONE) != 0) {
-                // ((currentPrice - basePrice) / basePrice) * 100
                 change = currentPrice.subtract(basePrice).divide(basePrice, 4, java.math.RoundingMode.HALF_UP).doubleValue() * 100;
             }
 
@@ -107,7 +102,6 @@ public class StocksGUI extends GUIHolder {
         int itemsPerPage = 45;
         int startIndex = page * itemsPerPage;
 
-        // Filter and sort stocks
         List<StockItem> filteredStocks = stocks.stream()
                 .filter(s -> {
                     if (searchQuery == null)
@@ -117,7 +111,6 @@ public class StocksGUI extends GUIHolder {
                     return name.contains(searchQuery.toLowerCase());
                 })
                 .sorted((a, b) -> {
-                    // Priority 1: Market Items vs Non-Market (ALL_ITEMS have base price 1.0)
                     boolean aIsMarket = a.entry.price.compareTo(BigDecimal.ONE) != 0;
                     boolean bIsMarket = b.entry.price.compareTo(BigDecimal.ONE) != 0;
 
@@ -126,8 +119,6 @@ public class StocksGUI extends GUIHolder {
                     if (!aIsMarket && bIsMarket)
                         return 1;
 
-                    // Priority 2: Absolute Percentage Change (Highest activity/volatility first)
-                    // We sort by absolute magnitude of change descending
                     return Double.compare(Math.abs(b.change), Math.abs(a.change));
                 })
                 .toList();
@@ -142,7 +133,6 @@ public class StocksGUI extends GUIHolder {
             ItemStack item = new ItemStack(stock.entry.material);
             ItemMeta meta = item.getItemMeta();
 
-            // Setup proper spawner metadata if it's a spawner
             if (stock.entry.material == Material.SPAWNER && stock.entry.customName != null) {
                 try {
                     org.bukkit.inventory.meta.BlockStateMeta bMeta = (org.bukkit.inventory.meta.BlockStateMeta) meta;
@@ -155,7 +145,6 @@ public class StocksGUI extends GUIHolder {
                 }
             }
 
-            // Color based on change
             NamedTextColor color = NamedTextColor.WHITE;
             String arrow = "▬";
             String percentageText = "";
@@ -182,7 +171,6 @@ public class StocksGUI extends GUIHolder {
             List<Component> lore = new ArrayList<>();
 
             if (stock.entry.price.compareTo(BigDecimal.ONE) == 0) {
-                // Formatting for non-market items (Prices pulled from Order/Auction history)
                 if (stock.currentPrice.compareTo(BigDecimal.ZERO) > 0) {
                     lore.add(Component.text("Last Sold For: " + plugin.getEconomyManager().getFormattedWithSymbol(stock.currentPrice, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.GOLD));
                 } else {
@@ -190,7 +178,6 @@ public class StocksGUI extends GUIHolder {
                 }
                 lore.add(Component.text("Base Price: Unvalued (Not in Market)", NamedTextColor.DARK_GRAY));
             } else {
-                // Formatting for real market items
                 lore.add(Component.text("Current Buy Price: " + plugin.getEconomyManager().getFormattedWithSymbol(stock.currentPrice, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.GREEN));
                 lore.add(Component.text("Current Sell Price: " + plugin.getEconomyManager().getFormattedWithSymbol(stock.sellPrice, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.RED));
                 lore.add(Component.text("Base Price: " + plugin.getEconomyManager().getFormattedWithSymbol(stock.entry.price, plugin.getEconomyManager().getDefaultCurrency()),
@@ -209,7 +196,6 @@ public class StocksGUI extends GUIHolder {
             inventory.setItem(slot++, item);
         }
 
-        // Navigation Buttons
         if (page > 0) {
             ItemStack prev = new ItemStack(Material.ARROW);
             ItemMeta meta = prev.getItemMeta();
@@ -217,7 +203,6 @@ public class StocksGUI extends GUIHolder {
             inventory.setItem(45, prev);
         }
 
-        // Search Button
         inventory.setItem(46, new ItemBuilder(Material.COMPASS)
                 .name(Component.text(searchQuery != null ? "Change Filter: " + searchQuery : "Filter Stocks",
                         NamedTextColor.AQUA))

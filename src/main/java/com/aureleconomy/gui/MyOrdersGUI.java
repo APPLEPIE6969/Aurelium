@@ -74,7 +74,6 @@ public class MyOrdersGUI extends GUIHolder {
                     .build());
         }
 
-        // Bottom Row navigation
         inventory.setItem(45, new ItemBuilder(Material.BARRIER)
                 .name(Component.text("Back to Global Orders", NamedTextColor.RED)).build());
 
@@ -96,7 +95,7 @@ public class MyOrdersGUI extends GUIHolder {
             return;
 
         int slot = event.getRawSlot();
-        if (slot == 45) { // Back to global
+        if (slot == 45) { 
             new OrdersGUI(plugin, player, 0).open();
         } else if (slot == 48 && page > 0) {
             page--;
@@ -109,7 +108,7 @@ public class MyOrdersGUI extends GUIHolder {
             if (orderIndex < myOrders.size()) {
                 BuyOrder order = myOrders.get(orderIndex);
                 plugin.getOrderManager().cancelOrder(player, order.getId());
-                myOrders.remove(orderIndex); // Optimistically remove from local list
+                myOrders.remove(orderIndex); 
                 refresh();
             }
         }

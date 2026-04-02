@@ -17,10 +17,6 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
-/**
- * GUI for viewing and managing incoming private offers on player's auctions.
- * Updated to use OfferStatus enum and BigDecimal for currency.
- */
 public class OffersGUI extends GUIHolder {
 
     private final AurelEconomy plugin;
@@ -43,11 +39,9 @@ public class OffersGUI extends GUIHolder {
         inventory.clear();
         inventory.setItem(49, new ItemBuilder(Material.BARRIER).name(Component.text("Back to AH", NamedTextColor.RED)).build());
 
-        // Asynchronously fetch offers 
         plugin.getAuctionManager().getOffersForSeller(player.getUniqueId(), offers -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 for (Offer offer : offers) {
-                    // Only show PENDING offers
                     if (offer.getStatus() != OfferStatus.PENDING) continue;
 
                     AuctionItem ai = plugin.getAuctionManager().getAuctionById(offer.getAuctionId());
@@ -98,10 +92,10 @@ public class OffersGUI extends GUIHolder {
         if (offerId != null) {
             if (event.isLeftClick()) {
                 plugin.getAuctionManager().acceptOffer(offerId, player);
-                setupItems(); // Refresh locally after action
+                setupItems(); 
             } else if (event.isRightClick()) {
                 plugin.getAuctionManager().declineOffer(offerId, player);
-                setupItems(); // Refresh locally after action
+                setupItems(); 
             }
         }
     }

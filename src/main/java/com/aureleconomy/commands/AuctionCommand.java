@@ -123,12 +123,10 @@ public class AuctionCommand implements TabExecutor {
                 return true;
             }
 
-            // Duration & Currency handling
             long durationMillis = plugin.getConfig().getLong("auction-house.default-duration", 86400) * 1000;
             String currency = plugin.getEconomyManager().getDefaultCurrency();
 
             if (args.length == 3) {
-                // Determine if it represents a currency or a duration
                 if (plugin.getConfig().getConfigurationSection("economy.currencies").contains(args[2])) {
                     currency = args[2];
                 } else {
@@ -153,10 +151,8 @@ public class AuctionCommand implements TabExecutor {
                 }
             }
 
-            // Listing fee
             BigDecimal feeRate = BigDecimal.valueOf(plugin.getConfig().getDouble("auction-house.listing-fee-percent", 2.0)).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
             BigDecimal days = BigDecimal.valueOf(durationMillis).divide(BigDecimal.valueOf(86400000L), 4, RoundingMode.HALF_UP);
-            // Scaling formula: Base% * (1 + (Days - 1) * 0.05)
             BigDecimal scalingMultiplier = BigDecimal.ONE.add(days.subtract(BigDecimal.ONE).max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(0.05)));
             BigDecimal feeAmount = price.multiply(feeRate).multiply(scalingMultiplier).setScale(2, RoundingMode.HALF_UP);
 
@@ -196,7 +192,6 @@ public class AuctionCommand implements TabExecutor {
                 default -> -1;
             };
 
-            // Limit to 1 year
             if (millis > 31536000000L)
                 return -1;
             return millis;

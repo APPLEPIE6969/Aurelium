@@ -40,7 +40,6 @@ public class JoinListener implements Listener {
                     BigDecimal amount = rs.getBigDecimal("amount");
                     String itemDisplay = rs.getString("item_display");
 
-                    // Send message
                     event.getPlayer().sendMessage(Component.text("You earned ", NamedTextColor.GREEN)
                             .append(Component.text(plugin.getEconomyManager().getFormattedWithSymbol(amount, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.GOLD))
                             .append(Component.text(" for selling ", NamedTextColor.GREEN))
@@ -50,7 +49,6 @@ public class JoinListener implements Listener {
                 }
 
                 if (hasEarnings) {
-                    // Delete all processed records for this UUID
                     deleteAllRecordsForUUID(uuid);
 
                     event.getPlayer().sendMessage(

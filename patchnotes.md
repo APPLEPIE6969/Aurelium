@@ -1,13 +1,13 @@
 # Aurelium - Patch Notes
 
 ## v1.4.2 - Security & Performance Hardening
-
+**This update is mandatory for all servers using the web dashboard.**
 ### Security
 - Session tokens for the web dashboard now use cryptographically secure `SecureRandom` (256-bit entropy) instead of `UUID.randomUUID()` (122-bit), preventing potential token prediction attacks
 - Added explanatory comments to `CloudSyncManager` for exceptions that are safely ignored
 
 ### Performance
-- Cloud dashboard registration retries no longer block a `ForkJoinPool` thread for 15 seconds between attempts — replaced `Thread.sleep(15_000)` with Bukkit's non-blocking `runTaskLaterAsynchronously` scheduler
+- Cloud dashboard registration retries no longer block a `ForkJoinPool` thread for 15 seconds between attempts, replaced `Thread.sleep(15_000)` with Bukkit's non-blocking `runTaskLaterAsynchronously` scheduler
 - Offline earnings cleanup now uses a single bulk `DELETE` SQL query instead of N+1 individual queries when a player joins, significantly reducing database load on servers with many offline earnings records
 
 ### Fixes

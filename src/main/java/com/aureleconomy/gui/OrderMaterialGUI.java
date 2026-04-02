@@ -79,10 +79,8 @@ public class OrderMaterialGUI extends GUIHolder {
 
             MarketEntry entry = categoryItems.get(startIdx + i);
 
-            // --- Item Rendering ---
             ItemStack item;
             if (entry.material == Material.SPAWNER && entry.customName != null) {
-                // Spawner rendering
                 item = new ItemStack(Material.SPAWNER);
                 org.bukkit.inventory.meta.BlockStateMeta meta = (org.bukkit.inventory.meta.BlockStateMeta) item
                         .getItemMeta();
@@ -98,26 +96,22 @@ public class OrderMaterialGUI extends GUIHolder {
                 meta.displayName(Component.text(entry.customName, NamedTextColor.AQUA));
                 item.setItemMeta(meta);
             } else if (entry.material == Material.ENCHANTED_BOOK && entry.customName != null) {
-                // Enchanted Book rendering
                 item = new ItemStack(Material.ENCHANTED_BOOK);
                 EnchantmentStorageMeta meta = (EnchantmentStorageMeta) item.getItemMeta();
                 meta.displayName(Component.text(entry.customName, NamedTextColor.LIGHT_PURPLE, TextDecoration.BOLD));
 
-                // Try to apply the actual enchantment glow
                 EnchantmentData enchData = parseEnchantment(entry.customName);
                 if (enchData != null) {
                     meta.addStoredEnchant(enchData.enchantment, enchData.level, true);
                 }
                 item.setItemMeta(meta);
             } else {
-                // Standard Item
                 Component itemNameComponent = entry.customName != null
                         ? Component.text(entry.customName, NamedTextColor.AQUA)
                         : Component.translatable(entry.material.translationKey(), NamedTextColor.AQUA);
                 item = new ItemBuilder(entry.material).name(itemNameComponent).build();
             }
 
-            // --- Price Display ---
             ItemBuilder builder = new ItemBuilder(item);
 
             String priceKey = (entry.customName != null) ? entry.customName : entry.material.name();
@@ -129,7 +123,6 @@ public class OrderMaterialGUI extends GUIHolder {
                                 .append(Component.text(plugin.getEconomyManager().format(marketBuyPrice),
                                         NamedTextColor.GREEN)));
             } else {
-                // Check last sold price (For ALL_ITEMS category default 1.0 items)
                 BigDecimal lastSold = plugin.getOrderManager().getLastSoldPrice(priceKey);
                 if (lastSold != null) {
                     builder.lore(
@@ -148,7 +141,6 @@ public class OrderMaterialGUI extends GUIHolder {
             inventory.setItem(i, builder.build());
         }
 
-        // Bottom Row navigation
         inventory.setItem(45, new ItemBuilder(Material.BARRIER)
                 .name(Component.text("Back to Categories", NamedTextColor.RED)).build());
 
@@ -162,7 +154,6 @@ public class OrderMaterialGUI extends GUIHolder {
                     new ItemBuilder(Material.ARROW).name(Component.text("Next Page", NamedTextColor.YELLOW)).build());
         }
 
-        // Search Button
         inventory.setItem(49, new ItemBuilder(Material.OAK_SIGN)
                 .name(Component.text("Search Items", NamedTextColor.AQUA, TextDecoration.BOLD))
                 .lore(Component.text("Click to filter this list", NamedTextColor.GRAY)).build());
@@ -183,7 +174,7 @@ public class OrderMaterialGUI extends GUIHolder {
             return;
 
         int slot = event.getRawSlot();
-        if (slot == 45) { // Back to Categories
+        if (slot == 45) { 
             new OrderCategoryGUI(plugin, player).open();
         } else if (slot == 48 && page > 0) {
             page--;
@@ -240,7 +231,6 @@ public class OrderMaterialGUI extends GUIHolder {
                                 if (pricePerPiece.compareTo(BigDecimal.ZERO) <= 0)
                                     throw new NumberFormatException();
 
-                                // Create the order
                                 plugin.getOrderManager().createOrder(player, entry.material, amount, pricePerPiece,
                                         plugin.getEconomyManager().getDefaultCurrency());
 
@@ -259,7 +249,6 @@ public class OrderMaterialGUI extends GUIHolder {
         }
     }
 
-    // --- Enchantment Parsing Utility ---
     private static class EnchantmentData {
         Enchantment enchantment;
         int level;
@@ -271,11 +260,9 @@ public class OrderMaterialGUI extends GUIHolder {
     }
 
     private static EnchantmentData parseEnchantment(String name) {
-        // Parse level from end (e.g. "Sharpness V" -> level 5)
         int level = 1;
         String enchName = name;
 
-        // Check for roman numeral suffix
         if (name.endsWith(" V")) {
             level = 5;
             enchName = name.substring(0, name.length() - 2);
@@ -293,7 +280,6 @@ public class OrderMaterialGUI extends GUIHolder {
             enchName = name.substring(0, name.length() - 2);
         }
 
-        // Map name to Enchantment
         Enchantment ench = switch (enchName.toLowerCase().trim()) {
             case "protection" -> Enchantment.PROTECTION;
             case "fire protection" -> Enchantment.FIRE_PROTECTION;

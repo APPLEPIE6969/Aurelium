@@ -67,7 +67,6 @@ public class MarketGUI extends GUIHolder {
             index++;
         }
 
-        // Search Button
         inventory.setItem(46, new ItemBuilder(Material.COMPASS)
                 .name(Component.text("Search Items", NamedTextColor.AQUA))
                 .lore(Component.text("Click to search by name", NamedTextColor.GRAY))
@@ -96,21 +95,18 @@ public class MarketGUI extends GUIHolder {
     }
 
     private void renderItems(List<MarketEntry> allItems) {
-        // Filter blacklisted
         allItems = allItems.stream().filter(entry -> !plugin.getMarketManager().isBlacklisted(entry.material)).toList();
 
         int itemsPerPage = 45;
         int totalItems = allItems.size();
         int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
 
-        // Search Button
         inventory.setItem(46, new ItemBuilder(Material.COMPASS)
                 .name(Component.text(searchQuery != null ? "Change Search: " + searchQuery : "Search Market",
                         NamedTextColor.AQUA))
                 .lore(Component.text("Click to find specific items", NamedTextColor.GRAY))
                 .build());
 
-        // Page Indicator Book (Middle)
         inventory.setItem(49, new ItemBuilder(Material.BOOK)
                 .name(Component.text("Page " + (page + 1) + " of " + totalPages, NamedTextColor.WHITE))
                 .lore(Component.text(
@@ -118,7 +114,6 @@ public class MarketGUI extends GUIHolder {
                         NamedTextColor.GRAY))
                 .build());
 
-        // Navigation Arrows
         if (page > 0) {
             inventory.setItem(48,
                     new ItemBuilder(Material.PAPER).name(Component.text("Previous Page", NamedTextColor.YELLOW))
@@ -130,7 +125,6 @@ public class MarketGUI extends GUIHolder {
                     new ItemBuilder(Material.PAPER).name(Component.text("Next Page", NamedTextColor.YELLOW)).build());
         }
 
-        // Back button / Clear Search
         inventory.setItem(45, new ItemBuilder(Material.BARRIER)
                 .name(Component.text(searchQuery != null ? "Clear Search" : "Back to Categories", NamedTextColor.RED))
                 .build());
@@ -144,7 +138,6 @@ public class MarketGUI extends GUIHolder {
 
             itemSlots.put(slot, entry);
 
-            // Price Logic
             BigDecimal buyPrice;
             String currency;
             if (entry.material == Material.SPAWNER && entry.customName != null) {
@@ -155,7 +148,6 @@ public class MarketGUI extends GUIHolder {
                 currency = plugin.getMarketManager().getCurrency(entry.material);
             }
 
-            // Item Creation
             ItemStack item;
             if (entry.material == Material.SPAWNER && entry.customName != null) {
                 item = new ItemStack(Material.SPAWNER);
@@ -290,29 +282,28 @@ public class MarketGUI extends GUIHolder {
         BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
 
         if (isBuy) {
-            if (plugin.getEconomyManager().getBalance(player, currency).compareTo(totalPrice) >= 0) {
-                ItemStack item;
-                if (entry.material == Material.SPAWNER && entry.customName != null) {
-                    item = new ItemStack(Material.SPAWNER);
-                    BlockStateMeta meta = (BlockStateMeta) item.getItemMeta();
-                    CreatureSpawner spawner = (CreatureSpawner) meta.getBlockState();
-                    String mobName = entry.customName.replace(" Spawner", "").toUpperCase().replace(" ", "_");
-                    try {
-                        spawner.setSpawnedType(EntityType.valueOf(mobName));
-                    } catch (Exception ignored) {
-                    }
-                    meta.setBlockState(spawner);
-                    meta.displayName(Component.text(entry.customName, NamedTextColor.AQUA));
-                    item.setItemMeta(meta);
-                } else if (entry.material == Material.ENCHANTED_BOOK && entry.customName != null) {
-                    item = com.aureleconomy.market.MarketItems.createEnchantedBook(entry.customName);
-                } else {
-                    item = new ItemStack(entry.material);
+            ItemStack item;
+            if (entry.material == Material.SPAWNER && entry.customName != null) {
+                item = new ItemStack(Material.SPAWNER);
+                BlockStateMeta meta = (BlockStateMeta) item.getItemMeta();
+                CreatureSpawner spawner = (CreatureSpawner) meta.getBlockState();
+                String mobName = entry.customName.replace(" Spawner", "").toUpperCase().replace(" ", "_");
+                try {
+                    spawner.setSpawnedType(EntityType.valueOf(mobName));
+                } catch (Exception ignored) {
                 }
-                item.setAmount(amount);
+                meta.setBlockState(spawner);
+                meta.displayName(Component.text(entry.customName, NamedTextColor.AQUA));
+                item.setItemMeta(meta);
+            } else if (entry.material == Material.ENCHANTED_BOOK && entry.customName != null) {
+                item = com.aureleconomy.market.MarketItems.createEnchantedBook(entry.customName);
+            } else {
+                item = new ItemStack(entry.material);
+            }
+            item.setAmount(amount);
 
-                if (com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), item, amount)) {
-                    plugin.getEconomyManager().withdraw(player, totalPrice, currency);
+            if (com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), item, amount)) {
+                if (plugin.getEconomyManager().withdrawIfSufficient(player, totalPrice, currency)) {
                     player.getInventory().addItem(item);
 
                     String key = (entry.material == Material.SPAWNER && entry.customName != null) ? entry.customName
@@ -323,8 +314,7 @@ public class MarketGUI extends GUIHolder {
                             "Bought " + amount + "x "
                                     + (entry.customName != null ? entry.customName : entry.material.name()),
                             NamedTextColor.GREEN));
-                    
-                    // Refresh GUI to update prices visually
+
                     plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                         if (player.getOpenInventory().getTopInventory().getHolder() instanceof MarketGUI) {
                             refresh();
@@ -332,15 +322,14 @@ public class MarketGUI extends GUIHolder {
                         }
                     }, 1L);
 
-                    // Push balance update to web dashboard
                     if (plugin.getCloudSync() != null) {
                         plugin.getCloudSync().updatePlayerBalance(player);
                     }
                 } else {
-                    player.sendMessage(Component.text("Not enough space in inventory.", NamedTextColor.RED));
+                    player.sendMessage(Component.text("Insufficient funds!", NamedTextColor.RED));
                 }
             } else {
-                player.sendMessage(Component.text("Insufficient funds!", NamedTextColor.RED));
+                player.sendMessage(Component.text("Not enough space in inventory.", NamedTextColor.RED));
             }
         } else {
             player.sendMessage(Component.text("Selling via Market is disabled. Use /sell.", NamedTextColor.RED));

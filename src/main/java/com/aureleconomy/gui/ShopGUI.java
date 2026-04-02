@@ -24,14 +24,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Modern Market GUI using MiniMessage gradients, glass-pane backgrounds,
- * and clean OOP InventoryHolder architecture.
- *
- * Pages:
- * null category → Category selector (3 rows, 27 slots)
- * valid category → Item listing (6 rows, 54 slots, paginated)
- */
 public class ShopGUI extends GUIHolder {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
@@ -42,13 +34,11 @@ public class ShopGUI extends GUIHolder {
     private final Category category;
     private final int page;
 
-    // Slot → data mappings
     private final Map<Integer, Category> categorySlots = new HashMap<>();
     private final Map<Integer, MarketEntry> itemSlots = new HashMap<>();
 
     private String searchQuery = null;
 
-    // ─── Glass pane filler ────────────────────────────────────────────
     private static final ItemStack FILLER;
     static {
         FILLER = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
@@ -65,45 +55,30 @@ public class ShopGUI extends GUIHolder {
         ACCENT_FILLER.setItemMeta(m);
     }
 
-    // ╔═══════════════════════════════════════════════════════════════╗
-    // Constructors
-    // ╚═══════════════════════════════════════════════════════════════╝
-
-    /** Open the category selector. */
     public ShopGUI(AurelEconomy plugin, Player player) {
         this(plugin, player, null, 0);
     }
 
-    /** Open a specific category / page. */
     public ShopGUI(AurelEconomy plugin, Player player, Category category, int page) {
         this.plugin = plugin;
         this.category = category;
         this.page = page;
 
         if (category == null) {
-            // Category selector — 3 rows
             this.inventory = plugin.getServer().createInventory(this, 27,
                     MM.deserialize("<gradient:gold:yellow><bold>Server Market</bold></gradient>"));
             setupCategories();
         } else {
-            // Item listing — 6 rows
             this.inventory = plugin.getServer().createInventory(this, 54,
                     MM.deserialize("<gradient:#55AAFF:#55FFFF>" + category.name + "</gradient>"));
             setupItems();
         }
     }
 
-    // ╔═══════════════════════════════════════════════════════════════╗
-    // Category Selector (27 slots)
-    // ╚═══════════════════════════════════════════════════════════════╝
-
     private void setupCategories() {
-        // Fill everything with glass
         fillGlass(27);
 
-        // Place categories in a centered row
         Category[] cats = Category.values();
-        // Slots 10-16 = 7 slots for row-2 center, 19-25 = 7 more if needed
         int[] row2 = { 10, 11, 12, 13, 14, 15, 16 };
         int[] row3 = { 19, 20, 21, 22, 23, 24, 25 };
 
@@ -136,7 +111,6 @@ public class ShopGUI extends GUIHolder {
             idx++;
         }
 
-        // Search button — slot 4 (top center)
         ItemStack search = new ItemStack(Material.COMPASS);
         ItemMeta sMeta = search.getItemMeta();
         sMeta.displayName(MM.deserialize("<aqua><bold>🔍 Search Items</bold></aqua>")
@@ -150,10 +124,6 @@ public class ShopGUI extends GUIHolder {
         inventory.setItem(4, search);
     }
 
-    // ╔═══════════════════════════════════════════════════════════════╗
-    // Item Listing (54 slots)
-    // ╚═══════════════════════════════════════════════════════════════╝
-
     @SuppressWarnings("deprecation")
     private void setupItems() {
         List<MarketEntry> allItems;
@@ -163,20 +133,15 @@ public class ShopGUI extends GUIHolder {
             allItems = MarketItems.getItems(category);
         }
 
-        // Filter blacklisted
         allItems = allItems.stream()
                 .filter(e -> !plugin.getMarketManager().isBlacklisted(e.material))
                 .toList();
 
-        int itemsPerPage = 28; // Slots inside the bordered area
+        int itemsPerPage = 28; 
         int totalItems = allItems.size();
         int totalPages = Math.max(1, (int) Math.ceil((double) totalItems / itemsPerPage));
 
-        // Fill borders with glass
         fillBorderedLayout();
-
-        // ── Navigation bar (bottom row 45-53) ──
-        // Back button (slot 45)
         {
             ItemStack back = new ItemStack(Material.ARROW);
             ItemMeta m = back.getItemMeta();
@@ -188,7 +153,6 @@ public class ShopGUI extends GUIHolder {
             inventory.setItem(45, back);
         }
 
-        // Previous page (slot 48)
         if (page > 0) {
             ItemStack prev = new ItemStack(Material.SPECTRAL_ARROW);
             ItemMeta m = prev.getItemMeta();
@@ -198,7 +162,6 @@ public class ShopGUI extends GUIHolder {
             inventory.setItem(48, prev);
         }
 
-        // Page indicator (slot 49)
         {
             ItemStack info = new ItemStack(Material.BOOK);
             ItemMeta m = info.getItemMeta();
@@ -209,7 +172,6 @@ public class ShopGUI extends GUIHolder {
             inventory.setItem(49, info);
         }
 
-        // Next page (slot 50)
         if (page < totalPages - 1) {
             ItemStack next = new ItemStack(Material.SPECTRAL_ARROW);
             ItemMeta m = next.getItemMeta();
@@ -219,7 +181,6 @@ public class ShopGUI extends GUIHolder {
             inventory.setItem(50, next);
         }
 
-        // Search button (slot 53)
         {
             ItemStack compass = new ItemStack(Material.COMPASS);
             ItemMeta m = compass.getItemMeta();
@@ -231,7 +192,6 @@ public class ShopGUI extends GUIHolder {
             inventory.setItem(53, compass);
         }
 
-        // ── Content area (slots 10-16, 19-25, 28-34, 37-43) = 28 slots ──
         int[] contentSlots = getContentSlots();
 
         int startIndex = page * itemsPerPage;
@@ -246,7 +206,6 @@ public class ShopGUI extends GUIHolder {
 
             itemSlots.put(slot, entry);
 
-            // ── Price & Currency ──
             BigDecimal buyPrice;
             String currency;
             if (entry.material == Material.SPAWNER && entry.customName != null) {
@@ -257,12 +216,9 @@ public class ShopGUI extends GUIHolder {
                 currency = plugin.getMarketManager().getCurrency(entry.material);
             }
 
-            // ── Build the display item ──
             ItemStack display = buildDisplayItem(entry);
             ItemMeta meta = display.getItemMeta();
             if (meta == null) continue;
-
-            // ── Item name ──
             Component displayName = entry.customName != null
                     ? MM.deserialize("<aqua><bold>" + entry.customName + "</bold></aqua>")
                     : Component.translatable(entry.material.translationKey())
@@ -270,7 +226,6 @@ public class ShopGUI extends GUIHolder {
                             .decoration(TextDecoration.BOLD, true);
             meta.displayName(displayName.decoration(TextDecoration.ITALIC, false));
 
-            // ── Lore ──
             List<Component> lore = new ArrayList<>();
             lore.add(Component.empty());
 
@@ -290,7 +245,6 @@ public class ShopGUI extends GUIHolder {
             }
 
             meta.lore(lore);
-            // CustomModelData for resource packs
             meta.setCustomModelData(1001);
             display.setItemMeta(meta);
 
@@ -298,24 +252,18 @@ public class ShopGUI extends GUIHolder {
         }
     }
 
-    // ╔═══════════════════════════════════════════════════════════════╗
-    // Click Handler
-    // ╚═══════════════════════════════════════════════════════════════╝
-
     @Override
     public void handleClick(InventoryClickEvent event) {
-        event.setCancelled(true); // Always cancel — no item theft
+        event.setCancelled(true); 
 
         Player clicker = (Player) event.getWhoClicked();
 
-        // Prevent clicking in bottom inventory
         if (event.getClickedInventory() != null && event.getClickedInventory().equals(clicker.getInventory())) {
             return;
         }
 
         int slot = event.getSlot();
 
-        // ── Category selector page ──
         if (category == null) {
             if (categorySlots.containsKey(slot)) {
                 clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f);
@@ -326,9 +274,6 @@ public class ShopGUI extends GUIHolder {
             return;
         }
 
-        // ── Item listing page ──
-
-        // Cooldown
         long now = System.currentTimeMillis();
         java.util.UUID uid = clicker.getUniqueId();
         if (COOLDOWNS.containsKey(uid) && (now - COOLDOWNS.get(uid)) < COOLDOWN_MS) {
@@ -336,7 +281,6 @@ public class ShopGUI extends GUIHolder {
         }
         COOLDOWNS.put(uid, now);
 
-        // Back
         if (slot == 45) {
             clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 0.8f);
             if (searchQuery != null) {
@@ -348,7 +292,6 @@ public class ShopGUI extends GUIHolder {
             return;
         }
 
-        // Previous page
         if (slot == 48 && page > 0) {
             clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.0f);
             ShopGUI prev = new ShopGUI(plugin, clicker, category, page - 1);
@@ -357,9 +300,7 @@ public class ShopGUI extends GUIHolder {
             return;
         }
 
-        // Next page
         if (slot == 50) {
-            // Calculate total pages for limit check
             List<MarketEntry> allItems;
             if (searchQuery != null) {
                 allItems = searchItems(searchQuery);
@@ -383,26 +324,19 @@ public class ShopGUI extends GUIHolder {
             return;
         }
 
-        // Search
         if (slot == 53) {
             promptSearch(clicker);
             return;
         }
 
-        // ── Buy item ──
         if (itemSlots.containsKey(slot)) {
             handleBuy(clicker, itemSlots.get(slot), event.isShiftClick());
         }
     }
 
-    // ╔═══════════════════════════════════════════════════════════════╗
-    // Transaction
-    // ╚═══════════════════════════════════════════════════════════════╝
-
     private void handleBuy(Player buyer, MarketEntry entry, boolean bulk) {
         int amount = bulk ? 64 : 1;
 
-        // Resolve price + currency
         BigDecimal unitPrice;
         String currency;
         if (entry.material == Material.SPAWNER && entry.customName != null) {
@@ -421,54 +355,40 @@ public class ShopGUI extends GUIHolder {
 
         BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
 
-        // Funds check
-        if (!plugin.getEconomyManager().has(buyer, totalPrice, currency)) {
-            buyer.sendMessage(MM.deserialize("<red><bold>✖</bold> Not enough funds!</red> <gray>You need "
-                    + plugin.getEconomyManager().getFormattedWithSymbol(totalPrice, currency) + "</gray>"));
-            buyer.playSound(buyer.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-            return;
-        }
-
-        // Build transaction item
         ItemStack given = buildTransactionItem(entry);
         given.setAmount(amount);
 
-        // Inventory space check
         if (!com.aureleconomy.utils.InventoryUtils.hasSpace(buyer.getInventory(), given, amount)) {
             buyer.sendMessage(MM.deserialize("<red><bold>✖</bold> Your inventory is full!</red>"));
             buyer.playSound(buyer.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
             return;
         }
 
-        // Execute
-        plugin.getEconomyManager().withdraw(buyer, totalPrice, currency);
+        if (!plugin.getEconomyManager().withdrawIfSufficient(buyer, totalPrice, currency)) {
+            buyer.sendMessage(MM.deserialize("<red><bold>✖</bold> Not enough funds!</red> <gray>You need "
+                    + plugin.getEconomyManager().getFormattedWithSymbol(totalPrice, currency) + "</gray>"));
+            buyer.playSound(buyer.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+            return;
+        }
         buyer.getInventory().addItem(given);
 
-        // Dynamic pricing
         String key = (entry.material == Material.SPAWNER && entry.customName != null)
                 ? entry.customName
                 : entry.material.name();
         plugin.getMarketManager().onTransaction(key, true, amount);
 
-        // Feedback
         String itemName = entry.customName != null ? entry.customName : entry.material.name().replace("_", " ");
         buyer.sendMessage(MM.deserialize("<green><bold>✔</bold> Purchased <white>" + amount + "x " + itemName
                 + "</white> for <gold>" + plugin.getEconomyManager().getFormattedWithSymbol(totalPrice, currency) + "</gold></green>"));
         buyer.playSound(buyer.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.2f);
         
-        // Refresh GUI to update prices visually
         refreshItems();
-        // Push balance update to web dashboard
+        
         if (plugin.getCloudSync() != null) {
             plugin.getCloudSync().updatePlayerBalance(buyer);
         }
     }
 
-    // ╔═══════════════════════════════════════════════════════════════╗
-    // Helpers
-    // ╚═══════════════════════════════════════════════════════════════╝
-
-    /** Build a display item (spawner or standard). */
     private ItemStack buildDisplayItem(MarketEntry entry) {
         if (entry.material == Material.SPAWNER && entry.customName != null) {
             ItemStack spawner = new ItemStack(Material.SPAWNER);
@@ -487,7 +407,6 @@ public class ShopGUI extends GUIHolder {
         return new ItemStack(entry.material);
     }
 
-    /** Build a clean transaction item (no lore). */
     private ItemStack buildTransactionItem(MarketEntry entry) {
         if (entry.material == Material.SPAWNER && entry.customName != null) {
             ItemStack spawner = new ItemStack(Material.SPAWNER);
@@ -509,33 +428,21 @@ public class ShopGUI extends GUIHolder {
         return new ItemStack(entry.material);
     }
 
-    /** Fill all slots with filler glass. */
     private void fillGlass(int size) {
         for (int i = 0; i < size; i++) {
             inventory.setItem(i, FILLER.clone());
         }
     }
 
-    /**
-     * Fill a 54-slot chest with a bordered layout (glass border, empty content
-     * area).
-     */
     private void fillBorderedLayout() {
-        // Fill everything with accent filler first
         for (int i = 0; i < 54; i++) {
             inventory.setItem(i, ACCENT_FILLER.clone());
         }
-
-        // Top accent row (0-8): keep as accent
-        // Content area: clear for items
         for (int slot : getContentSlots()) {
             inventory.setItem(slot, null);
         }
-
-        // Bottom nav row stays as accent (will be overwritten by nav items)
     }
 
-    /** Returns the 28 content slots in the bordered 54-layout. */
     private int[] getContentSlots() {
         return new int[] {
                 10, 11, 12, 13, 14, 15, 16,
@@ -545,7 +452,6 @@ public class ShopGUI extends GUIHolder {
         };
     }
 
-    /** Search across all categories. */
     private List<MarketEntry> searchItems(String query) {
         List<MarketEntry> results = new ArrayList<>();
         String q = query.toLowerCase();
@@ -562,7 +468,6 @@ public class ShopGUI extends GUIHolder {
         return results;
     }
 
-    /** Prompt the player for a search query via chat. */
     private void promptSearch(Player target) {
         target.closeInventory();
         target.sendMessage(MM.deserialize(
@@ -579,7 +484,6 @@ public class ShopGUI extends GUIHolder {
         });
     }
 
-    /** Refresh the items view in-place. */
     private void refreshItems() {
         itemSlots.clear();
         inventory.clear();

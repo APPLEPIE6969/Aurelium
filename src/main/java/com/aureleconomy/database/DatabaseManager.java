@@ -70,15 +70,10 @@ public class DatabaseManager {
 
         connection = DriverManager.getConnection("jdbc:sqlite:" + dataFolder.getAbsolutePath());
 
-        // Enable WAL mode and optimize SQLite for concurrent access
         try (Statement stmt = connection.createStatement()) {
-            // WAL mode allows concurrent reads during writes
             stmt.execute("PRAGMA journal_mode=WAL;");
-            // Busy timeout: wait up to 30 seconds for locks to clear
             stmt.execute("PRAGMA busy_timeout=30000;");
-            // Synchronous mode for balance between safety and performance
             stmt.execute("PRAGMA synchronous=NORMAL;");
-            // Increase cache size for better performance
             stmt.execute("PRAGMA cache_size=-10000;");
         }
     }
@@ -100,19 +95,16 @@ public class DatabaseManager {
                 : "INTEGER PRIMARY KEY AUTOINCREMENT";
 
         try (Statement statement = connection.createStatement()) {
-            // Internal versioning table
             statement.execute("CREATE TABLE IF NOT EXISTS database_info (" +
                     "version INTEGER PRIMARY KEY" +
                     ");");
 
-            // Players table
             statement.execute("CREATE TABLE IF NOT EXISTS players (" +
                     "uuid VARCHAR(36) PRIMARY KEY, " +
                     "name VARCHAR(16), " +
                     "gui_style VARCHAR(16) DEFAULT 'MODERN'" +
                     ");");
 
-            // Player Balances table
             statement.execute("CREATE TABLE IF NOT EXISTS player_balances (" +
                     "uuid VARCHAR(36), " +
                     "currency VARCHAR(32), " +
@@ -120,10 +112,8 @@ public class DatabaseManager {
                     "PRIMARY KEY (uuid, currency)" +
                     ");");
 
-            // Migrate legacy single-currency balances to player_balances if needed
             migrateLegacyBalances();
 
-            // Auctions table
             statement.execute("CREATE TABLE IF NOT EXISTS auctions (" +
                     "id " + autoIncrement + ", " +
                     "seller_uuid VARCHAR(36), " +
@@ -139,7 +129,6 @@ public class DatabaseManager {
                     "start_time LONG" +
                     ");");
 
-            // Offline Earnings table
             statement.execute("CREATE TABLE IF NOT EXISTS offline_earnings (" +
                     "id " + autoIncrement + ", " +
                     "uuid VARCHAR(36), " +
@@ -149,7 +138,6 @@ public class DatabaseManager {
                     "timestamp LONG" +
                     ");");
 
-            // Buy Orders table
             statement.execute("CREATE TABLE IF NOT EXISTS buy_orders (" +
                     "id " + autoIncrement + ", " +
                     "buyer_uuid VARCHAR(36), " +
@@ -161,7 +149,6 @@ public class DatabaseManager {
                     "status VARCHAR(16) DEFAULT 'ACTIVE'" +
                     ");");
 
-            // Price History table
             statement.execute("CREATE TABLE IF NOT EXISTS price_history (" +
                     "id " + autoIncrement + ", " +
                     "item_key VARCHAR(128), " +
@@ -186,7 +173,6 @@ public class DatabaseManager {
                 + "). Starting automatic migration to v" + LATEST_SCHEMA_VERSION + "...");
 
         try {
-            // Disable auto-commit for atomicity if supported
             connection.setAutoCommit(false);
 
             for (int i = currentVersion + 1; i <= LATEST_SCHEMA_VERSION; i++) {
@@ -217,7 +203,6 @@ public class DatabaseManager {
             if (rs.next())
                 return rs.getInt("version");
         } catch (SQLException e) {
-            // Likely fresh database or first update to versioning system
         }
         return 0;
     }
@@ -232,8 +217,6 @@ public class DatabaseManager {
     private void applyMigration(int version) throws SQLException {
         switch (version) {
             case 1:
-                // Migration to version 1: Ensure all legacy patch columns exist
-                // This consolidates all previous addColumnIfNotExists calls
                 addColumnIfNotExists("players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
                 addColumnIfNotExists("auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
                 addColumnIfNotExists("auctions", "start_time", "LONG");
@@ -276,7 +259,6 @@ public class DatabaseManager {
                     .info("Legacy single-currency database detected. Migrating to multi-currency system...");
             String defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
 
-            // Use direct insert for compatibility
             statement.execute("INSERT INTO player_balances (uuid, currency, balance) " +
                     "SELECT uuid, '" + defaultCurrency + "', balance FROM players " +
                     "WHERE uuid NOT IN (SELECT uuid FROM player_balances WHERE currency = '" + defaultCurrency + "');");
@@ -284,12 +266,10 @@ public class DatabaseManager {
             try {
                 statement.execute("ALTER TABLE players DROP COLUMN balance;");
             } catch (SQLException dropError) {
-                // If drop fails (old SQLite), migrationChecked flag handles it
             }
 
             plugin.getComponentLogger().info("Multi-currency database migration completed successfully.");
         } catch (SQLException e) {
-            // column missing = already migrated
         }
     }
 
@@ -324,7 +304,6 @@ public class DatabaseManager {
                 statement.executeQuery("SELECT " + column + " FROM " + table + " LIMIT 1");
                 return;
             } catch (SQLException e) {
-                // missing
             }
             statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         }

@@ -4,10 +4,6 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import org.bukkit.inventory.ItemStack;
 
-/**
- * Represents an item listed in the Auction House.
- * Refactored to use BigDecimal for currency precision and the Builder pattern for clean instantiation.
- */
 public class AuctionItem {
     private final int id;
     private final UUID seller;
@@ -101,9 +97,6 @@ public class AuctionItem {
         this.collected = collected;
     }
 
-    /**
-     * Builder for AuctionItem to handle complex instantiation.
-     */
     public static class Builder {
         private int id;
         private UUID seller;
