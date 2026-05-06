@@ -1,79 +1,79 @@
 name: Aurelium
 version: '1.4.2'
 main: com.aureleconomy.AurelEconomy
-api-version: '1.21'
+api-version: '26.1.2'
 description: Economy plugin with market, auction house, and web dashboard.
 authors:
-  - APPLEPIE6969
+ - APPLEPIE6969
 softdepend: [Vault]
 
 commands:
-  bal:
-    description: Check your balance
-    usage: /bal [player]
-    permission: aureleconomy.bal
-    aliases: [balance, money]
-  pay:
-    description: Send money to someone
-    usage: /pay <player> <amount>
-    permission: aureleconomy.pay
-  market:
-    description: Browse the market
-    usage: /market
-    permission: aureleconomy.market
-  ah:
-    description: Auction house
-    usage: /ah [sell|bid|collect]
-    permission: aureleconomy.ah
-    aliases: [auction]
-  sell:
-    description: Sell items from your inventory
-    usage: /sell
-    permission: aureleconomy.sell
-  orders:
-    description: Buy orders
-    usage: /orders [create|fill|cancel|my|search|help]
-    permission: aureleconomy.orders
-  stocks:
-    description: View item price trends
-    usage: /stocks
-    aliases: [stonks]
-  eco:
-    description: Admin money commands
-    usage: /eco <give|take|set> [player] <amount>
-    permission: aureleconomy.admin
-  web:
-    description: Open the web dashboard
-    usage: /web
-    permission: aureleconomy.web
+ bal:
+ description: Check your balance
+ usage: /bal [player]
+ permission: aureleconomy.bal
+ aliases: [balance, money]
+ pay:
+ description: Send money to someone
+ usage: /pay <player> <amount>
+ permission: aureleconomy.pay
+ market:
+ description: Browse the market
+ usage: /market
+ permission: aureleconomy.market
+ ah:
+ description: Auction house
+ usage: /ah [sell|bid|collect]
+ permission: aureleconomy.ah
+ aliases: [auction]
+ sell:
+ description: Sell items from your inventory
+ usage: /sell
+ permission: aureleconomy.sell
+ orders:
+ description: Buy orders
+ usage: /orders [create|fill|cancel|my|search|help]
+ permission: aureleconomy.orders
+ stocks:
+ description: View item price trends
+ usage: /stocks
+ aliases: [stonks]
+ eco:
+ description: Admin money commands
+ usage: /eco <give|take|set> [player] <amount>
+ permission: aureleconomy.admin
+ web:
+ description: Open the web dashboard
+ usage: /web
+ permission: aureleconomy.web
 
 permissions:
-  aureleconomy.admin:
-    description: Admin commands
-  aureleconomy.market:
-    description: Use the market
-    default: true
-  aureleconomy.ah:
-    description: Use the auction house
-    default: true
-  aureleconomy.bal:
-    description: Check balance
-    default: true
-  aureleconomy.pay:
-    description: Pay players
-    default: true
-  aureleconomy.sell:
-    description: Use /sell
-    default: true
-  aureleconomy.orders:
-    description: Use buy orders
-    default: true
-  aureleconomy.web:
-    description: Use /web
-    default: true
-  aureleconomy.stocks:
-    description: Use /stocks
-    default: true
+ aureleconomy.admin:
+ description: Admin commands
+ aureleconomy.market:
+ description: Use the market
+ default: true
+ aureleconomy.ah:
+ description: Use the auction house
+ default: true
+ aureleconomy.bal:
+ description: Check balance
+ default: true
+ aureleconomy.pay:
+ description: Pay players
+ default: true
+ aureleconomy.sell:
+ description: Use /sell
+ default: true
+ aureleconomy.orders:
+ description: Use buy orders
+ default: true
+ aureleconomy.web:
+ description: Use /web
+ default: true
+ aureleconomy.stocks:
+ description: Use /stocks
+ default: true
 
 libraries:
-  - org.xerial:sqlite-jdbc:3.45.3.0
+ - org.xerial:sqlite-jdbc:3.45.3.0
