@@ -1,15 +1,12 @@
 plugins {
  id("java")
- id("io.github.goooler.shadow") version "8.1.8"
 }
 
 group = "com.aureleconomy"
 version = "1.4.2"
 
 java {
- toolchain {
- languageVersion = JavaLanguageVersion.of(25)
- }
+ toolchain.languageVersion.set(JavaLanguageVersion.of(25))
 }
 
 repositories {
@@ -19,7 +16,7 @@ repositories {
 }
 
 dependencies {
- compileOnly("io.papermc.paper:paper-api:26.1.2.build.53-stable")
+ compileOnly("io.papermc.paper:paper-api:26.1.2-R0.1-SNAPSHOT")
  compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
  exclude(group = "org.bukkit", module = "bukkit")
  }
@@ -32,12 +29,4 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.withType<ProcessResources>().configureEach {
  filteringCharset = Charsets.UTF_8.name()
-}
-
-tasks.shadowJar {
- archiveClassifier.set("")
-}
-
-tasks.build {
- dependsOn(tasks.shadowJar)
 }
