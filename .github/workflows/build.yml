@@ -2,9 +2,12 @@ name: Build Aurelium
 
 on:
   push:
-    branches: [ "1.4.2-26.1.2", "main" ]
+    branches: ["1.4.2-26.1.2", main]
   pull_request:
-    branches: [ "1.4.2-26.1.2", "main" ]
+    branches: ["1.4.2-26.1.2", main]
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -22,10 +25,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build with Gradle
-        run: ./gradlew shadowJar
+        run: ./gradlew build
 
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
-          name: Aurelium-1.4.2
-          path: build/libs/Aurelium-1.4.2.jar
+          name: Aurelium
+          path: build/libs/*.jar
