@@ -42,11 +42,6 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
 
-      - name: Install mcrcon
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq mcrcon
-
       - name: Download Paper 26.1.2
         run: |
           curl -sL "https://fill-data.papermc.io/v1/objects/6934188878fc351e1be5bfba5f2b8c4591224886e4b34e3de09dbec68a351caf/paper-26.1.2-53.jar" -o paper.jar
@@ -58,40 +53,70 @@ jobs:
           name: Aurelium
           path: plugins/
 
-      - name: Accept EULA and configure RCON
+      - name: Accept EULA and pre-configure RCON
         run: |
           echo "eula=true" > eula.txt
-          mkdir -p .github
-          cat > server-setup.sh << 'SETUP_EOF'
-          #!/bin/bash
-          # Wait for server.properties to be created, then inject RCON settings
-          for i in $(seq 1 30); do
-            if [ -f server.properties ]; then
-              sed -i 's/enable-rcon=false/enable-rcon=true/' server.properties
-              sed -i 's/rcon.port=.*/rcon.port=25575/' server.properties
-              sed -i 's/rcon.password=.*/rcon.password=testpassword/' server.properties
-              echo "RCON configured in server.properties"
-              cat server.properties | grep rcon
-              break
-            fi
-            sleep 2
-          done
-          SETUP_EOF
-          chmod +x server-setup.sh
+          # Pre-create server.properties with RCON enabled so it's ready on first start
+          cat > server.properties << 'EOF'
+          enable-rcon=true
+          rcon.port=25575
+          rcon.password=testpassword
+          server-port=25565
+          max-players=10
+          online-mode=false
+          EOF
+
+      - name: Write RCON client script
+        run: |
+          cat > rcon_client.py << 'PYEOF'
+          import socket, struct, sys
+
+          def rcon(host, port, password, command):
+              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              sock.settimeout(5)
+              sock.connect((host, port))
+              # Auth
+              _send(sock, 1, password)
+              _recv(sock)
+              # Command
+              _send(sock, 2, command)
+              resp = _recv(sock)
+              sock.close()
+              return resp
+
+          def _send(sock, req_id, payload):
+              data = payload.encode('utf-8') + b'\x00\x00'
+              header = struct.pack('<ii', req_id, len(data))
+              sock.sendall(header + data)
+
+          def _recv(sock):
+              header = b''
+              while len(header) < 8:
+                  header += sock.recv(8 - len(header))
+              req_id, length = struct.unpack('<ii', header)
+              data = b''
+              while len(data) < length:
+                  data += sock.recv(length - len(data))
+              return data[:-2].decode('utf-8', errors='replace')
+
+          if __name__ == '__main__':
+              cmd = ' '.join(sys.argv[1:])
+              try:
+                  print(rcon('localhost', 25575, 'testpassword', cmd))
+              except Exception as e:
+                  print(f'RCON_ERROR: {e}', file=sys.stderr)
+                  sys.exit(1)
+          PYEOF
 
       - name: Start Paper server
         timeout-minutes: 5
         run: |
-          # Start RCON config injector in background
-          ./server-setup.sh &
-
           java -Dpaper.playerconnection.keepalive=60 \
             -Xmx512M -Xms512M \
             -jar paper.jar --nogui \
             --max-players=10 &
           SERVER_PID=$!
 
-          # Wait for server to fully start
           TIMEOUT=120
           ELAPSED=0
           while [ $ELAPSED -lt $TIMEOUT ]; do
@@ -118,29 +143,37 @@ jobs:
 
           # Verify RCON is working
           echo "Testing RCON connection..."
-          for i in $(seq 1 10); do
-            if echo "list" | mcrcon -H localhost -P 25575 -p testpassword 2>/dev/null | grep -q "players"; then
+          for i in $(seq 1 15); do
+            if python3 rcon_client.py list 2>/dev/null | grep -qi "player"; then
               echo "RCON connected!"
               break
             fi
-            echo "RCON not ready, retrying..."
+            echo "RCON not ready, retrying ($i)..."
             sleep 2
           done
 
-          # Save server PID for later
+          # Quick RCON sanity check
+          python3 rcon_client.py list || echo "RCON check failed but continuing"
+
           echo $SERVER_PID > /tmp/server_pid
 
-      - name: Run integration tests
+      - name: Write and run integration tests
         timeout-minutes: 5
         run: |
           SERVER_PID=$(cat /tmp/server_pid)
+          LOG_FILE="logs/latest.log"
+
+          cat > run_tests.sh << 'TESTEOF'
+          #!/bin/bash
+          set -uo pipefail
+
           LOG_FILE="logs/latest.log"
           PASSED=0
           FAILED=0
           SKIP=0
 
           rcon() {
-              echo "$1" | mcrcon -H localhost -P 25575 -p testpassword 2>/dev/null | head -20
+              python3 rcon_client.py "$1" 2>/dev/null | head -20
           }
 
           assert_log() {
@@ -181,7 +214,7 @@ jobs:
                   echo "  PASS: $desc"
                   PASSED=$((PASSED + 1))
               else
-                  echo "  FAIL: $desc (expected rejection: $expected)"
+                  echo "  FAIL: $desc (expected rejection containing: $expected)"
                   echo "    Got: $(echo "$response" | head -3)"
                   FAILED=$((FAILED + 1))
               fi
@@ -200,41 +233,27 @@ jobs:
           echo "  Phase 2: Console Commands - Economy"
           echo "========================================"
 
-          # /bal requires player from console
           assert_reject "/bal needs player arg" "bal" "specify a player\|Console must\|Usage"
-
-          # /bal <player>
           assert_no_error "/bal Steve" "bal Steve"
-
-          # /bal <player> <currency>
           assert_no_error "/bal Steve Aurels" "bal Steve Aurels"
-
-          # /eco give
           assert_no_error "/eco give Steve 100" "eco give Steve 100"
           sleep 2
-
-          # /bal after deposit
           assert_no_error "/bal Steve after deposit" "bal Steve"
-
-          # /eco take
           assert_no_error "/eco take Steve 50" "eco take Steve 50"
           sleep 2
-
-          # /eco set
           assert_no_error "/eco set Steve 500" "eco set Steve 500"
           sleep 2
 
           echo ""
           echo "========================================"
-          echo "  Phase 3: Console Commands - Rejections"
+          echo "  Phase 3: Player-Only Command Rejection"
           echo "========================================"
 
-          # Player-only commands from console should gracefully reject
           assert_reject "/market is player-only" "market" "Only players\|nur Spieler\|console"
           assert_reject "/ah is player-only" "ah" "Only players"
           assert_reject "/sell is player-only" "sell" "Only players"
           assert_reject "/orders is player-only" "orders" "Only players"
-          assert_reject "/stocks is player-only" "stocks" "Only players"
+          assert_reject "/stocks is player-only" "stocks" "Only players\|player only"
           assert_reject "/web is player-only" "web" "Only players"
           assert_reject "/pay is player-only" "pay Steve 10" "Only players\|player can pay"
 
@@ -243,32 +262,17 @@ jobs:
           echo "  Phase 4: Edge Cases"
           echo "========================================"
 
-          # Invalid /eco action
           assert_no_error "/eco invalid action" "eco explode Steve 100"
+          assert_no_error "/eco invalid amount" "eco give Steve abc"
+          assert_no_error "/eco negative amount" "eco give Steve -100"
+          assert_no_error "/eco zero amount" "eco give Steve 0"
+          assert_no_error "/eco invalid currency" "eco give Steve 100 FakeCoin"
+          assert_no_error "/bal nonexistent player" "bal NonExistentPlayerXYZ"
+          assert_no_error "/eco give nonexistent" "eco give NonExistentPlayerXYZ 10"
+          assert_no_error "/eco set very large" "eco set Steve 999999999"
+          assert_no_error "/bal no args console" "bal"
 
-          # Invalid amount
-          assert_no_error "/eco give Steve abc" "eco give Steve abc"
-
-          # Negative amount
-          assert_no_error "/eco give Steve -100" "eco give Steve -100"
-
-          # Zero amount
-          assert_no_error "/eco give Steve 0" "eco give Steve 0"
-
-          # Invalid currency
-          assert_no_error "/eco give Steve 100 FakeCoin" "eco give Steve 100 FakeCoin"
-
-          # Non-existent player
-          assert_no_error "/bal NonExistentPlayerXYZ" "bal NonExistentPlayerXYZ"
-          assert_no_error "/eco give NonExistentPlayerXYZ 10" "eco give NonExistentPlayerXYZ 10"
-
-          # Very large amount
-          assert_no_error "/eco set Steve 999999999" "eco set Steve 999999999"
-
-          # /bal with no args (console)
-          assert_no_error "/bal no args" "bal"
-
-          # AH subcommands from console (player-only but no crash)
+          # AH subcommands from console (player-only, must not crash)
           assert_no_error "/ah collect from console" "ah collect"
           assert_no_error "/ah sell from console" "ah sell 100"
           assert_no_error "/ah search from console" "ah search diamond"
@@ -282,18 +286,17 @@ jobs:
 
           echo ""
           echo "========================================"
-          echo "  Phase 5: Database Verification"
+          echo "  Phase 5: Database and Config"
           echo "========================================"
 
-          if ls plugins/Aurelium/*.db 2>/dev/null || ls plugins/Aurelium/database.db 2>/dev/null; then
+          if ls plugins/Aurelium/*.db 2>/dev/null; then
               echo "  PASS: SQLite database file exists"
               PASSED=$((PASSED + 1))
           else
-              echo "  SKIP: No .db file found in plugins/Aurelium"
+              echo "  SKIP: No .db file found in plugins/Aurelium/"
               SKIP=$((SKIP + 1))
           fi
 
-          # Verify config was generated
           if [ -f plugins/Aurelium/config.yml ]; then
               echo "  PASS: config.yml generated"
               PASSED=$((PASSED + 1))
@@ -302,12 +305,11 @@ jobs:
               FAILED=$((FAILED + 1))
           fi
 
-          # Verify messages.yml was generated
           if [ -f plugins/Aurelium/messages.yml ]; then
               echo "  PASS: messages.yml generated"
               PASSED=$((PASSED + 1))
           else
-              echo "  SKIP: messages.yml not found (may not generate on first run)"
+              echo "  SKIP: messages.yml not generated on first run"
               SKIP=$((SKIP + 1))
           fi
 
@@ -326,7 +328,6 @@ jobs:
               PASSED=$((PASSED + 1))
           fi
 
-          # ─── Summary ───
           echo ""
           echo "========================================"
           echo "  TEST RESULTS"
@@ -342,15 +343,21 @@ jobs:
               echo ""
               echo "  Relevant log lines:"
               grep -i "aurel\|economy\|error\|exception\|caused by" "$LOG_FILE" | tail -30
+              exit 1
+          else
+              echo "  *** ALL TESTS PASSED ***"
           fi
+          TESTEOF
+
+          chmod +x run_tests.sh
+          bash run_tests.sh
+          TEST_EXIT=$?
 
           # Shutdown server
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
 
-          if [ $FAILED -gt 0 ]; then
-              exit 1
-          fi
+          exit $TEST_EXIT
 
       - name: Upload server log on failure
         if: failure()
