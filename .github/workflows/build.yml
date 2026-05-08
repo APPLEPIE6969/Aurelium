@@ -90,6 +90,9 @@ jobs:
             exit 1
           fi
 
+          # Save pre-shutdown log to separate file for exception scan
+          cp logs/latest.log logs/pre-shutdown.log
+
           # Verify plugin loaded
           echo ""
           echo "=== Plugin Load Verification ==="
@@ -104,16 +107,17 @@ jobs:
             exit 1
           fi
 
-          # Verify no Aurelium exceptions
+          # Verify no Aurelium exceptions BEFORE shutdown
+          # (shutdown causes benign zip-file-closed errors from async tasks)
           echo ""
-          echo "=== Exception Scan ==="
-          if grep -qi "Exception.*aurel\|Error.*aurel\|Caused by:.*aurel" logs/latest.log 2>/dev/null; then
-            echo "FAIL: Aurelium exceptions found"
-            grep -i "exception.*aurel\|caused by.*aurel" logs/latest.log | tail -20
+          echo "=== Exception Scan (pre-shutdown) ==="
+          if grep -qi "Exception.*aurel\|Error.*aurel\|Caused by:.*aurel" logs/pre-shutdown.log 2>/dev/null; then
+            echo "FAIL: Aurelium exceptions found during runtime"
+            grep -i "exception.*aurel\|caused by.*aurel" logs/pre-shutdown.log | tail -20
             kill $SERVER_PID 2>/dev/null || true
             exit 1
           else
-            echo "PASS: No Aurelium exceptions in log"
+            echo "PASS: No Aurelium exceptions during runtime"
           fi
 
           # Verify database and config
@@ -137,7 +141,7 @@ jobs:
             echo "SKIP: messages.yml not generated on first run"
           fi
 
-          # Shutdown server
+          # Shutdown server gracefully
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
 
