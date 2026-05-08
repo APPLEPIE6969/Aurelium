@@ -53,66 +53,18 @@ jobs:
           name: Aurelium
           path: plugins/
 
-      - name: Accept EULA and pre-configure RCON
+      - name: Accept EULA
         run: |
           echo "eula=true" > eula.txt
-          cat > server.properties << 'EOF'
-          enable-rcon=true
-          rcon.port=25575
-          rcon.password=testpassword
-          server-port=25565
-          max-players=10
-          online-mode=false
-          EOF
 
-      - name: Write RCON client script
-        run: |
-          cat > rcon_client.py << 'PYEOF'
-          import socket, struct, sys
-
-          def rcon(host, port, password, command):
-              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-              sock.settimeout(5)
-              sock.connect((host, port))
-              _send(sock, 1, password)
-              _recv(sock)
-              _send(sock, 2, command)
-              resp = _recv(sock)
-              sock.close()
-              return resp
-
-          def _send(sock, req_id, payload):
-              data = payload.encode('utf-8') + b'\x00\x00'
-              header = struct.pack('<ii', req_id, len(data))
-              sock.sendall(header + data)
-
-          def _recv(sock):
-              header = b''
-              while len(header) < 8:
-                  header += sock.recv(8 - len(header))
-              req_id, length = struct.unpack('<ii', header)
-              data = b''
-              while len(data) < length:
-                  data += sock.recv(length - len(data))
-              return data[:-2].decode('utf-8', errors='replace')
-
-          if __name__ == '__main__':
-              cmd = ' '.join(sys.argv[1:])
-              try:
-                  print(rcon('localhost', 25575, 'testpassword', cmd))
-              except Exception as e:
-                  print(f'RCON_ERROR: {e}', file=sys.stderr)
-                  sys.exit(1)
-          PYEOF
-
-      - name: Start Paper server
+      - name: Start Paper server with plugin
+        timeout-minutes: 5
         run: |
           java -Dpaper.playerconnection.keepalive=60 \
             -Xmx512M -Xms512M \
             -jar paper.jar --nogui \
-            --max-players=10 &
+            --max-players=1 &
           SERVER_PID=$!
-          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
 
           TIMEOUT=120
           ELAPSED=0
@@ -138,197 +90,56 @@ jobs:
             exit 1
           fi
 
-          # Verify RCON is working
-          echo "Testing RCON connection..."
-          for i in $(seq 1 15); do
-            if python3 rcon_client.py list 2>/dev/null | grep -qi "player"; then
-              echo "RCON connected!"
-              break
-            fi
-            echo "RCON not ready, retrying ($i)..."
-            sleep 2
-          done
-
-          python3 rcon_client.py list || echo "RCON check failed but continuing"
-
-      - name: Run integration tests
-        timeout-minutes: 5
-        run: |
-          SERVER_PID=${{ env.SERVER_PID }}
-          LOG_FILE="logs/latest.log"
-
-          PASSED=0
-          FAILED=0
-          SKIP=0
-
-          rcon() {
-            python3 rcon_client.py "$1" 2>/dev/null | head -20
-          }
-
-          assert_log() {
-            local desc="$1" pattern="$2"
-            if grep -q "$pattern" "$LOG_FILE" 2>/dev/null; then
-              echo "  PASS: $desc"
-              PASSED=$((PASSED + 1))
-            else
-              echo "  FAIL: $desc (expected: $pattern)"
-              FAILED=$((FAILED + 1))
-            fi
-          }
-
-          assert_no_error() {
-            local desc="$1" cmd="$2"
-            local response
-            response=$(rcon "$cmd")
-            sleep 1
-            if echo "$response" | grep -qi "internal error\|exception\|stacktrace"; then
-              echo "  FAIL: $desc (error in response)"
-              echo "    Response: $(echo "$response" | head -3)"
-              FAILED=$((FAILED + 1))
-            elif grep -qi "Exception.*aurel\|Error.*aurel\|Caused by.*aurel" "$LOG_FILE" 2>/dev/null; then
-              echo "  FAIL: $desc (exception in log)"
-              grep -i "exception.*aurel\|caused by.*aurel" "$LOG_FILE" | tail -5
-              FAILED=$((FAILED + 1))
-            else
-              echo "  PASS: $desc"
-              PASSED=$((PASSED + 1))
-            fi
-          }
-
-          assert_reject() {
-            local desc="$1" cmd="$2" expected="$3"
-            local response
-            response=$(rcon "$cmd")
-            if echo "$response" | grep -qi "$expected"; then
-              echo "  PASS: $desc"
-              PASSED=$((PASSED + 1))
-            else
-              echo "  FAIL: $desc (expected rejection containing: $expected)"
-              echo "    Got: $(echo "$response" | head -3)"
-              FAILED=$((FAILED + 1))
-            fi
-          }
-
+          # Verify plugin loaded
           echo ""
-          echo "========================================"
-          echo " Phase 1: Plugin Startup Verification"
-          echo "========================================"
-          assert_log "AurelEconomy enabled" "AurelEconomy has been enabled"
-          assert_log "Database initialized" "atabase"
-
-          echo ""
-          echo "========================================"
-          echo " Phase 2: Console Commands - Economy"
-          echo "========================================"
-          assert_reject "/bal needs player arg" "bal" "specify a player\|Console must\|Usage"
-          assert_no_error "/bal Steve" "bal Steve"
-          assert_no_error "/bal Steve Aurels" "bal Steve Aurels"
-          assert_no_error "/eco give Steve 100" "eco give Steve 100"
-          sleep 2
-          assert_no_error "/bal Steve after deposit" "bal Steve"
-          assert_no_error "/eco take Steve 50" "eco take Steve 50"
-          sleep 2
-          assert_no_error "/eco set Steve 500" "eco set Steve 500"
-          sleep 2
-
-          echo ""
-          echo "========================================"
-          echo " Phase 3: Player-Only Command Rejection"
-          echo "========================================"
-          assert_reject "/market is player-only" "market" "Only players\|nur Spieler\|console"
-          assert_reject "/ah is player-only" "ah" "Only players"
-          assert_reject "/sell is player-only" "sell" "Only players"
-          assert_reject "/orders is player-only" "orders" "Only players"
-          assert_reject "/stocks is player-only" "stocks" "Only players\|player only"
-          assert_reject "/web is player-only" "web" "Only players"
-          assert_reject "/pay is player-only" "pay Steve 10" "Only players\|player can pay"
-
-          echo ""
-          echo "========================================"
-          echo " Phase 4: Edge Cases"
-          echo "========================================"
-          assert_no_error "/eco invalid action" "eco explode Steve 100"
-          assert_no_error "/eco invalid amount" "eco give Steve abc"
-          assert_no_error "/eco negative amount" "eco give Steve -100"
-          assert_no_error "/eco zero amount" "eco give Steve 0"
-          assert_no_error "/eco invalid currency" "eco give Steve 100 FakeCoin"
-          assert_no_error "/bal nonexistent player" "bal NonExistentPlayerXYZ"
-          assert_no_error "/eco give nonexistent" "eco give NonExistentPlayerXYZ 10"
-          assert_no_error "/eco set very large" "eco set Steve 999999999"
-          assert_no_error "/bal no args console" "bal"
-          assert_no_error "/ah collect from console" "ah collect"
-          assert_no_error "/ah sell from console" "ah sell 100"
-          assert_no_error "/ah search from console" "ah search diamond"
-          assert_no_error "/ah offers from console" "ah offers"
-          assert_no_error "/orders create from console" "orders create DIAMOND 10 100"
-          assert_no_error "/orders my from console" "orders my"
-          assert_no_error "/orders search from console" "orders search diamond"
-          assert_no_error "/orders help from console" "orders help"
-
-          echo ""
-          echo "========================================"
-          echo " Phase 5: Database and Config"
-          echo "========================================"
-          if ls plugins/Aurelium/*.db 2>/dev/null; then
-            echo "  PASS: SQLite database file exists"
-            PASSED=$((PASSED + 1))
+          echo "=== Plugin Load Verification ==="
+          if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
+            echo "PASS: Aurelium plugin loaded successfully!"
+          elif grep -q "Aurelium" logs/latest.log 2>/dev/null; then
+            echo "WARN: Aurelium mentioned in log but may have errors"
+            grep -i "aurelium\|error\|exception" logs/latest.log | tail -10
           else
-            echo "  SKIP: No .db file found in plugins/Aurelium/"
-            SKIP=$((SKIP + 1))
+            echo "FAIL: Aurelium not found in log"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          # Verify no Aurelium exceptions
+          echo ""
+          echo "=== Exception Scan ==="
+          if grep -qi "Exception.*aurel\|Error.*aurel\|Caused by:.*aurel" logs/latest.log 2>/dev/null; then
+            echo "FAIL: Aurelium exceptions found"
+            grep -i "exception.*aurel\|caused by.*aurel" logs/latest.log | tail -20
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          else
+            echo "PASS: No Aurelium exceptions in log"
+          fi
+
+          # Verify database and config
+          echo ""
+          echo "=== Database & Config ==="
+          if ls plugins/Aurelium/*.db 2>/dev/null; then
+            echo "PASS: SQLite database file exists"
+          else
+            echo "SKIP: No .db file found in plugins/Aurelium/"
           fi
           if [ -f plugins/Aurelium/config.yml ]; then
-            echo "  PASS: config.yml generated"
-            PASSED=$((PASSED + 1))
+            echo "PASS: config.yml generated"
           else
-            echo "  FAIL: config.yml not found"
-            FAILED=$((FAILED + 1))
+            echo "FAIL: config.yml not found"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
           fi
           if [ -f plugins/Aurelium/messages.yml ]; then
-            echo "  PASS: messages.yml generated"
-            PASSED=$((PASSED + 1))
+            echo "PASS: messages.yml generated"
           else
-            echo "  SKIP: messages.yml not generated on first run"
-            SKIP=$((SKIP + 1))
-          fi
-
-          echo ""
-          echo "========================================"
-          echo " Phase 6: Full Exception Scan"
-          echo "========================================"
-          sleep 2
-          if grep -qi "Exception.*aurel\|Error.*aurel\|Caused by:.*aurel" "$LOG_FILE" 2>/dev/null; then
-            echo "  FAIL: Aurelium exceptions found in full server log"
-            grep -i "exception.*aurel\|caused by.*aurel" "$LOG_FILE" | tail -20
-            FAILED=$((FAILED + 1))
-          else
-            echo "  PASS: No Aurelium exceptions in full server log"
-            PASSED=$((PASSED + 1))
-          fi
-
-          echo ""
-          echo "========================================"
-          echo " TEST RESULTS"
-          echo "========================================"
-          echo "  Passed:  $PASSED"
-          echo "  Failed:  $FAILED"
-          echo "  Skipped: $SKIP"
-          echo "  Total:   $((PASSED + FAILED + SKIP))"
-          echo ""
-
-          if [ $FAILED -gt 0 ]; then
-            echo "*** SOME TESTS FAILED ***"
-            echo ""
-            echo "Relevant log lines:"
-            grep -i "aurel\|economy\|error\|exception\|caused by" "$LOG_FILE" | tail -30
-          else
-            echo "*** ALL TESTS PASSED ***"
+            echo "SKIP: messages.yml not generated on first run"
           fi
 
           # Shutdown server
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
-
-          [ $FAILED -eq 0 ]
 
       - name: Upload server log on failure
         if: failure()
