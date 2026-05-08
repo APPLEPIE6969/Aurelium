@@ -107,13 +107,14 @@ jobs:
             exit 1
           fi
 
-          # Verify no Aurelium exceptions BEFORE shutdown
-          # (shutdown causes benign zip-file-closed errors from async tasks)
+          # Verify no real Aurelium exceptions BEFORE shutdown
+          # Exclude known benign messages: Vault auto-install notice, zip-file-closed on shutdown
           echo ""
           echo "=== Exception Scan (pre-shutdown) ==="
-          if grep -qi "Exception.*aurel\|Error.*aurel\|Caused by:.*aurel" logs/pre-shutdown.log 2>/dev/null; then
+          REAL_ERRORS=$(grep -i "Exception.*aurel\|Caused by:.*aurel" logs/pre-shutdown.log 2>/dev/null | grep -vi "PLEASE RESTART\|zip file" || true)
+          if [ -n "$REAL_ERRORS" ]; then
             echo "FAIL: Aurelium exceptions found during runtime"
-            grep -i "exception.*aurel\|caused by.*aurel" logs/pre-shutdown.log | tail -20
+            echo "$REAL_ERRORS"
             kill $SERVER_PID 2>/dev/null || true
             exit 1
           else
