@@ -464,3 +464,255 @@ jobs:
         kill $(cat /tmp/server_pid) 2>/dev/null || true
         wait $(cat /tmp/server_pid) 2>/dev/null || true
         exit $TEST_EXIT
+
+  # Test MySQL/MariaDB compatibility
+  mysql-test:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: aurelium
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --password=testpass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+    - uses: actions/setup-java@v5
+      with:
+        java-version: '25'
+        distribution: 'temurin'
+    - name: Download Paper 26.1.2 build 61
+      run: |
+        curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+    - name: Download plugin artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: Aurelium
+        path: plugins/
+    - name: Accept EULA
+      run: |
+        echo "eula=true" > eula.txt
+        printf "online-mode=false
+max-players=5
+server-port=25566
+" > server.properties
+    - name: Configure plugin for MySQL
+      run: |
+        mkdir -p plugins/Aurelium
+        cat > plugins/Aurelium/config.yml << 'EOF'
+        config-version: 1
+        database:
+          type: mysql
+          file: "database.db"
+          mysql:
+            host: "127.0.0.1"
+            port: 3306
+            database: "aurelium"
+            username: "root"
+            password: "testpass"
+        economy:
+          default-currency: "Aurels"
+          currencies:
+            Aurels:
+              symbol: "A"
+              starting-balance: 100.0
+          max-balance: -1
+          min-pay-amount: 0.01
+          prefix: "[Aurelium] "
+          balance: "Balance: %amount%%symbol%"
+          balance-other: "Balance of %player%: %amount%%symbol%"
+          admin-give: "Gave %player% %amount%%symbol%"
+          admin-take: "Took %amount%%symbol% from %player%"
+          admin-set: "Set %player% balance to %amount%%symbol%"
+        market:
+          enabled: true
+          gui-mode: modern
+          dynamic-pricing: true
+          price-increase-per-buy: 0.001
+          price-decrease-per-sell: 0.001
+          default-sell-ratio: 0.5
+          price-floor: 0.2
+          price-ceiling: 5.0
+          price-recovery:
+            enabled: true
+            rate: 0.01
+            interval-minutes: 10
+          alerts:
+            enabled: true
+            threshold: 0.5
+            min-base-price: 200.0
+          blacklist:
+            - BEDROCK
+        auction-house:
+          enabled: true
+          default-duration: 86400
+          max-duration: 604800
+          listing-fee-percent: 2.0
+          sales-tax-percent: 5.0
+        buy-orders:
+          enabled: true
+          max-active-orders-per-player: 10
+          min-price-per-piece: 0.1
+          creation-fee-percent: 2.0
+          sales-tax-percent: 5.0
+        web:
+          enabled: false
+          mode: cloud
+          local:
+            host: "localhost"
+            port: 8585
+          cloud:
+            url: ""
+            server-id: ""
+            api-key: ""
+            sync-interval: 30
+        EOF
+    - name: Start Paper server with MySQL
+      timeout-minutes: 5
+      run: |
+        java -Dpaper.playerconnection.keepalive=60         -Xmx768M -Xms768M         -jar paper.jar --nogui         --max-players=5 --port=25566 &
+        SERVER_PID=$!
+
+        TIMEOUT=150
+        ELAPSED=0
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          if grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server started with MySQL!"
+            break
+          fi
+          if grep -q "Failed to start" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start with MySQL"
+            tail -50 logs/latest.log
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+          sleep 2
+          ELAPSED=$((ELAPSED + 2))
+        done
+
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+          echo "Server did not start within ${TIMEOUT}s"
+          tail -30 logs/latest.log
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
+        fi
+
+        echo "=== Plugin Load Check ==="
+        if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
+          echo "PASS: Plugin loaded with MySQL"
+        else
+          echo "FAIL: Plugin did not load with MySQL"
+          grep -i "aurel\|error\|exception" logs/latest.log | tail -20
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
+        fi
+
+        # Check for SQL syntax errors
+        if grep -qi "SQLSyntaxErrorException\|SQL syntax" logs/latest.log 2>/dev/null; then
+          echo "FAIL: SQL syntax errors detected with MySQL"
+          grep -i "SQLSyntax\|syntax error" logs/latest.log | tail -10
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
+        fi
+        echo "PASS: No SQL syntax errors with MySQL"
+
+        # Test basic economy via RCON
+        sed -i '/^enable-rcon=/d; /^rcon\./d' server.properties
+        printf "
+enable-rcon=true
+rcon.port=25576
+rcon.password=testpass
+" >> server.properties
+        kill $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
+        sleep 3
+
+        # Restart with RCON
+        java -Dpaper.playerconnection.keepalive=60         -Xmx768M -Xms768M         -jar paper.jar --nogui         --max-players=5 --port=25566 &
+        SERVER_PID=$!
+
+        TIMEOUT=90
+        ELAPSED=0
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          if grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server restarted with RCON!"
+            break
+          fi
+          sleep 2
+          ELAPSED=$((ELAPSED + 2))
+        done
+
+        for i in $(seq 1 30); do
+          if nc -z 127.0.0.1 25576 2>/dev/null; then
+            echo "RCON port open!"
+            break
+          fi
+          sleep 1
+        done
+        sleep 3
+
+        # Run basic RCON commands to exercise MySQL upserts
+        python3 -c "
+import socket, struct, re
+
+def rcon(host, port, password, command):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(10)
+    sock.connect((host, port))
+    packet = struct.pack('<ii', 3, 3) + password.encode('utf-8') + b'  '
+    sock.send(struct.pack('<i', len(packet)) + packet)
+    length = struct.unpack('<i', sock.recv(4))[0]
+    data = b''
+    while len(data) < length:
+        data += sock.recv(length - len(data))
+    _send_packet(sock, 2, command)
+    req_id, resp = _receive_packet(sock)
+    sock.close()
+    return resp
+
+def _send_packet(sock, req_type, data):
+    packet = struct.pack('<ii', req_type, req_type) + data.encode('utf-8') + b'  '
+    sock.send(struct.pack('<i', len(packet)) + packet)
+
+def _receive_packet(sock):
+    length = struct.unpack('<i', sock.recv(4))[0]
+    data = b''
+    while len(data) < length:
+        data += sock.recv(length - len(data))
+    return struct.unpack('<i', data[:4])[0], data[8:-2].decode('utf-8', errors='replace')
+
+tests = 0
+failures = 0
+
+for cmd, check in [
+    ('bal', lambda r: len(r) > 0),
+    ('eco give TestPlayer 500', lambda r: len(r) > 0 and 'error' not in r.lower()),
+    ('eco set TestPlayer 100', lambda r: len(r) > 0 and 'error' not in r.lower()),
+    ('bal TestPlayer', lambda r: len(r) > 0 and 'error' not in r.lower()),
+]:
+    resp = rcon('127.0.0.1', 25576, 'testpass', cmd)
+    clean = re.sub(r'§[0-9a-fk-or]', '', resp or '')
+    ok = check(clean)
+    print(f'  {"PASS" if ok else "FAIL"}: /{cmd} -> {clean[:80]}')
+    tests += 1
+    if not ok: failures += 1
+
+print(f'
+MySQL Tests: {tests - failures}/{tests} passed')
+import sys
+sys.exit(1 if failures > 0 else 0)
+"
+
+        TEST_EXIT=$?
+        echo "=== Server Exceptions ==="
+        grep -iE "Exception|Caused by|NullPointer|SQLSyntax" logs/latest.log | grep -vi "PLEASE RESTART\|zip file" | tail -20 || true
+
+        kill $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
+        exit $TEST_EXIT
