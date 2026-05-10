@@ -87,7 +87,7 @@ jobs:
             echo "PASS: Aurelium plugin loaded successfully!"
           elif grep -q "Aurelium" logs/latest.log 2>/dev/null; then
             echo "WARN: Aurelium mentioned in log but may have errors"
-            grep -i "aurelium\|error\|exception" logs/latest.log | tail -10
+            echo "=== Exceptions ===" && grep -iE "Exception|Caused by|NullPointer" logs/latest.log | grep -vi "PLEASE RESTART" | tail -40 || true && echo "=== Commands ===" && grep -i "aurelium\|error\|exception" logs/latest.log | tail -10
           else
             echo "FAIL: Aurelium not found in log"
             kill $SERVER_PID 2>/dev/null || true
