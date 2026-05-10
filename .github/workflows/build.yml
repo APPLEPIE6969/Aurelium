@@ -2,9 +2,9 @@ name: Build and Test
 
 on:
   push:
-    branches: ["1.4.3", main]
+    branches: ["1.4.3", main, "fix/mysql-compat-and-auction-displayname"]
   pull_request:
-    branches: ["1.4.3", main]
+    branches: ["1.4.3", main, "fix/mysql-compat-and-auction-displayname"]
 
 permissions:
   contents: read
