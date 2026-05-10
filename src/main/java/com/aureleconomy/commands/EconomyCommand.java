@@ -89,16 +89,13 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  sender.sendMessage(Component.text("Checking balance...", NamedTextColor.GRAY));
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+ try {
  OfflinePlayer target = Bukkit.getOfflinePlayer(targetName);
- if (target.getUniqueId() == null) {
- Bukkit.getScheduler().runTask(plugin, () ->
- sender.sendMessage(Component.text("Player not found: " + targetName, NamedTextColor.RED)));
- return;
- }
  BigDecimal bal = plugin.getEconomyManager().getBalance(target, finalCurrency);
  String prefix = plugin.getConfig().getString("prefix", "<gold>[AurelEconomy] <gray>");
 
  Bukkit.getScheduler().runTask(plugin, () -> {
+ try {
  String formatted = plugin.getEconomyManager().format(bal, finalCurrency);
  String symbol = plugin.getEconomyManager().getCurrencySymbol(finalCurrency);
  if (sender instanceof Player p && target.getUniqueId().equals(p.getUniqueId())) {
@@ -117,7 +114,16 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  .replace("%amount%", formatted)
  .replace("%symbol%", symbol)));
  }
+ } catch (Exception e) {
+ plugin.getComponentLogger().error("Error displaying balance", e);
+ sender.sendMessage(Component.text("An error occurred while retrieving balance.", NamedTextColor.RED));
+ }
  });
+ } catch (Exception e) {
+ plugin.getComponentLogger().error("Error loading balance", e);
+ Bukkit.getScheduler().runTask(plugin, () ->
+ sender.sendMessage(Component.text("An error occurred while retrieving balance.", NamedTextColor.RED)));
+ }
  });
  }
 
@@ -160,13 +166,8 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  player.sendMessage(Component.text("Processing payment...", NamedTextColor.GRAY));
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+ try {
  OfflinePlayer target = Bukkit.getOfflinePlayer(targetName);
-
- if (target.getUniqueId() == null) {
- Bukkit.getScheduler().runTask(plugin,
- () -> player.sendMessage(Component.text("Player not found: " + targetName, NamedTextColor.RED)));
- return;
- }
 
  if (target.getUniqueId().equals(player.getUniqueId())) {
  Bukkit.getScheduler().runTask(plugin,
@@ -175,6 +176,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  }
 
  Bukkit.getScheduler().runTask(plugin, () -> {
+ try {
  if (plugin.getEconomyManager().has(player, amount, currency)) {
  plugin.getEconomyManager().withdraw(player, amount, currency);
  plugin.getEconomyManager().deposit(target, amount, currency);
@@ -204,7 +206,16 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  } else {
  player.sendMessage(Component.text("Insufficient funds.", NamedTextColor.RED));
  }
+ } catch (Exception e) {
+ plugin.getComponentLogger().error("Error processing payment", e);
+ player.sendMessage(Component.text("An error occurred while processing payment.", NamedTextColor.RED));
+ }
  });
+ } catch (Exception e) {
+ plugin.getComponentLogger().error("Error looking up player for payment", e);
+ Bukkit.getScheduler().runTask(plugin,
+ () -> player.sendMessage(Component.text("An error occurred while processing payment.", NamedTextColor.RED)));
+ }
  });
  }
 
@@ -221,11 +232,6 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
 
  String action = args[0].toLowerCase();
  OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
-
- if (target.getUniqueId() == null) {
- sender.sendMessage(Component.text("Player not found: " + args[1], NamedTextColor.RED));
- return;
- }
 
  BigDecimal amount;
 
@@ -249,6 +255,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  String prefix = plugin.getConfig().getString("prefix", "[AurelEconomy] ");
  String displayName = target.getName() != null ? target.getName() : args[1];
 
+ try {
  switch (action) {
  case "give":
  plugin.getEconomyManager().deposit(target, amount, currency);
@@ -279,6 +286,10 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  break;
  default:
  sender.sendMessage(Component.text("Unknown action: " + action));
+ }
+ } catch (Exception e) {
+ plugin.getComponentLogger().error("Error executing /eco " + action, e);
+ sender.sendMessage(Component.text("An error occurred while executing /eco " + action + ".", NamedTextColor.RED));
  }
  }
 
