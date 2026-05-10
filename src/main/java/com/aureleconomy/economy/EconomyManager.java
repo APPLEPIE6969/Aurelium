@@ -73,7 +73,7 @@ public class EconomyManager {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
 				plugin.getDatabaseManager().isMySQL()
 				? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance)"
-				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?"))
+				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
 
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
@@ -279,9 +279,7 @@ public class EconomyManager {
  .prepareStatement(
 				plugin.getDatabaseManager().isMySQL()
 				? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = VALUES(balance)"
-				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?"))
- 	: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) " +
-
+				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, startBal);
