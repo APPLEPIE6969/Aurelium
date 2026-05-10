@@ -2,9 +2,9 @@ name: Build and Test
 
 on:
   push:
-    branches: ["1.4.2-26.1.2", main]
+    branches: ["1.4.3", main]
   pull_request:
-    branches: ["1.4.2-26.1.2", main]
+    branches: ["1.4.3", main]
 
 permissions:
   contents: read
