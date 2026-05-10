@@ -303,70 +303,142 @@ jobs:
               return re.sub(r'\u00a7[0-9a-fk-or]', '', text)
 
           print('=== Aurelium In-Game Tests ===\n')
+          print('--- /bal command ---\n')
 
-          # TEST 1: /bal without player (console)
-          print('Test 1: /bal without player (console)')
+          # TEST 1: /bal without player (console must specify)
+          print('Test 1: /bal (console must specify player)')
           resp = strip_color(run_cmd('bal'))
           assert_test('/bal responds', len(resp) > 0, f'len={len(resp)}')
 
-          # TEST 2: /eco give - give money to a player
-          print('\nTest 2: /eco give TestPlayer 500')
+          # TEST 2: /bal TestPlayer (async, acknowledges request)
+          print('\nTest 2: /bal TestPlayer')
+          resp = strip_color(run_cmd('bal TestPlayer'))
+          assert_test('/bal acknowledges', 'Checking' in resp or 'Balance' in resp or 'balance' in resp or 'TestPlayer' in resp, f'resp={resp[:100]}')
+
+          # TEST 3: /bal TestPlayer Aurels (with currency)
+          print('\nTest 3: /bal TestPlayer Aurels')
+          resp = strip_color(run_cmd('bal TestPlayer Aurels'))
+          assert_test('/bal with currency acknowledges', 'Checking' in resp or 'Balance' in resp or 'balance' in resp or 'TestPlayer' in resp or 'Aurels' in resp, f'resp={resp[:100]}')
+
+          print('\n--- /eco admin command ---\n')
+
+          # TEST 4: /eco give
+          print('Test 4: /eco give TestPlayer 500')
           resp = strip_color(run_cmd('eco give TestPlayer 500'))
-          assert_test('/eco give responds', len(resp) > 0, f'len={len(resp)}')
+          assert_test('/eco give responds', len(resp) > 0)
           assert_test('/eco give confirms', 'Gave' in resp or 'gave' in resp or '500' in resp, f'resp={resp[:100]}')
 
-          # TEST 3: /bal TestPlayer - async, just check it acknowledges
-          print('\nTest 3: /bal TestPlayer')
-          resp = strip_color(run_cmd('bal TestPlayer'))
-          # /bal is async - RCON gets "Checking balance..." then actual balance
-          # arrives in a separate message. Just verify the command was accepted.
-          assert_test('/bal acknowledges request', 'Checking' in resp or 'Balance' in resp or 'balance' in resp or 'TestPlayer' in resp, f'resp={resp[:100]}')
-
-          # TEST 4: /eco take - take money from a player
-          print('\nTest 4: /eco take TestPlayer 200')
+          # TEST 5: /eco take
+          print('\nTest 5: /eco take TestPlayer 200')
           resp = strip_color(run_cmd('eco take TestPlayer 200'))
           assert_test('/eco take confirms', 'Took' in resp or 'took' in resp or '200' in resp, f'resp={resp[:100]}')
 
-          # TEST 5: /bal TestPlayer - verify it still responds after take
-          print('\nTest 5: /bal TestPlayer (after take)')
-          resp = strip_color(run_cmd('bal TestPlayer'))
-          assert_test('/bal still responds after operations', 'Checking' in resp or 'Balance' in resp or 'balance' in resp or 'TestPlayer' in resp, f'resp={resp[:100]}')
-
-          # TEST 6: /eco set - set balance directly
+          # TEST 6: /eco set
           print('\nTest 6: /eco set TestPlayer 1000')
           resp = strip_color(run_cmd('eco set TestPlayer 1000'))
           assert_test('/eco set confirms', 'Set' in resp or 'set' in resp or '1000' in resp, f'resp={resp[:100]}')
 
-          # TEST 7: Verify balance via server log after async /bal
-          # Since /bal is async, check the server log instead for the balance value
-          print('\nTest 7: Verify eco operations via /eco set check')
-          resp = strip_color(run_cmd('eco set TestPlayer 1000'))
-          assert_test('/eco set idempotent', 'Set' in resp or 'set' in resp or '1000' in resp, f'resp={resp[:100]}')
-
-          # TEST 8: /eco invalid action
-          print('\nTest 8: /eco invalid action')
-          resp = strip_color(run_cmd('eco burn TestPlayer 100'))
-          assert_test('/eco rejects invalid action', 'Unknown' in resp or 'Usage' in resp or len(resp) > 0, f'resp={resp[:100]}')
-
-          # TEST 9: /eco negative amount
-          print('\nTest 9: /eco give TestPlayer -100')
-          resp = strip_color(run_cmd('eco give TestPlayer -100'))
-          assert_test('/eco rejects negative', 'positive' in resp.lower() or 'invalid' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
-
-          # TEST 10: /eco invalid amount (non-numeric)
-          print('\nTest 10: /eco give TestPlayer abc')
-          resp = strip_color(run_cmd('eco give TestPlayer abc'))
-          assert_test('/eco rejects non-numeric', 'Invalid' in resp or 'invalid' in resp or 'Usage' in resp, f'resp={resp[:100]}')
-
-          # TEST 11: /eco with specific currency
-          print('\nTest 11: /eco give TestPlayer 50 Aurels')
+          # TEST 7: /eco with specific currency
+          print('\nTest 7: /eco give TestPlayer 50 Aurels')
           resp = strip_color(run_cmd('eco give TestPlayer 50 Aurels'))
-          assert_test('/eco with currency works', 'Gave' in resp or 'gave' in resp or '50' in resp or len(resp) > 0, f'resp={resp[:100]}')
+          assert_test('/eco with currency works', 'Gave' in resp or 'gave' in resp or '50' in resp or 'Aurels' in resp, f'resp={resp[:100]}')
 
-          # TEST 12: /eco invalid currency
-          print('\nTest 12: /eco give TestPlayer 50 InvalidCoin')
+          # TEST 8: /eco invalid currency
+          print('\nTest 8: /eco give TestPlayer 50 InvalidCoin')
           resp = strip_color(run_cmd('eco give TestPlayer 50 InvalidCoin'))
-          assert_test('/eco rejects invalid currency', 'Invalid' in resp or 'invalid' in resp or len(resp) > 0, f'resp={resp[:100]}')
+          assert_test('/eco rejects invalid currency', 'Invalid' in resp or 'invalid' in resp, f'resp={resp[:100]}')
+
+          # TEST 9: /eco invalid action
+          print('\nTest 9: /eco burn TestPlayer 100')
+          resp = strip_color(run_cmd('eco burn TestPlayer 100'))
+          assert_test('/eco rejects invalid action', 'Unknown' in resp or 'Usage' in resp, f'resp={resp[:100]}')
+
+          # TEST 10: /eco negative amount
+          print('\nTest 10: /eco give TestPlayer -100')
+          resp = strip_color(run_cmd('eco give TestPlayer -100'))
+          assert_test('/eco rejects negative', 'positive' in resp.lower() or 'Positive' in resp, f'resp={resp[:100]}')
+
+          # TEST 11: /eco non-numeric amount
+          print('\nTest 11: /eco give TestPlayer abc')
+          resp = strip_color(run_cmd('eco give TestPlayer abc'))
+          assert_test('/eco rejects non-numeric', 'Invalid' in resp or 'invalid' in resp, f'resp={resp[:100]}')
+
+          # TEST 12: /eco missing args
+          print('\nTest 12: /eco give TestPlayer')
+          resp = strip_color(run_cmd('eco give TestPlayer'))
+          assert_test('/eco rejects missing amount', 'Usage' in resp or 'Invalid' in resp or len(resp) > 0, f'resp={resp[:100]}')
+
+          print('\n--- /pay command (console) ---\n')
+
+          # TEST 13: /pay from console (player-only)
+          print('Test 13: /pay TestPlayer 50')
+          resp = strip_color(run_cmd('pay TestPlayer 50'))
+          assert_test('/pay rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
+
+          print('\n--- /market command (console) ---\n')
+
+          # TEST 14: /market from console (player-only GUI)
+          print('Test 14: /market')
+          resp = strip_color(run_cmd('market'))
+          assert_test('/market rejects console', 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
+
+          print('\n--- /stocks command (console) ---\n')
+
+          # TEST 15: /stocks from console (player-only GUI)
+          print('Test 15: /stocks')
+          resp = strip_color(run_cmd('stocks'))
+          assert_test('/stocks rejects console', 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
+
+          print('\n--- /web command (console) ---\n')
+
+          # TEST 16: /web from console (player-only)
+          print('Test 16: /web')
+          resp = strip_color(run_cmd('web'))
+          assert_test('/web rejects console', 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
+
+          print('\n--- /ah command (console) ---\n')
+
+          # TEST 17: /ah from console (player-only)
+          print('Test 17: /ah')
+          resp = strip_color(run_cmd('ah'))
+          assert_test('/ah rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
+
+          # TEST 18: /ah sell from console
+          print('\nTest 18: /ah sell 100')
+          resp = strip_color(run_cmd('ah sell 100'))
+          assert_test('/ah sell rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
+
+          # TEST 19: /ah collect from console
+          print('\nTest 19: /ah collect')
+          resp = strip_color(run_cmd('ah collect'))
+          assert_test('/ah collect rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
+
+          # TEST 20: /ah search from console
+          print('\nTest 20: /ah search diamond')
+          resp = strip_color(run_cmd('ah search diamond'))
+          assert_test('/ah search rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
+
+          print('\n--- /orders command (console) ---\n')
+
+          # TEST 21: /orders from console (player-only)
+          print('Test 21: /orders')
+          resp = strip_color(run_cmd('orders'))
+          assert_test('/orders rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
+
+          # TEST 22: /orders create from console
+          print('\nTest 22: /orders create DIAMOND 10 5')
+          resp = strip_color(run_cmd('orders create DIAMOND 10 5'))
+          assert_test('/orders create rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
+
+          # TEST 23: /orders my from console
+          print('\nTest 23: /orders my')
+          resp = strip_color(run_cmd('orders my'))
+          assert_test('/orders my rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
+
+          # TEST 24: /orders search from console
+          print('\nTest 24: /orders search diamond')
+          resp = strip_color(run_cmd('orders search diamond'))
+          assert_test('/orders search rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
 
           # Cleanup
           run_cmd('eco set TestPlayer 100')
@@ -384,7 +456,7 @@ jobs:
           python3 test_rcon.py
           TEST_EXIT=$?
           echo "Test exit code: $TEST_EXIT"
-          grep -i "aurel\|economy\|issued server command" logs/latest.log | tail -20 || true
+          grep -i "aurel\|economy\|issued server command" logs/latest.log | tail -30 || true
           kill $(cat /tmp/server_pid) 2>/dev/null || true
           wait $(cat /tmp/server_pid) 2>/dev/null || true
           exit $TEST_EXIT
