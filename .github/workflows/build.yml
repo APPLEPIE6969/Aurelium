@@ -1,14 +1,15 @@
 name: Build and Test
-
-on:
+true:
   push:
-    branches: ["1.4.3", main, "fix/mysql-compat-and-auction-displayname"]
+    branches:
+    - 1.4.3
+    - main
   pull_request:
-    branches: ["1.4.3", main, "fix/mysql-compat-and-auction-displayname"]
-
+    branches:
+    - 1.4.3
+    - main
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,7 +19,7 @@ jobs:
       uses: actions/setup-java@v5
       with:
         java-version: '25'
-        distribution: 'temurin'
+        distribution: temurin
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
     - name: Build with Gradle
@@ -28,7 +29,6 @@ jobs:
       with:
         name: Aurelium
         path: build/libs/*.jar
-
   smoke-test:
     needs: build
     runs-on: ubuntu-latest
@@ -36,92 +36,32 @@ jobs:
     - uses: actions/setup-java@v5
       with:
         java-version: '25'
-        distribution: 'temurin'
+        distribution: temurin
     - name: Download Paper 26.1.2 build 61
-      run: |
-        curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+      run: 'curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+
         ls -lh paper.jar
+
+        '
     - name: Download plugin artifact
       uses: actions/download-artifact@v4
       with:
         name: Aurelium
         path: plugins/
     - name: Accept EULA
-      run: |
-        echo "eula=true" > eula.txt
+      run: 'echo "eula=true" > eula.txt
+
+        '
     - name: Start Paper server with plugin
       timeout-minutes: 5
-      run: |
-        java -Dpaper.playerconnection.keepalive=60 \
-        -Xmx512M -Xms512M \
-        -jar paper.jar --nogui \
-        --max-players=5 &
-        SERVER_PID=$!
-
-        TIMEOUT=120
-        ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-          if grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server started successfully!"
-            break
-          fi
-          if grep -q "Failed to start" logs/latest.log 2>/dev/null; then
-            echo "Server failed to start"
-            tail -50 logs/latest.log
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
-          fi
-          sleep 2
-          ELAPSED=$((ELAPSED + 2))
-        done
-
-        if [ $ELAPSED -ge $TIMEOUT ]; then
-          echo "Server did not start within ${TIMEOUT}s"
-          tail -30 logs/latest.log
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
-        fi
-
-        echo "=== Plugin Load Verification ==="
-        if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
-          echo "PASS: Aurelium plugin loaded successfully!"
-        elif grep -q "Aurelium" logs/latest.log 2>/dev/null; then
-          echo "WARN: Aurelium mentioned in log but may have errors"
-          grep -i "aurelium\|error\|exception" logs/latest.log | tail -10
-        else
-          echo "FAIL: Aurelium not found in log"
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
-        fi
-
-        echo "=== Database & Config ==="
-        if ls plugins/Aurelium/*.db 2>/dev/null; then
-          echo "PASS: SQLite database file exists"
-        else
-          echo "SKIP: No .db file found"
-        fi
-        if [ -f plugins/Aurelium/config.yml ]; then
-          echo "PASS: config.yml generated"
-        else
-          echo "FAIL: config.yml not found"
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
-        fi
-
-        cp logs/latest.log logs/pre-shutdown.log
-        REAL_ERRORS=$(grep -i "Exception.*aurel\|Caused by:.*aurel" logs/pre-shutdown.log 2>/dev/null | grep -vi "PLEASE RESTART\|zip file" || true)
-        if [ -n "$REAL_ERRORS" ]; then
-          echo "FAIL: Aurelium exceptions found during runtime"
-          echo "$REAL_ERRORS"
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
-        else
-          echo "PASS: No Aurelium exceptions during runtime"
-        fi
-
-        kill $SERVER_PID 2>/dev/null || true
-        wait $SERVER_PID 2>/dev/null || true
-
+      run: "java -Dpaper.playerconnection.keepalive=60 \\\n-Xmx512M -Xms512M \\\n-jar paper.jar --nogui \\\n--max-players=5 &\nSERVER_PID=$!\n\nTIMEOUT=120\nELAPSED=0\nwhile [ $ELAPSED -lt $TIMEOUT ]; do\n  if grep -q \"Done (\" logs/latest.log 2>/dev/null; then\n    echo \"Server started successfully!\"\
+        \n    break\n  fi\n  if grep -q \"Failed to start\" logs/latest.log 2>/dev/null; then\n    echo \"Server failed to start\"\n    tail -50 logs/latest.log\n    kill $SERVER_PID 2>/dev/null || true\n    exit 1\n  fi\n  sleep 2\n  ELAPSED=$((ELAPSED + 2))\ndone\n\nif [ $ELAPSED -ge $TIMEOUT ]; then\n\
+        \  echo \"Server did not start within ${TIMEOUT}s\"\n  tail -30 logs/latest.log\n  kill $SERVER_PID 2>/dev/null || true\n  exit 1\nfi\n\necho \"=== Plugin Load Verification ===\"\nif grep -q \"AurelEconomy has been enabled\" logs/latest.log 2>/dev/null; then\n  echo \"PASS: Aurelium plugin loaded\
+        \ successfully!\"\nelif grep -q \"Aurelium\" logs/latest.log 2>/dev/null; then\n  echo \"WARN: Aurelium mentioned in log but may have errors\"\n  grep -i \"aurelium\\|error\\|exception\" logs/latest.log | tail -10\nelse\n  echo \"FAIL: Aurelium not found in log\"\n  kill $SERVER_PID 2>/dev/null\
+        \ || true\n  exit 1\nfi\n\necho \"=== Database & Config ===\"\nif ls plugins/Aurelium/*.db 2>/dev/null; then\n  echo \"PASS: SQLite database file exists\"\nelse\n  echo \"SKIP: No .db file found\"\nfi\nif [ -f plugins/Aurelium/config.yml ]; then\n  echo \"PASS: config.yml generated\"\nelse\n \
+        \ echo \"FAIL: config.yml not found\"\n  kill $SERVER_PID 2>/dev/null || true\n  exit 1\nfi\n\ncp logs/latest.log logs/pre-shutdown.log\nREAL_ERRORS=$(grep -i \"Exception.*aurel\\|Caused by:.*aurel\" logs/pre-shutdown.log 2>/dev/null | grep -vi \"PLEASE RESTART\\|zip file\" || true)\nif [ -n \"\
+        $REAL_ERRORS\" ]; then\n  echo \"FAIL: Aurelium exceptions found during runtime\"\n  echo \"$REAL_ERRORS\"\n  kill $SERVER_PID 2>/dev/null || true\n  exit 1\nelse\n  echo \"PASS: No Aurelium exceptions during runtime\"\nfi\n\nkill $SERVER_PID 2>/dev/null || true\nwait $SERVER_PID 2>/dev/null ||\
+        \ true\n"
     - name: Upload server log on failure
       if: failure()
       uses: actions/upload-artifact@v4
@@ -129,7 +69,6 @@ jobs:
         name: server-log
         path: logs/latest.log
         retention-days: 7
-
     - name: Upload plugin data on failure
       if: failure()
       uses: actions/upload-artifact@v4
@@ -137,7 +76,6 @@ jobs:
         name: plugin-data
         path: plugins/Aurelium/
         retention-days: 7
-
   ingame-test:
     needs: build
     runs-on: ubuntu-latest
@@ -145,327 +83,84 @@ jobs:
     - uses: actions/setup-java@v5
       with:
         java-version: '25'
-        distribution: 'temurin'
+        distribution: temurin
     - name: Download Paper 26.1.2 build 61
-      run: |
-        curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+      run: 'curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+
+        '
     - name: Download plugin artifact
       uses: actions/download-artifact@v4
       with:
         name: Aurelium
         path: plugins/
     - name: Accept EULA and configure server
-      run: |
-        echo "eula=true" > eula.txt
+      run: 'echo "eula=true" > eula.txt
+
         printf "online-mode=false\nmax-players=5\nserver-port=25565\n" > server.properties
+
+        '
     - name: Start Paper server (first run)
-      run: |
-        java -Dpaper.playerconnection.keepalive=60 \
-        -Xmx768M -Xms768M \
-        -jar paper.jar --nogui \
-        --max-players=5 &
-        SERVER_PID=$!
-
-        TIMEOUT=150
-        ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-          if grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server ready on first run!"
-            break
-          fi
-          if grep -q "Failed to start" logs/latest.log 2>/dev/null; then
-            echo "Server failed to start"
-            tail -50 logs/latest.log
-            kill $SERVER_PID 2>/dev/null
-            exit 1
-          fi
-          sleep 2
-          ELAPSED=$((ELAPSED + 2))
-        done
-
-        if [ $ELAPSED -ge $TIMEOUT ]; then
-          echo "Server did not start in time"
-          tail -30 logs/latest.log
-          kill $SERVER_PID 2>/dev/null
-          exit 1
-        fi
-
-        kill $SERVER_PID 2>/dev/null || true
-        wait $SERVER_PID 2>/dev/null || true
-        sleep 3
-
-        sed -i 's/online-mode=true/online-mode=false/g' server.properties
-        sed -i '/^enable-rcon=/d; /^rcon\./d' server.properties
-        printf "\nenable-rcon=true\nrcon.port=25575\nrcon.password=testpass\n" >> server.properties
-        grep "online-mode\|rcon" server.properties
+      run: "java -Dpaper.playerconnection.keepalive=60 \\\n-Xmx768M -Xms768M \\\n-jar paper.jar --nogui \\\n--max-players=5 &\nSERVER_PID=$!\n\nTIMEOUT=150\nELAPSED=0\nwhile [ $ELAPSED -lt $TIMEOUT ]; do\n  if grep -q \"Done (\" logs/latest.log 2>/dev/null; then\n    echo \"Server ready on first run!\"\
+        \n    break\n  fi\n  if grep -q \"Failed to start\" logs/latest.log 2>/dev/null; then\n    echo \"Server failed to start\"\n    tail -50 logs/latest.log\n    kill $SERVER_PID 2>/dev/null\n    exit 1\n  fi\n  sleep 2\n  ELAPSED=$((ELAPSED + 2))\ndone\n\nif [ $ELAPSED -ge $TIMEOUT ]; then\n  echo\
+        \ \"Server did not start in time\"\n  tail -30 logs/latest.log\n  kill $SERVER_PID 2>/dev/null\n  exit 1\nfi\n\nkill $SERVER_PID 2>/dev/null || true\nwait $SERVER_PID 2>/dev/null || true\nsleep 3\n\nsed -i 's/online-mode=true/online-mode=false/g' server.properties\nsed -i '/^enable-rcon=/d; /^rcon\\\
+        ./d' server.properties\nprintf \"\\nenable-rcon=true\\nrcon.port=25575\\nrcon.password=testpass\\n\" >> server.properties\ngrep \"online-mode\\|rcon\" server.properties\n"
     - name: Restart Paper server with RCON
-      run: |
-        java -Dpaper.playerconnection.keepalive=60 \
-        -Xmx768M -Xms768M \
-        -jar paper.jar --nogui \
-        --max-players=5 &
-        SERVER_PID=$!
-        echo "$SERVER_PID" > /tmp/server_pid
-
-        TIMEOUT=90
-        ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-          if grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server restarted with RCON!"
-            break
-          fi
-          sleep 2
-          ELAPSED=$((ELAPSED + 2))
-        done
-
-        if [ $ELAPSED -ge $TIMEOUT ]; then
-          echo "Server did not restart in time"
-          tail -30 logs/latest.log
-          kill $SERVER_PID 2>/dev/null
-          exit 1
-        fi
-
-        echo "Waiting for RCON port 25575..."
-        for i in $(seq 1 30); do
-          if nc -z 127.0.0.1 25575 2>/dev/null; then
-            echo "RCON port 25575 is open!"
-            break
-          fi
-          sleep 1
-        done
-        sleep 3
+      run: "java -Dpaper.playerconnection.keepalive=60 \\\n-Xmx768M -Xms768M \\\n-jar paper.jar --nogui \\\n--max-players=5 &\nSERVER_PID=$!\necho \"$SERVER_PID\" > /tmp/server_pid\n\nTIMEOUT=90\nELAPSED=0\nwhile [ $ELAPSED -lt $TIMEOUT ]; do\n  if grep -q \"Done (\" logs/latest.log 2>/dev/null; then\n\
+        \    echo \"Server restarted with RCON!\"\n    break\n  fi\n  sleep 2\n  ELAPSED=$((ELAPSED + 2))\ndone\n\nif [ $ELAPSED -ge $TIMEOUT ]; then\n  echo \"Server did not restart in time\"\n  tail -30 logs/latest.log\n  kill $SERVER_PID 2>/dev/null\n  exit 1\nfi\n\necho \"Waiting for RCON port 25575...\"\
+        \nfor i in $(seq 1 30); do\n  if nc -z 127.0.0.1 25575 2>/dev/null; then\n    echo \"RCON port 25575 is open!\"\n    break\n  fi\n  sleep 1\ndone\nsleep 3\n"
     - name: Write RCON test script
-      run: |
-        cat > test_rcon.py << 'PYEOF'
-        import socket
-        import struct
-        import sys
-        import re
-        import time
-
-        def rcon(host, port, password, command):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(10)
-            sock.connect((host, port))
-            _send_packet(sock, 3, password)
-            req_id, resp = _receive_packet(sock)
-            if req_id == -1:
-                print("RCON auth failed!")
-                sock.close()
-                return None
-            _send_packet(sock, 2, command)
-            req_id, resp = _receive_packet(sock)
-            sock.close()
-            return resp
-
-        def _send_packet(sock, req_type, data):
-            packet = struct.pack('<ii', req_type, req_type) + data.encode('utf-8') + b'\x00\x00'
-            length = len(packet)
-            sock.send(struct.pack('<i', length) + packet)
-
-        def _receive_packet(sock):
-            length = struct.unpack('<i', sock.recv(4))[0]
-            data = b''
-            while len(data) < length:
-                chunk = sock.recv(length - len(data))
-                if not chunk:
-                    break
-                data += chunk
-            req_id = struct.unpack('<i', data[:4])[0]
-            resp = data[8:-2].decode('utf-8', errors='replace')
-            return req_id, resp
-
-        HOST = '127.0.0.1'
-        PORT = 25575
-        PASS = 'testpass'
-
-        passed = 0
-        failed = 0
-
-        def assert_test(name, condition, detail=''):
-            global passed, failed
-            if condition:
-                print(f'  PASS: {name}')
-                passed += 1
-            else:
-                print(f'  FAIL: {name} {detail}')
-                failed += 1
-
-        def run_cmd(cmd):
-            resp = rcon(HOST, PORT, PASS, cmd)
-            if resp is None:
-                print(f'  ERROR: RCON failed for: {cmd}')
-            else:
-                clean = re.sub(r'\u00a7[0-9a-fk-or]', '', resp)
-                print(f'  RCON [{cmd}] -> {clean[:200]}')
-            return resp or ''
-
-        def strip_color(text):
-            return re.sub(r'\u00a7[0-9a-fk-or]', '', text)
-
-        print('=== Aurelium In-Game Tests ===\n')
-        print('--- /bal command ---\n')
-
-        # TEST 1: /bal without player (console must specify)
-        print('Test 1: /bal (console must specify player)')
-        resp = strip_color(run_cmd('bal'))
-        assert_test('/bal responds', len(resp) > 0, f'len={len(resp)}')
-
-        # TEST 2: /bal TestPlayer (async - acknowledges immediately)
-        print('\nTest 2: /bal TestPlayer')
-        resp = strip_color(run_cmd('bal TestPlayer'))
-        assert_test('/bal acknowledges', 'Checking' in resp or 'Balance' in resp or 'balance' in resp or 'error' in resp.lower() or 'TestPlayer' in resp, f'resp={resp[:100]}')
-
-        # TEST 3: /bal TestPlayer Aurels
-        print('\nTest 3: /bal TestPlayer Aurels')
-        resp = strip_color(run_cmd('bal TestPlayer Aurels'))
-        assert_test('/bal with currency acknowledges', 'Checking' in resp or 'Balance' in resp or 'balance' in resp or 'error' in resp.lower() or 'Aurels' in resp, f'resp={resp[:100]}')
-
-        print('\n--- /eco admin command ---\n')
-
-        # TEST 4: /eco give (async - "Processing..." acknowledgement)
-        print('Test 4: /eco give TestPlayer 500')
-        resp = strip_color(run_cmd('eco give TestPlayer 500'))
-        assert_test('/eco give responds', len(resp) > 0)
-        assert_test('/eco give confirms', 'Processing' in resp or 'Gave' in resp or 'gave' in resp or '500' in resp or 'error' not in resp.lower(), f'resp={resp[:100]}')
-
-        # TEST 5: /eco take
-        print('\nTest 5: /eco take TestPlayer 200')
-        resp = strip_color(run_cmd('eco take TestPlayer 200'))
-        assert_test('/eco take confirms', 'Processing' in resp or 'Took' in resp or 'took' in resp or '200' in resp, f'resp={resp[:100]}')
-
-        # TEST 6: /eco set
-        print('\nTest 6: /eco set TestPlayer 1000')
-        resp = strip_color(run_cmd('eco set TestPlayer 1000'))
-        assert_test('/eco set confirms', 'Processing' in resp or 'Set' in resp or 'set' in resp or '1000' in resp, f'resp={resp[:100]}')
-
-        # TEST 7: /eco with specific currency
-        print('\nTest 7: /eco give TestPlayer 50 Aurels')
-        resp = strip_color(run_cmd('eco give TestPlayer 50 Aurels'))
-        assert_test('/eco with currency works', 'Processing' in resp or 'Gave' in resp or 'gave' in resp or '50' in resp or 'Aurels' in resp, f'resp={resp[:100]}')
-
-        # TEST 8: /eco invalid currency
-        print('\nTest 8: /eco give TestPlayer 50 InvalidCoin')
-        resp = strip_color(run_cmd('eco give TestPlayer 50 InvalidCoin'))
-        assert_test('/eco rejects invalid currency', 'Invalid' in resp or 'invalid' in resp, f'resp={resp[:100]}')
-
-        # TEST 9: /eco invalid action
-        print('\nTest 9: /eco burn TestPlayer 100')
-        resp = strip_color(run_cmd('eco burn TestPlayer 100'))
-        assert_test('/eco rejects invalid action', 'Unknown' in resp or 'Usage' in resp, f'resp={resp[:100]}')
-
-        # TEST 10: /eco negative amount
-        print('\nTest 10: /eco give TestPlayer -100')
-        resp = strip_color(run_cmd('eco give TestPlayer -100'))
-        assert_test('/eco rejects negative', 'positive' in resp.lower() or 'Positive' in resp, f'resp={resp[:100]}')
-
-        # TEST 11: /eco non-numeric amount
-        print('\nTest 11: /eco give TestPlayer abc')
-        resp = strip_color(run_cmd('eco give TestPlayer abc'))
-        assert_test('/eco rejects non-numeric', 'Invalid' in resp or 'invalid' in resp, f'resp={resp[:100]}')
-
-        # TEST 12: /eco missing args
-        print('\nTest 12: /eco give TestPlayer')
-        resp = strip_color(run_cmd('eco give TestPlayer'))
-        assert_test('/eco rejects missing amount', 'Usage' in resp or 'Invalid' in resp or len(resp) > 0, f'resp={resp[:100]}')
-
-        print('\n--- /pay command (console) ---\n')
-
-        # TEST 13: /pay from console
-        print('Test 13: /pay TestPlayer 50')
-        resp = strip_color(run_cmd('pay TestPlayer 50'))
-        assert_test('/pay rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        print('\n--- /market command (console) ---\n')
-
-        # TEST 14: /market from console
-        print('Test 14: /market')
-        resp = strip_color(run_cmd('market'))
-        assert_test('/market rejects console', 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
-
-        print('\n--- /stocks command (console) ---\n')
-
-        # TEST 15: /stocks from console
-        print('Test 15: /stocks')
-        resp = strip_color(run_cmd('stocks'))
-        assert_test('/stocks rejects console', 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
-
-        print('\n--- /web command (console) ---\n')
-
-        # TEST 16: /web from console
-        print('Test 16: /web')
-        resp = strip_color(run_cmd('web'))
-        assert_test('/web rejects console', 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
-
-        print('\n--- /ah command (console) ---\n')
-
-        # TEST 17: /ah from console
-        print('Test 17: /ah')
-        resp = strip_color(run_cmd('ah'))
-        assert_test('/ah rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        # TEST 18: /ah sell from console
-        print('\nTest 18: /ah sell 100')
-        resp = strip_color(run_cmd('ah sell 100'))
-        assert_test('/ah sell rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        # TEST 19: /ah collect from console
-        print('\nTest 19: /ah collect')
-        resp = strip_color(run_cmd('ah collect'))
-        assert_test('/ah collect rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        # TEST 20: /ah search from console
-        print('\nTest 20: /ah search diamond')
-        resp = strip_color(run_cmd('ah search diamond'))
-        assert_test('/ah search rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        print('\n--- /orders command (console) ---\n')
-
-        # TEST 21: /orders from console
-        print('Test 21: /orders')
-        resp = strip_color(run_cmd('orders'))
-        assert_test('/orders rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        # TEST 22: /orders create from console
-        print('\nTest 22: /orders create DIAMOND 10 5')
-        resp = strip_color(run_cmd('orders create DIAMOND 10 5'))
-        assert_test('/orders create rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        # TEST 23: /orders my from console
-        print('\nTest 23: /orders my')
-        resp = strip_color(run_cmd('orders my'))
-        assert_test('/orders my rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        # TEST 24: /orders search from console
-        print('\nTest 24: /orders search diamond')
-        resp = strip_color(run_cmd('orders search diamond'))
-        assert_test('/orders search rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
-
-        # Cleanup
-        run_cmd('eco set TestPlayer 100')
-
-        print('\n========== RESULTS ==========')
-        print(f'Passed: {passed}')
-        print(f'Failed: {failed}')
-        print('==============================')
-
-        sys.exit(1 if failed > 0 else 0)
-        PYEOF
+      run: "cat > test_rcon.py << 'PYEOF'\nimport socket\nimport struct\nimport sys\nimport re\nimport time\n\ndef rcon(host, port, password, command):\n    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n    sock.settimeout(10)\n    sock.connect((host, port))\n    _send_packet(sock, 3, password)\n\
+        \    req_id, resp = _receive_packet(sock)\n    if req_id == -1:\n        print(\"RCON auth failed!\")\n        sock.close()\n        return None\n    _send_packet(sock, 2, command)\n    req_id, resp = _receive_packet(sock)\n    sock.close()\n    return resp\n\ndef _send_packet(sock, req_type,\
+        \ data):\n    packet = struct.pack('<ii', req_type, req_type) + data.encode('utf-8') + b'\\x00\\x00'\n    length = len(packet)\n    sock.send(struct.pack('<i', length) + packet)\n\ndef _receive_packet(sock):\n    length = struct.unpack('<i', sock.recv(4))[0]\n    data = b''\n    while len(data)\
+        \ < length:\n        chunk = sock.recv(length - len(data))\n        if not chunk:\n            break\n        data += chunk\n    req_id = struct.unpack('<i', data[:4])[0]\n    resp = data[8:-2].decode('utf-8', errors='replace')\n    return req_id, resp\n\nHOST = '127.0.0.1'\nPORT = 25575\nPASS\
+        \ = 'testpass'\n\npassed = 0\nfailed = 0\n\ndef assert_test(name, condition, detail=''):\n    global passed, failed\n    if condition:\n        print(f'  PASS: {name}')\n        passed += 1\n    else:\n        print(f'  FAIL: {name} {detail}')\n        failed += 1\n\ndef run_cmd(cmd):\n    resp\
+        \ = rcon(HOST, PORT, PASS, cmd)\n    if resp is None:\n        print(f'  ERROR: RCON failed for: {cmd}')\n    else:\n        clean = re.sub(r'\\u00a7[0-9a-fk-or]', '', resp)\n        print(f'  RCON [{cmd}] -> {clean[:200]}')\n    return resp or ''\n\ndef strip_color(text):\n    return re.sub(r'\\\
+        u00a7[0-9a-fk-or]', '', text)\n\nprint('=== Aurelium In-Game Tests ===\\n')\nprint('--- /bal command ---\\n')\n\n# TEST 1: /bal without player (console must specify)\nprint('Test 1: /bal (console must specify player)')\nresp = strip_color(run_cmd('bal'))\nassert_test('/bal responds', len(resp)\
+        \ > 0, f'len={len(resp)}')\n\n# TEST 2: /bal TestPlayer (async - acknowledges immediately)\nprint('\\nTest 2: /bal TestPlayer')\nresp = strip_color(run_cmd('bal TestPlayer'))\nassert_test('/bal acknowledges', 'Checking' in resp or 'Balance' in resp or 'balance' in resp or 'error' in resp.lower()\
+        \ or 'TestPlayer' in resp, f'resp={resp[:100]}')\n\n# TEST 3: /bal TestPlayer Aurels\nprint('\\nTest 3: /bal TestPlayer Aurels')\nresp = strip_color(run_cmd('bal TestPlayer Aurels'))\nassert_test('/bal with currency acknowledges', 'Checking' in resp or 'Balance' in resp or 'balance' in resp or\
+        \ 'error' in resp.lower() or 'Aurels' in resp, f'resp={resp[:100]}')\n\nprint('\\n--- /eco admin command ---\\n')\n\n# TEST 4: /eco give (async - \"Processing...\" acknowledgement)\nprint('Test 4: /eco give TestPlayer 500')\nresp = strip_color(run_cmd('eco give TestPlayer 500'))\nassert_test('/eco\
+        \ give responds', len(resp) > 0)\nassert_test('/eco give confirms', 'Processing' in resp or 'Gave' in resp or 'gave' in resp or '500' in resp or 'error' not in resp.lower(), f'resp={resp[:100]}')\n\n# TEST 5: /eco take\nprint('\\nTest 5: /eco take TestPlayer 200')\nresp = strip_color(run_cmd('eco\
+        \ take TestPlayer 200'))\nassert_test('/eco take confirms', 'Processing' in resp or 'Took' in resp or 'took' in resp or '200' in resp, f'resp={resp[:100]}')\n\n# TEST 6: /eco set\nprint('\\nTest 6: /eco set TestPlayer 1000')\nresp = strip_color(run_cmd('eco set TestPlayer 1000'))\nassert_test('/eco\
+        \ set confirms', 'Processing' in resp or 'Set' in resp or 'set' in resp or '1000' in resp, f'resp={resp[:100]}')\n\n# TEST 7: /eco with specific currency\nprint('\\nTest 7: /eco give TestPlayer 50 Aurels')\nresp = strip_color(run_cmd('eco give TestPlayer 50 Aurels'))\nassert_test('/eco with currency\
+        \ works', 'Processing' in resp or 'Gave' in resp or 'gave' in resp or '50' in resp or 'Aurels' in resp, f'resp={resp[:100]}')\n\n# TEST 8: /eco invalid currency\nprint('\\nTest 8: /eco give TestPlayer 50 InvalidCoin')\nresp = strip_color(run_cmd('eco give TestPlayer 50 InvalidCoin'))\nassert_test('/eco\
+        \ rejects invalid currency', 'Invalid' in resp or 'invalid' in resp, f'resp={resp[:100]}')\n\n# TEST 9: /eco invalid action\nprint('\\nTest 9: /eco burn TestPlayer 100')\nresp = strip_color(run_cmd('eco burn TestPlayer 100'))\nassert_test('/eco rejects invalid action', 'Unknown' in resp or 'Usage'\
+        \ in resp, f'resp={resp[:100]}')\n\n# TEST 10: /eco negative amount\nprint('\\nTest 10: /eco give TestPlayer -100')\nresp = strip_color(run_cmd('eco give TestPlayer -100'))\nassert_test('/eco rejects negative', 'positive' in resp.lower() or 'Positive' in resp, f'resp={resp[:100]}')\n\n# TEST 11:\
+        \ /eco non-numeric amount\nprint('\\nTest 11: /eco give TestPlayer abc')\nresp = strip_color(run_cmd('eco give TestPlayer abc'))\nassert_test('/eco rejects non-numeric', 'Invalid' in resp or 'invalid' in resp, f'resp={resp[:100]}')\n\n# TEST 12: /eco missing args\nprint('\\nTest 12: /eco give\
+        \ TestPlayer')\nresp = strip_color(run_cmd('eco give TestPlayer'))\nassert_test('/eco rejects missing amount', 'Usage' in resp or 'Invalid' in resp or len(resp) > 0, f'resp={resp[:100]}')\n\nprint('\\n--- /pay command (console) ---\\n')\n\n# TEST 13: /pay from console\nprint('Test 13: /pay TestPlayer\
+        \ 50')\nresp = strip_color(run_cmd('pay TestPlayer 50'))\nassert_test('/pay rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')\n\nprint('\\n--- /market command (console) ---\\n')\n\n# TEST 14: /market from console\nprint('Test 14: /market')\nresp = strip_color(run_cmd('market'))\n\
+        assert_test('/market rejects console', 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')\n\nprint('\\n--- /stocks command (console) ---\\n')\n\n# TEST 15: /stocks from console\nprint('Test 15: /stocks')\nresp = strip_color(run_cmd('stocks'))\nassert_test('/stocks rejects console',\
+        \ 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')\n\nprint('\\n--- /web command (console) ---\\n')\n\n# TEST 16: /web from console\nprint('Test 16: /web')\nresp = strip_color(run_cmd('web'))\nassert_test('/web rejects console', 'player' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')\n\
+        \nprint('\\n--- /ah command (console) ---\\n')\n\n# TEST 17: /ah from console\nprint('Test 17: /ah')\nresp = strip_color(run_cmd('ah'))\nassert_test('/ah rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')\n\n# TEST 18: /ah sell from console\nprint('\\nTest\
+        \ 18: /ah sell 100')\nresp = strip_color(run_cmd('ah sell 100'))\nassert_test('/ah sell rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')\n\n# TEST 19: /ah collect from console\nprint('\\nTest 19: /ah collect')\nresp = strip_color(run_cmd('ah collect'))\n\
+        assert_test('/ah collect rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')\n\n# TEST 20: /ah search from console\nprint('\\nTest 20: /ah search diamond')\nresp = strip_color(run_cmd('ah search diamond'))\nassert_test('/ah search rejects console', 'Only\
+        \ players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')\n\nprint('\\n--- /orders command (console) ---\\n')\n\n# TEST 21: /orders from console\nprint('Test 21: /orders')\nresp = strip_color(run_cmd('orders'))\nassert_test('/orders rejects console', 'Only players' in resp or 'player'\
+        \ in resp.lower(), f'resp={resp[:100]}')\n\n# TEST 22: /orders create from console\nprint('\\nTest 22: /orders create DIAMOND 10 5')\nresp = strip_color(run_cmd('orders create DIAMOND 10 5'))\nassert_test('/orders create rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')\n\
+        \n# TEST 23: /orders my from console\nprint('\\nTest 23: /orders my')\nresp = strip_color(run_cmd('orders my'))\nassert_test('/orders my rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')\n\n# TEST 24: /orders search from console\nprint('\\nTest 24: /orders\
+        \ search diamond')\nresp = strip_color(run_cmd('orders search diamond'))\nassert_test('/orders search rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')\n\n# Cleanup\nrun_cmd('eco set TestPlayer 100')\n\nprint('\\n========== RESULTS ==========')\nprint(f'Passed:\
+        \ {passed}')\nprint(f'Failed: {failed}')\nprint('==============================')\n\nsys.exit(1 if failed > 0 else 0)\nPYEOF\n"
     - name: Run in-game tests via RCON
       timeout-minutes: 3
-      run: |
-        python3 test_rcon.py
+      run: 'python3 test_rcon.py
+
         TEST_EXIT=$?
+
         echo "Test exit code: $TEST_EXIT"
+
         echo "=== Server Exceptions ==="
+
         grep -iE "Exception|Caused by|NullPointer|Stacktrace" logs/latest.log | grep -vi "PLEASE RESTART\|zip file" | tail -40 || true
+
         echo "=== Command Log ==="
+
         grep -i "aurel\|economy\|issued server command" logs/latest.log | tail -30 || true
+
         kill $(cat /tmp/server_pid) 2>/dev/null || true
+
         wait $(cat /tmp/server_pid) 2>/dev/null || true
+
         exit $TEST_EXIT
 
-  # Test MySQL/MariaDB compatibility
+        '
   mysql-test:
     needs: build
     runs-on: ubuntu-latest
@@ -476,243 +171,43 @@ jobs:
           MYSQL_ROOT_PASSWORD: testpass
           MYSQL_DATABASE: aurelium
         ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="healthcheck.sh --connect --password=testpass"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+        - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --password=testpass" --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
+    - uses: actions/checkout@v4
     - uses: actions/setup-java@v5
       with:
         java-version: '25'
-        distribution: 'temurin'
+        distribution: temurin
     - name: Download Paper 26.1.2 build 61
-      run: |
-        curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+      run: curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
     - name: Download plugin artifact
       uses: actions/download-artifact@v4
       with:
         name: Aurelium
         path: plugins/
     - name: Accept EULA
-      run: |
-        echo "eula=true" > eula.txt
-        printf "online-mode=false
-max-players=5
-server-port=25566
-" > server.properties
+      run: 'echo "eula=true" > eula.txt
+
+        printf "online-mode=false\nmax-players=5\nserver-port=25566\n" > server.properties'
     - name: Configure plugin for MySQL
-      run: |
-        mkdir -p plugins/Aurelium
-        cat > plugins/Aurelium/config.yml << 'EOF'
-        config-version: 1
-        database:
-          type: mysql
-          file: "database.db"
-          mysql:
-            host: "127.0.0.1"
-            port: 3306
-            database: "aurelium"
-            username: "root"
-            password: "testpass"
-        economy:
-          default-currency: "Aurels"
-          currencies:
-            Aurels:
-              symbol: "A"
-              starting-balance: 100.0
-          max-balance: -1
-          min-pay-amount: 0.01
-          prefix: "[Aurelium] "
-          balance: "Balance: %amount%%symbol%"
-          balance-other: "Balance of %player%: %amount%%symbol%"
-          admin-give: "Gave %player% %amount%%symbol%"
-          admin-take: "Took %amount%%symbol% from %player%"
-          admin-set: "Set %player% balance to %amount%%symbol%"
-        market:
-          enabled: true
-          gui-mode: modern
-          dynamic-pricing: true
-          price-increase-per-buy: 0.001
-          price-decrease-per-sell: 0.001
-          default-sell-ratio: 0.5
-          price-floor: 0.2
-          price-ceiling: 5.0
-          price-recovery:
-            enabled: true
-            rate: 0.01
-            interval-minutes: 10
-          alerts:
-            enabled: true
-            threshold: 0.5
-            min-base-price: 200.0
-          blacklist:
-            - BEDROCK
-        auction-house:
-          enabled: true
-          default-duration: 86400
-          max-duration: 604800
-          listing-fee-percent: 2.0
-          sales-tax-percent: 5.0
-        buy-orders:
-          enabled: true
-          max-active-orders-per-player: 10
-          min-price-per-piece: 0.1
-          creation-fee-percent: 2.0
-          sales-tax-percent: 5.0
-        web:
-          enabled: false
-          mode: cloud
-          local:
-            host: "localhost"
-            port: 8585
-          cloud:
-            url: ""
-            server-id: ""
-            api-key: ""
-            sync-interval: 30
-        EOF
+      run: "mkdir -p plugins/Aurelium\ncat > plugins/Aurelium/config.yml << 'CFGEOF'\nconfig-version: 1\ndatabase:\n  type: mysql\n  mysql:\n    host: \"127.0.0.1\"\n    port: 3306\n    database: \"aurelium\"\n    username: \"root\"\n    password: \"testpass\"\neconomy:\n  default-currency: \"Aurels\"\
+        \n  currencies:\n    Aurels:\n      symbol: \"A\"\n      starting-balance: 100.0\n  max-balance: -1\n  min-pay-amount: 0.01\nmarket:\n  enabled: true\n  gui-mode: modern\n  dynamic-pricing: true\n  price-increase-per-buy: 0.001\n  price-decrease-per-sell: 0.001\n  default-sell-ratio: 0.5\n  price-floor:\
+        \ 0.2\n  price-ceiling: 5.0\n  blacklist:\n    - BEDROCK\nauction-house:\n  enabled: true\n  default-duration: 86400\n  listing-fee-percent: 2.0\n  sales-tax-percent: 5.0\nbuy-orders:\n  enabled: true\nweb:\n  enabled: false\nCFGEOF"
     - name: Start Paper server with MySQL
       timeout-minutes: 5
-      run: |
-        java -Dpaper.playerconnection.keepalive=60         -Xmx768M -Xms768M         -jar paper.jar --nogui         --max-players=5 --port=25566 &
-        SERVER_PID=$!
-
-        TIMEOUT=150
-        ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-          if grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server started with MySQL!"
-            break
-          fi
-          if grep -q "Failed to start" logs/latest.log 2>/dev/null; then
-            echo "Server failed to start with MySQL"
-            tail -50 logs/latest.log
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
-          fi
-          sleep 2
-          ELAPSED=$((ELAPSED + 2))
-        done
-
-        if [ $ELAPSED -ge $TIMEOUT ]; then
-          echo "Server did not start within ${TIMEOUT}s"
-          tail -30 logs/latest.log
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
-        fi
-
-        echo "=== Plugin Load Check ==="
-        if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
-          echo "PASS: Plugin loaded with MySQL"
-        else
-          echo "FAIL: Plugin did not load with MySQL"
-          grep -i "aurel\|error\|exception" logs/latest.log | tail -20
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
-        fi
-
-        # Check for SQL syntax errors
-        if grep -qi "SQLSyntaxErrorException\|SQL syntax" logs/latest.log 2>/dev/null; then
-          echo "FAIL: SQL syntax errors detected with MySQL"
-          grep -i "SQLSyntax\|syntax error" logs/latest.log | tail -10
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
-        fi
-        echo "PASS: No SQL syntax errors with MySQL"
-
-        # Test basic economy via RCON
-        sed -i '/^enable-rcon=/d; /^rcon\./d' server.properties
-        printf "
-enable-rcon=true
-rcon.port=25576
-rcon.password=testpass
-" >> server.properties
-        kill $SERVER_PID 2>/dev/null || true
-        wait $SERVER_PID 2>/dev/null || true
-        sleep 3
-
-        # Restart with RCON
-        java -Dpaper.playerconnection.keepalive=60         -Xmx768M -Xms768M         -jar paper.jar --nogui         --max-players=5 --port=25566 &
-        SERVER_PID=$!
-
-        TIMEOUT=90
-        ELAPSED=0
-        while [ $ELAPSED -lt $TIMEOUT ]; do
-          if grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server restarted with RCON!"
-            break
-          fi
-          sleep 2
-          ELAPSED=$((ELAPSED + 2))
-        done
-
-        for i in $(seq 1 30); do
-          if nc -z 127.0.0.1 25576 2>/dev/null; then
-            echo "RCON port open!"
-            break
-          fi
-          sleep 1
-        done
-        sleep 3
-
-        # Run basic RCON commands to exercise MySQL upserts
-        python3 -c "
-import socket, struct, re
-
-def rcon(host, port, password, command):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(10)
-    sock.connect((host, port))
-    packet = struct.pack('<ii', 3, 3) + password.encode('utf-8') + b'  '
-    sock.send(struct.pack('<i', len(packet)) + packet)
-    length = struct.unpack('<i', sock.recv(4))[0]
-    data = b''
-    while len(data) < length:
-        data += sock.recv(length - len(data))
-    _send_packet(sock, 2, command)
-    req_id, resp = _receive_packet(sock)
-    sock.close()
-    return resp
-
-def _send_packet(sock, req_type, data):
-    packet = struct.pack('<ii', req_type, req_type) + data.encode('utf-8') + b'  '
-    sock.send(struct.pack('<i', len(packet)) + packet)
-
-def _receive_packet(sock):
-    length = struct.unpack('<i', sock.recv(4))[0]
-    data = b''
-    while len(data) < length:
-        data += sock.recv(length - len(data))
-    return struct.unpack('<i', data[:4])[0], data[8:-2].decode('utf-8', errors='replace')
-
-tests = 0
-failures = 0
-
-for cmd, check in [
-    ('bal', lambda r: len(r) > 0),
-    ('eco give TestPlayer 500', lambda r: len(r) > 0 and 'error' not in r.lower()),
-    ('eco set TestPlayer 100', lambda r: len(r) > 0 and 'error' not in r.lower()),
-    ('bal TestPlayer', lambda r: len(r) > 0 and 'error' not in r.lower()),
-]:
-    resp = rcon('127.0.0.1', 25576, 'testpass', cmd)
-    clean = re.sub(r'§[0-9a-fk-or]', '', resp or '')
-    ok = check(clean)
-    print(f'  {"PASS" if ok else "FAIL"}: /{cmd} -> {clean[:80]}')
-    tests += 1
-    if not ok: failures += 1
-
-print(f'
-MySQL Tests: {tests - failures}/{tests} passed')
-import sys
-sys.exit(1 if failures > 0 else 0)
-"
-
-        TEST_EXIT=$?
-        echo "=== Server Exceptions ==="
-        grep -iE "Exception|Caused by|NullPointer|SQLSyntax" logs/latest.log | grep -vi "PLEASE RESTART\|zip file" | tail -20 || true
-
-        kill $SERVER_PID 2>/dev/null || true
-        wait $SERVER_PID 2>/dev/null || true
-        exit $TEST_EXIT
+      run: "java -Dpaper.playerconnection.keepalive=60 -Xmx768M -Xms768M -jar paper.jar --nogui --max-players=5 --port=25566 &\nSERVER_PID=$!\nTIMEOUT=150\nELAPSED=0\nwhile [ $ELAPSED -lt $TIMEOUT ]; do\n  if grep -q \"Done (\" logs/latest.log 2>/dev/null; then echo \"Server started with MySQL!\"; break;\
+        \ fi\n  if grep -q \"Failed to start\" logs/latest.log 2>/dev/null; then echo \"Server failed\"; tail -50 logs/latest.log; kill $SERVER_PID 2>/dev/null || true; exit 1; fi\n  sleep 2\n  ELAPSED=$((ELAPSED + 2))\ndone\nif [ $ELAPSED -ge $TIMEOUT ]; then echo \"Server did not start\"; tail -30 logs/latest.log;\
+        \ kill $SERVER_PID 2>/dev/null || true; exit 1; fi\necho \"=== Plugin Load Check ===\"\nif grep -q \"AurelEconomy has been enabled\" logs/latest.log 2>/dev/null; then echo \"PASS: Plugin loaded with MySQL\"; else echo \"FAIL: Plugin did not load\"; grep -i \"aurel|error\" logs/latest.log | tail\
+        \ -20; kill $SERVER_PID 2>/dev/null || true; exit 1; fi\nif grep -qi \"SQLSyntaxErrorException|SQL syntax\" logs/latest.log 2>/dev/null; then echo \"FAIL: SQL syntax errors with MySQL\"; grep -i \"SQLSyntax|syntax error\" logs/latest.log | tail -10; kill $SERVER_PID 2>/dev/null || true; exit 1;\
+        \ fi\necho \"PASS: No SQL syntax errors with MySQL\"\n# Enable RCON\nsed -i '/^enable-rcon=/d; /^rcon\\./d' server.properties\nprintf \"\\nenable-rcon=true\\nrcon.port=25576\\nrcon.password=testpass\\n\" >> server.properties\nkill $SERVER_PID 2>/dev/null || true\nwait $SERVER_PID 2>/dev/null ||\
+        \ true\nsleep 3\n# Restart with RCON\njava -Dpaper.playerconnection.keepalive=60 -Xmx768M -Xms768M -jar paper.jar --nogui --max-players=5 --port=25566 &\nSERVER_PID=$!\nTIMEOUT=90\nELAPSED=0\nwhile [ $ELAPSED -lt $TIMEOUT ]; do\n  if grep -q \"Done (\" logs/latest.log 2>/dev/null; then echo \"\
+        Server restarted with RCON!\"; break; fi\n  sleep 2\n  ELAPSED=$((ELAPSED + 2))\ndone\nfor i in $(seq 1 30); do nc -z 127.0.0.1 25576 2>/dev/null && break; sleep 1; done\nsleep 3\n# Run MySQL RCON tests\npython3 .github/scripts/test_mysql_rcon.py\nTEST_EXIT=$?\necho \"=== Server Exceptions ===\"\
+        \ngrep -iE \"Exception|Caused by|SQLSyntax\" logs/latest.log | grep -vi \"PLEASE RESTART|zip file\" | tail -20 || true\nkill $SERVER_PID 2>/dev/null || true\nwait $SERVER_PID 2>/dev/null || true\nexit $TEST_EXIT"
+    - name: Upload server log on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mysql-server-log
+        path: logs/latest.log
+        retention-days: 7
