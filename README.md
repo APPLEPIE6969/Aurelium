@@ -4,8 +4,8 @@
 > 
 > *The newly added Web Dashboard features are currently in active development. Please expect potential bugs or instability if you enable `web.enabled` in your configuration. The core in-game economy, GUI markets, and auction house are mostly stable.*
 
-**Aurelium** is a comprehensive, standalone economy plugin for Minecraft Paper 1.21.11.
-> **Compatibility**: Paper, Purpur, Pufferfish, Leaves (1.21.x)
+**Aurelium** is a comprehensive, standalone economy plugin for Minecraft Paper.
+> **Compatibility**: Paper, Purpur, Pufferfish, Leaves
 
 It features a multi-currency system, a flexible Server Market with three interface modes (classic chest, modern styled, or browser-based web dashboard), a player-driven Auction House, Buy Orders, and seamless Vault integration.
 
@@ -22,7 +22,7 @@ Aurelium includes a modern, responsive web application that players can use to b
 - **Price History**: Prices are recorded every 10 minutes and stored for 7 days for charts.
 - **Cloud Mode**: Optional cloud hosting via Render for **almost** always-accessible dashboards.
 - **Multi-Currency UI**: Correctly displays custom currency symbols (e.g., `₳`, `$`, `€`) synced perfectly from your `config.yml`.
-- **Icon Fallbacks**: Robust image loading seamlessly falls back to older Minecraft versions (1.21, 1.20, 1.19, 1.18) if modern icons aren't available from external APIs yet.
+- **Icon Fallbacks**: Robust image loading seamlessly falls back to older Minecraft versions  if modern icons aren't available from external APIs yet.
 - **Secure Sessions**: Players use `/web` in-game to get a time-limited clickable link. Sessions use a rolling 1-hour timeout that resets on activity. Visiting the dashboard without a session shows a friendly error screen with instructions.
 - **Tab Sleep Mode**: When a player switches to another browser tab or minimizes the window, the entire dashboard goes to sleep — no network requests, no CPU usage. When they return, it instantly wakes up and loads fresh data.
 - **RAM Optimized**: Bulk data (auctions, orders, stocks, price history) is cached as raw JSON strings, keeping per-server memory usage under 1MB.
@@ -221,7 +221,7 @@ A `messages.yml` file is generated on startup.
 - **"Unknown Command"**: If `/market` or `/eco` says "Unknown command", the plugin failed to load.
  - Check your server console/logs for errors.
  - Ensure you have `Aurelium-1.4.3.jar` in `plugins/`.
- - Ensure you are running **Paper 1.21.x** (or compatible forks: Purpur, Pufferfish, Leaves).
+ - Ensure you are running **Paper** (or compatible forks: Purpur, Pufferfish, Leaves).
 - **"No Permission"**:
  - Ensure you are **OP** (`/op <player>`) or have the permission node `aureleconomy.admin`.
  - Note: Standard player commands (`/bal`, `/market`, `/ah`, `/sell`) are enabled for everyone by default.
