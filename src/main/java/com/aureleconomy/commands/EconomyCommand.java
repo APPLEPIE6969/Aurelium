@@ -260,50 +260,40 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  String prefix = plugin.getConfig().getString("prefix", "[AurelEconomy] ");
  String displayName = target.getName() != null ? target.getName() : args[1];
 
- // Run economy operations asynchronously to avoid blocking main thread
- Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  try {
  switch (action) {
  case "give":
  plugin.getEconomyManager().deposit(target, amount, currency);
- Bukkit.getScheduler().runTask(plugin, () -> {
  sender.sendMessage(mm.deserialize(prefix +
  plugin.getConfig().getString("economy.admin-give", "Gave %player% %amount% (%currency%)")
  .replace("%player%", displayName)
  .replace("%currency%", currency)
  .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
  .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
- });
  break;
  case "take":
  plugin.getEconomyManager().withdraw(target, amount, currency);
- Bukkit.getScheduler().runTask(plugin, () -> {
  sender.sendMessage(mm.deserialize(prefix +
  plugin.getConfig().getString("economy.admin-take", "Took %amount% (%currency%) from %player%")
  .replace("%player%", displayName)
  .replace("%currency%", currency)
  .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
  .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
- });
  break;
  case "set":
  plugin.getEconomyManager().setBalance(target, amount, currency);
- Bukkit.getScheduler().runTask(plugin, () -> {
  sender.sendMessage(mm.deserialize(prefix +
  plugin.getConfig().getString("economy.admin-set", "Set balance of %player% to %amount% (%currency%)")
  .replace("%player%", displayName)
  .replace("%currency%", currency)
  .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
  .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
- });
  break;
  }
  } catch (Exception e) {
  plugin.getComponentLogger().error("Error executing /eco " + action, e);
- Bukkit.getScheduler().runTask(plugin, () ->
- sender.sendMessage(Component.text("An error occurred while executing /eco " + action + ".", NamedTextColor.RED)));
+ sender.sendMessage(Component.text("An error occurred while executing /eco " + action + ".", NamedTextColor.RED));
  }
- });
  }
 
  @Override
