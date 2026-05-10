@@ -20,6 +20,13 @@ public class DatabaseManager {
         this.databaseType = plugin.getConfig().getString("database.type", "sqlite").toLowerCase();
     }
 
+	/**
+	 * Returns true if the configured database type is MySQL/MariaDB.
+	 */
+	public boolean isMySQL() {
+		return "mysql".equals(databaseType);
+	}
+
     private static final int LATEST_SCHEMA_VERSION = 1;
 
     public boolean initialize() {
