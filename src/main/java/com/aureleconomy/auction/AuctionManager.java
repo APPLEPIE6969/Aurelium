@@ -164,7 +164,7 @@ public class AuctionManager {
                             Player prev = Bukkit.getPlayer(previousBidder);
                             if (prev != null) {
                                 String formatted = plugin.getEconomyManager().getFormattedWithSymbol(previousPrice, currency);
-                                prev.sendMessage(Component.text(String.format(MSG_OUTBID, auction.getItem().getType().name(), formatted), NamedTextColor.YELLOW));
+                                prev.sendMessage(Component.text(String.format(MSG_OUTBID, getItemDisplayName(auction.getItem()), formatted), NamedTextColor.YELLOW));
                             }
                         }
                     }
@@ -402,7 +402,7 @@ public class AuctionManager {
                 Player seller = Bukkit.getPlayer(ai.getSeller());
                 if (seller != null) {
                     seller.sendMessage(Component.text(
-                            String.format(MSG_NEW_OFFER, amount, ai.getItem().getType().name()), NamedTextColor.GOLD));
+                            String.format(MSG_NEW_OFFER, amount, getItemDisplayName(ai.getItem())), NamedTextColor.GOLD));
                 }
             } catch (SQLException e) {
                 plugin.getComponentLogger().error("Database error making offer", e);
@@ -448,7 +448,7 @@ public class AuctionManager {
                                     bidder.getInventory().addItem(ai.getItem().clone());
                                     markCollected(ai.getId());
                                     bidder.sendMessage(Component.text(
-                                            String.format(MSG_OFFER_ACCEPTED_BIDDER, ai.getItem().getType().name()),
+                                            String.format(MSG_OFFER_ACCEPTED_BIDDER, getItemDisplayName(ai.getItem())),
                                             NamedTextColor.GREEN));
                                 } else {
                                     bidder.sendMessage(Component.text(
@@ -568,7 +568,18 @@ public class AuctionManager {
         });
     }
 
-    private String itemToBase64(ItemStack item) {
+    /**
+  * Returns the display name of an item, preferring custom display name over material name.
+  */
+ private String getItemDisplayName(ItemStack item) {
+ if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
+ return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+ .serialize(item.getItemMeta().displayName());
+ }
+ return item.getType().name();
+ }
+
+ private String itemToBase64(ItemStack item) {
         return Base64Coder.encodeLines(item.serializeAsBytes());
     }
 
