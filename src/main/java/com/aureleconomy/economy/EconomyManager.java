@@ -39,7 +39,6 @@ public class EconomyManager {
 
  public BigDecimal getBalance(OfflinePlayer player, String currency) {
  UUID uuid = player.getUniqueId();
- if (uuid == null) return BigDecimal.ZERO;
  Map<String, BigDecimal> userBalances = balanceCache.get(uuid);
  if (userBalances != null && userBalances.containsKey(currency)) {
  return userBalances.get(currency);
@@ -61,15 +60,16 @@ public class EconomyManager {
  return;
 
  UUID uuid = player.getUniqueId();
- if (uuid == null) return;
  BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
- // Update cache immediately
- BigDecimal current = getBalance(player, currency);
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, current.add(normalizedAmount));
+ // Update cache immediately for responsiveness
+ BigDecimal current = getBalanceFromCache(uuid, currency);
+ BigDecimal newBalance = current.add(normalizedAmount);
+ balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
 
- // Persist to DB asynchronously
- Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+ // Persist to DB async (if called from async context, this is fine;
+ // if called from main thread, the DB call must still be async)
+ scheduleAsyncWrite(() -> {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
  "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) " +
  "ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
@@ -80,7 +80,6 @@ public class EconomyManager {
  ps.executeUpdate();
 
  loadBalance(uuid, currency);
-
  updatePlayerMetadata(player);
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error in EconomyManager while depositing", e);
@@ -97,10 +96,9 @@ public class EconomyManager {
  return;
 
  UUID uuid = player.getUniqueId();
- if (uuid == null) return;
  BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
- BigDecimal currentBalance = getBalance(player, currency);
+ BigDecimal currentBalance = getBalanceFromCache(uuid, currency);
  if (currentBalance.compareTo(normalizedAmount) < 0) {
  plugin.getComponentLogger().warn("Insufficient funds for withdraw: " + player.getName() +
  " tried to withdraw " + normalizedAmount + " but only has " + currentBalance);
@@ -108,11 +106,11 @@ public class EconomyManager {
  }
 
  // Update cache immediately
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency,
- currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO));
+ BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
+ balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
 
- // Persist to DB asynchronously
- Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+ // Persist to DB async
+ scheduleAsyncWrite(() -> {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
  "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
  ps.setBigDecimal(1, normalizedAmount);
@@ -139,39 +137,52 @@ public class EconomyManager {
  return false;
 
  UUID uuid = player.getUniqueId();
- if (uuid == null) return false;
  BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
  BigDecimal currentBalance = getBalance(player, currency);
 
+ plugin.getComponentLogger().info("withdrawIfSufficient: player=" + player.getName() +
+ ", amount=" + normalizedAmount +
+ ", currency=" + currency +
+ ", balance=" + currentBalance);
+
  if (currentBalance.compareTo(normalizedAmount) < 0) {
+ plugin.getComponentLogger().warn("Insufficient funds: " + player.getName() +
+ " has " + currentBalance + " " + currency +
+ " but needs " + normalizedAmount);
  return false;
  }
 
- // Update cache immediately
- BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
-
- // Persist to DB asynchronously
- Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
  "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
  ps.setBigDecimal(1, normalizedAmount);
  ps.setString(2, uuid.toString());
  ps.setString(3, currency);
  ps.setBigDecimal(4, normalizedAmount);
+
  int affectedRows = ps.executeUpdate();
+ plugin.getComponentLogger().info("Database update affected " + affectedRows + " rows");
+
  if (affectedRows == 0) {
+ plugin.getComponentLogger().warn("Database update failed - reloading balance");
  loadBalance(uuid, currency);
- } else {
+ return false;
+ }
+
+ BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
+ balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
+
+ scheduleAsyncWrite(() -> {
  updatePlayerMetadata(player);
- }
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error in withdrawIfSufficient", e);
- }
  });
 
+ plugin.getComponentLogger().info("Withdrawal successful: " + player.getName() +
+ " new balance: " + newBalance);
  return true;
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Database error in withdrawIfSufficient", e);
+ return false;
+ }
  }
 
  private void updatePlayerMetadata(OfflinePlayer player) {
@@ -179,7 +190,6 @@ public class EconomyManager {
  if (name == null)
  return;
  UUID uuid = player.getUniqueId();
- if (uuid == null) return;
 
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
  "INSERT INTO players (uuid, name) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET name = ?")) {
@@ -215,6 +225,29 @@ public class EconomyManager {
 
  public String getFormattedWithSymbol(BigDecimal amount, String currency) {
  return getCurrencySymbol(currency) + format(amount, currency);
+ }
+
+ /**
+  * Get balance from cache only (no DB call). Returns ZERO if not cached.
+  */
+ private BigDecimal getBalanceFromCache(UUID uuid, String currency) {
+ Map<String, BigDecimal> userBalances = balanceCache.get(uuid);
+ if (userBalances != null && userBalances.containsKey(currency)) {
+ return userBalances.get(currency);
+ }
+ return BigDecimal.ZERO;
+ }
+
+ /**
+  * Schedule a write task asynchronously.
+  * If already on an async thread, run directly; otherwise schedule via Bukkit.
+  */
+ private void scheduleAsyncWrite(Runnable task) {
+ if (Bukkit.isPrimaryThread()) {
+ Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
+ } else {
+ task.run();
+ }
  }
 
  private BigDecimal loadBalance(UUID uuid, String currency) {
@@ -257,14 +290,11 @@ public class EconomyManager {
 
  public void setBalance(OfflinePlayer player, BigDecimal amount, String currency) {
  UUID uuid = player.getUniqueId();
- if (uuid == null) return;
  BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
- // Update cache immediately
  balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, normalizedAmount);
 
- // Persist to DB asynchronously
- Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+ scheduleAsyncWrite(() -> {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
  "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) " +
  "ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
