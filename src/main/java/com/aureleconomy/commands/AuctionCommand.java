@@ -127,7 +127,7 @@ public class AuctionCommand implements TabExecutor {
             String currency = plugin.getEconomyManager().getDefaultCurrency();
 
             if (args.length == 3) {
-                if (plugin.getConfig().getConfigurationSection("economy.currencies").contains(args[2])) {
+                if (plugin.getConfig().getConfigurationSection("economy.currencies") != null && plugin.getConfig().getConfigurationSection("economy.currencies").contains(args[2])) {
                     currency = args[2];
                 } else {
                     durationMillis = parseDuration(args[2]);
@@ -145,7 +145,7 @@ public class AuctionCommand implements TabExecutor {
                     return true;
                 }
                 currency = args[3];
-                if (!plugin.getConfig().getConfigurationSection("economy.currencies").contains(currency)) {
+                if (!plugin.getConfig().getConfigurationSection("economy.currencies") != null && plugin.getConfig().getConfigurationSection("economy.currencies").contains(currency)) {
                     player.sendMessage(Component.text("Invalid currency: " + currency, NamedTextColor.RED));
                     return true;
                 }
