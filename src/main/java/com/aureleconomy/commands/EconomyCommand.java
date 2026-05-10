@@ -98,7 +98,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  try {
  String formatted = plugin.getEconomyManager().format(bal, finalCurrency);
  String symbol = plugin.getEconomyManager().getCurrencySymbol(finalCurrency);
- if (sender instanceof Player p && target.getUniqueId().equals(p.getUniqueId())) {
+ if (sender instanceof Player p && target.getUniqueId() != null && target.getUniqueId().equals(p.getUniqueId())) {
  String msg = plugin.getConfig().getString("economy.balance",
  "Balance (%currency%): %amount%%symbol%");
  sender.sendMessage(mm.deserialize(prefix + msg
@@ -169,7 +169,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  try {
  OfflinePlayer target = Bukkit.getOfflinePlayer(targetName);
 
- if (target.getUniqueId().equals(player.getUniqueId())) {
+ if (target.getUniqueId() != null && target.getUniqueId().equals(player.getUniqueId())) {
  Bukkit.getScheduler().runTask(plugin,
  () -> player.sendMessage(Component.text("You cannot pay yourself.", NamedTextColor.RED)));
  return;
@@ -252,45 +252,58 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  return;
  }
 
+ if (!action.equals("give") && !action.equals("take") && !action.equals("set")) {
+ sender.sendMessage(Component.text("Unknown action: " + action));
+ return;
+ }
+
  String prefix = plugin.getConfig().getString("prefix", "[AurelEconomy] ");
  String displayName = target.getName() != null ? target.getName() : args[1];
 
+ // Run economy operations asynchronously to avoid blocking main thread
+ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  try {
  switch (action) {
  case "give":
  plugin.getEconomyManager().deposit(target, amount, currency);
+ Bukkit.getScheduler().runTask(plugin, () -> {
  sender.sendMessage(mm.deserialize(prefix +
  plugin.getConfig().getString("economy.admin-give", "Gave %player% %amount% (%currency%)")
  .replace("%player%", displayName)
  .replace("%currency%", currency)
  .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
  .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
+ });
  break;
  case "take":
  plugin.getEconomyManager().withdraw(target, amount, currency);
+ Bukkit.getScheduler().runTask(plugin, () -> {
  sender.sendMessage(mm.deserialize(prefix +
  plugin.getConfig().getString("economy.admin-take", "Took %amount% (%currency%) from %player%")
  .replace("%player%", displayName)
  .replace("%currency%", currency)
  .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
  .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
+ });
  break;
  case "set":
  plugin.getEconomyManager().setBalance(target, amount, currency);
+ Bukkit.getScheduler().runTask(plugin, () -> {
  sender.sendMessage(mm.deserialize(prefix +
  plugin.getConfig().getString("economy.admin-set", "Set balance of %player% to %amount% (%currency%)")
  .replace("%player%", displayName)
  .replace("%currency%", currency)
  .replace("%amount%", plugin.getEconomyManager().format(amount, currency))
  .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency))));
+ });
  break;
- default:
- sender.sendMessage(Component.text("Unknown action: " + action));
  }
  } catch (Exception e) {
  plugin.getComponentLogger().error("Error executing /eco " + action, e);
- sender.sendMessage(Component.text("An error occurred while executing /eco " + action + ".", NamedTextColor.RED));
+ Bukkit.getScheduler().runTask(plugin, () ->
+ sender.sendMessage(Component.text("An error occurred while executing /eco " + action + ".", NamedTextColor.RED)));
  }
+ });
  }
 
  @Override
