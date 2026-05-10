@@ -145,7 +145,7 @@ public class AuctionCommand implements TabExecutor {
                     return true;
                 }
                 currency = args[3];
-                if (!plugin.getConfig().getConfigurationSection("economy.currencies") != null && plugin.getConfig().getConfigurationSection("economy.currencies").contains(currency)) {
+                if (plugin.getConfig().getConfigurationSection("economy.currencies") != null && plugin.getConfig().getConfigurationSection("economy.currencies").contains(currency)) {
                     player.sendMessage(Component.text("Invalid currency: " + currency, NamedTextColor.RED));
                     return true;
                 }
