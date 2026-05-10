@@ -1,5 +1,20 @@
 # Aurelium - Patch Notes
 
+## v1.4.3 - CI & Testing Infrastructure
+**Automated in-game testing ensures every command works correctly on Paper 26.1.2.**
+
+### Testing
+- Added RCON-based in-game command testing to GitHub Actions CI (25 tests covering all commands)
+- `/bal` variants: self, other player, with currency — all verified
+- `/eco` admin commands: give, take, set, with currency, invalid inputs (negative, non-numeric, missing args, invalid currency, invalid action)
+- Player-only commands reject console correctly: `/pay`, `/market`, `/web`, `/stocks`, `/ah` (4 subcommands), `/orders` (4 subcommands)
+- Smoke test upgraded to Paper 26.1.2 build 61 (latest)
+- All tests pass on every push — zero regressions guaranteed
+
+### Internal
+- Updated Paper CI server from build 53 to build 61
+- Bumped version to 1.4.3 across all build files and config
+
 ## v1.4.2 - Security & Performance Hardening
 **This update is mandatory for all servers using the web dashboard.**
 ### Security
@@ -67,8 +82,8 @@
 * **Fix**: **Auction Display Fix** — Fixed a bug where auction prices would show as `undefined` instead of the correct currency symbol.
 * **New**: **Stitch-Inspired Icons** — Replaced all legacy emojis with a premium SVG icon system for better clarity and aesthetics.
 * **Security**: **Self-Trade Protection** — Players can no longer bid on their own auctions or fill their own buy orders via the web.
-  - Buy buttons are now explicitly labeled "Your Auction/Order" and disabled for owned items.
-  - Added backend validation to reject self-trading attempts.
+ - Buy buttons are now explicitly labeled "Your Auction/Order" and disabled for owned items.
+ - Added backend validation to reject self-trading attempts.
 * **New**: Added `sellerUuid` and `buyerUuid` to sync payloads for improved identity tracking on the frontend.
 
 ### 🎮 In-Game Fixes
@@ -87,14 +102,14 @@
 * **New**: **Buy Orders** page — view all active buy orders with progress bars (filled/requested), price per piece, buyer name, and status badges.
 * **New**: **Stocks / Price Tracker** page — view all items with buy price, sell price, and change % (green ↑ / red ↓). Sortable by name, price, or change.
 * **New**: **Interactive Stock Charts** — click any item on the Stocks page to open a Modrinth-inspired chart modal with:
-  - Smooth bezier curve lines with gradient fill (green for positive trend, red for negative)
-  - Y-axis price labels and X-axis date labels
-  - Hover tooltips showing exact date, buy price, and sell price
+ - Smooth bezier curve lines with gradient fill (green for positive trend, red for negative)
+ - Y-axis price labels and X-axis date labels
+ - Hover tooltips showing exact date, buy price, and sell price
 * **New**: **Price History Recording** — item prices are recorded every 10 minutes and stored for 7 days.
 * **New**: `price_history` database table for persistent price tracking.
 * **New**: **Multi-Version Icon Fallback:** The dashboard will gracefully fallback to older version icons (1.20, 1.19, 1.18) if a 1.21.11 icon is missing from the API, preventing broken images.
 * **The Web Dashboard is now fully interactive!** Players can now purchase items from the Server Market, place bids on the Auction House, buyout BIN auctions, and fulfill Buy Orders straight from their browser.
-  * *Note: To fulfill orders or buy/bid on auctions from the web, players must have the required funds/items currently in their online inventory.*
+ * *Note: To fulfill orders or buy/bid on auctions from the web, players must have the required funds/items currently in their online inventory.*
 * **New**: Web Dashboard sessions now use a **rolling 1-hour timeout**. The timer resets every time you interact with the dashboard, so active users are never kicked out. Sessions only expire after 1 full hour of inactivity.
 * **New**: A styled **🔒 Session Required** error screen now appears when visiting the dashboard without a valid session, guiding users to issue `/web` in-game.
 * **New**: Added **Tab Sleep Mode** using the browser's Page Visibility API. If a player switches to another tab or minimizes the browser, the 20-second background data sync pauses to save data and RAM. It instantly fetches fresh data the moment they return to the dashboard.
@@ -138,9 +153,9 @@
 
 ### 🖥️ GUI Mode Selector
 * **New**: Added `market.gui-mode` config option — server owners choose between three market interfaces:
-  - `classic` — Original chest-based `MarketGUI`.
-  - `modern` — New `ShopGUI` with MiniMessage gradient titles, glass-pane borders, and styled lore.
-  - `web` — Opens a browser-based dashboard (see below).
+ - `classic` — Original chest-based `MarketGUI`.
+ - `modern` — New `ShopGUI` with MiniMessage gradient titles, glass-pane borders, and styled lore.
+ - `web` — Opens a browser-based dashboard (see below).
 
 ### 🌐 Web Dashboard
 * **New**: Embedded Modrinth-inspired web dashboard served by the plugin's built-in HTTP server (zero external dependencies).
@@ -149,12 +164,12 @@
 * Session tokens use a rolling 1-hour timeout (hardcoded for security).
 * All purchases are executed on the main server thread for thread-safety.
 * Configuration:
-  web:
-  ```
-    enabled: false
-    port: 8585
-     # Session timeout: rolling 1 hour of inactivity (hardcoded)
-  ```
+ web:
+ ```
+ enabled: false
+ port: 8585
+ # Session timeout: rolling 1 hour of inactivity (hardcoded)
+ ```
 
 ### 📚 Enchanted Books
 * **Fix**: **CRITICAL** bug where purchasing an Enchanted Book from the MarketGUI or ShopGUI would give the player a completely blank, unenchanted book. The plugin now perfectly parses internal names (like "Protection IV") into actual Bukkit `EnchantmentStorageMeta` drops!
