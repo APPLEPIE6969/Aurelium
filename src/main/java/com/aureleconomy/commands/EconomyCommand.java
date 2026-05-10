@@ -28,12 +28,18 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  }
 
  private boolean isValidCurrency(String currency) {
- return plugin.getConfig().getConfigurationSection("economy.currencies").contains(currency);
+ org.bukkit.configuration.ConfigurationSection section = plugin.getConfig().getConfigurationSection("economy.currencies");
+ if (section == null) {
+ plugin.getComponentLogger().warn("economy.currencies section missing from config!");
+ return currency.equals(plugin.getEconomyManager().getDefaultCurrency());
+ }
+ return section.contains(currency);
  }
 
  @Override
  public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label,
  @NotNull String[] args) {
+ try {
  if (label.equalsIgnoreCase("bal") || label.equalsIgnoreCase("balance") || label.equalsIgnoreCase("money")) {
  handleBalance(sender, args);
  return true;
@@ -50,6 +56,11 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  }
 
  return false;
+ } catch (Exception e) {
+ plugin.getComponentLogger().error("Unhandled exception in EconomyCommand for /" + label, e);
+ sender.sendMessage(Component.text("An internal error occurred in /" + label + ": " + e.getClass().getSimpleName(), NamedTextColor.RED));
+ return true;
+ }
  }
 
  private void handleBalance(CommandSender sender, String[] args) {
