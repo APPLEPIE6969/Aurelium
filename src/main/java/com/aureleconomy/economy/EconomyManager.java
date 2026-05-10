@@ -192,7 +192,9 @@ public class EconomyManager {
  UUID uuid = player.getUniqueId();
 
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- "INSERT INTO players (uuid, name) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET name = ?")) {
+ plugin.getDatabaseManager().isMySQL()
+ ? "INSERT INTO players (uuid, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name)"
+ : "INSERT INTO players (uuid, name) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET name = ?")) {
  ps.setString(1, uuid.toString());
  ps.setString(2, name);
  ps.setString(3, name);
@@ -273,7 +275,9 @@ public class EconomyManager {
  BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
  .prepareStatement(
- "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
+ plugin.getDatabaseManager().isMySQL()
+ ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = VALUES(balance)"
+ : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, startBal);
