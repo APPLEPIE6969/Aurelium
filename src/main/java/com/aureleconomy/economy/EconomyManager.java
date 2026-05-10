@@ -71,10 +71,10 @@ public class EconomyManager {
  // if called from main thread, the DB call must still be async)
  scheduleAsyncWrite(() -> {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- (plugin.getDatabaseManager().isMySQL()
- 	? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance)"
- 	: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) " +
- 	  "ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?"))
+				plugin.getDatabaseManager().isMySQL()
+				? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance)"
+				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?"))
+
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, normalizedAmount);
@@ -277,11 +277,11 @@ public class EconomyManager {
  BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
  .prepareStatement(
- plugin.getDatabaseManager().isMySQL()
- ? (plugin.getDatabaseManager().isMySQL()
- 	? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = VALUES(balance)"
+				plugin.getDatabaseManager().isMySQL()
+				? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = VALUES(balance)"
+				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?"))
  	: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) " +
- 	  "ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?"))
+
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, startBal);
@@ -304,8 +304,8 @@ public class EconomyManager {
 
  scheduleAsyncWrite(() -> {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) " +
- "ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
+				plugin.getDatabaseManager().isMySQL()
+				? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE balance = VALUES(balance)"
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, normalizedAmount);
