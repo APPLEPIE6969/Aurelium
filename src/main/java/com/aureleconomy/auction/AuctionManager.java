@@ -583,8 +583,6 @@ public class AuctionManager {
 		}
 		return item.getType().name();
 	}
- return item.getType().name();
- }
 
  private String itemToBase64(ItemStack item) {
         return Base64Coder.encodeLines(item.serializeAsBytes());
