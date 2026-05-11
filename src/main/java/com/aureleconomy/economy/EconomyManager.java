@@ -195,11 +195,13 @@ public class EconomyManager {
 
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
  plugin.getDatabaseManager().isMySQL()
- ? "INSERT INTO players (uuid, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name)"
+ ? "INSERT INTO players (uuid, name) VALUES (?, ?) AS new ON DUPLICATE KEY UPDATE name = new.name"
  : "INSERT INTO players (uuid, name) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET name = ?")) {
  ps.setString(1, uuid.toString());
  ps.setString(2, name);
+ if (!plugin.getDatabaseManager().isMySQL()) {
  ps.setString(3, name);
+ }
  ps.executeUpdate();
  } catch (SQLException e) {
  }
