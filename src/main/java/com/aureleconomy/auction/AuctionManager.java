@@ -571,11 +571,20 @@ public class AuctionManager {
     /**
   * Returns the display name of an item, preferring custom display name over material name.
   */
- private String getItemDisplayName(ItemStack item) {
- if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
- return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
- .serialize(item.getItemMeta().displayName());
- }
+	private String getItemDisplayName(ItemStack item) {
+		if (item.hasItemMeta()) {
+			ItemMeta meta = item.getItemMeta();
+			// Paper 26.1.2: displayName() returns a Component (may be null even with custom name)
+			if (meta.hasDisplayName() || meta.displayName() != null) {
+				net.kyori.adventure.text.Component display = meta.displayName();
+				if (display != null) {
+					return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+							.serialize(display);
+				}
+			}
+		}
+		return item.getType().name();
+	}
  return item.getType().name();
  }
 
