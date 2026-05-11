@@ -207,6 +207,7 @@ public class EconomyManager {
  ps.executeUpdate();
  } catch (SQLException e) {
  }
+ }
 
  public boolean has(OfflinePlayer player, BigDecimal amount) {
  return has(player, amount, getDefaultCurrency());
