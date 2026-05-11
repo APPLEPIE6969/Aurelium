@@ -78,7 +78,9 @@ public class EconomyManager {
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, normalizedAmount);
+ if (!plugin.getDatabaseManager().isMySQL()) {
  ps.setBigDecimal(4, normalizedAmount);
+ }
  ps.executeUpdate();
 
  loadBalance(uuid, currency);
@@ -285,7 +287,9 @@ public class EconomyManager {
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, startBal);
+ if (!plugin.getDatabaseManager().isMySQL()) {
  ps.setBigDecimal(4, startBal);
+ }
  ps.executeUpdate();
  plugin.getComponentLogger().info("Created initial balance for " + uuid + ": " + startBal + " " + currency);
  } catch (SQLException e) {
@@ -310,7 +314,9 @@ public class EconomyManager {
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, normalizedAmount);
+ if (!plugin.getDatabaseManager().isMySQL()) {
  ps.setBigDecimal(4, normalizedAmount);
+ }
  ps.executeUpdate();
  updatePlayerMetadata(player);
  } catch (SQLException e) {
