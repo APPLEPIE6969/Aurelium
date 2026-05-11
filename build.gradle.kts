@@ -23,10 +23,10 @@ dependencies {
 }
 
 tasks.withType<JavaCompile>().configureEach {
-    options.encoding = Charsets.UTF_8.name
+    options.encoding = Charsets.UTF_8.name()
     options.release = 25
 }
 
 tasks.withType<ProcessResources>().configureEach {
-    filteringCharset = Charsets.UTF_8.name
+    filteringCharset = Charsets.UTF_8.name()
 }
