@@ -295,9 +295,7 @@ public class AuctionManager {
                 ps.setString(1, uuid.toString());
                 ps.setBigDecimal(2, amount);
 
-                String itemName = item.hasItemMeta() && item.getItemMeta().hasDisplayName()
-                        ? ((net.kyori.adventure.text.TextComponent) item.getItemMeta().displayName()).content()
-                        : item.getType().name();
+                String itemName = getItemDisplayName(item);
                 String display = itemName + " (x" + item.getAmount() + ")";
 
                 ps.setString(3, display);
