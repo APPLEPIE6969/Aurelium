@@ -82,7 +82,6 @@ public class EconomyManager {
  if (!plugin.getDatabaseManager().isMySQL()) {
  ps.setBigDecimal(4, normalizedAmount);
  }
- }
  ps.executeUpdate();
 
  loadBalance(uuid, currency);
@@ -207,10 +206,8 @@ public class EconomyManager {
  if (!plugin.getDatabaseManager().isMySQL()) {
  ps.setString(3, name);
  }
- }
  ps.executeUpdate();
  } catch (SQLException e) {
- }
  }
 
  public boolean has(OfflinePlayer player, BigDecimal amount) {
@@ -295,7 +292,6 @@ public class EconomyManager {
  if (!plugin.getDatabaseManager().isMySQL()) {
  ps.setBigDecimal(4, startBal);
  }
- }
  ps.executeUpdate();
  plugin.getComponentLogger().info("Created initial balance for " + uuid + ": " + startBal + " " + currency);
  } catch (SQLException e) {
@@ -323,7 +319,6 @@ public class EconomyManager {
  if (!plugin.getDatabaseManager().isMySQL()) {
  if (!plugin.getDatabaseManager().isMySQL()) {
  ps.setBigDecimal(4, normalizedAmount);
- }
  }
  ps.executeUpdate();
  updatePlayerMetadata(player);
