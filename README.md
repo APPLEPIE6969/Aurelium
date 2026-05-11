@@ -116,7 +116,7 @@ A global request system that lets players buy things they want even while offlin
 
 ## Setup
 
-1. Download `Aurelium-1.4.3.jar`.
+1. Download `Aurelium-1.4.5.jar`.
 2. Place it in your server's `plugins/` folder.
 3. **Restart** the server.
  - *Note: If Vault is not detected, Aurelium will automatically extract and install it into your plugins folder for you upon first run.*
@@ -220,7 +220,7 @@ A `messages.yml` file is generated on startup.
 ## FAQ
 - **"Unknown Command"**: If `/market` or `/eco` says "Unknown command", the plugin failed to load.
  - Check your server console/logs for errors.
- - Ensure you have `Aurelium-1.4.3.jar` in `plugins/`.
+ - Ensure you have `Aurelium-1.4.5.jar` in `plugins/`.
  - Ensure you are running **Paper** (or compatible forks: Purpur, Pufferfish, Leaves).
 - **"No Permission"**:
  - Ensure you are **OP** (`/op <player>`) or have the permission node `aureleconomy.admin`.
