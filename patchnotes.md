@@ -15,6 +15,12 @@
 - Zero `SQLSyntaxErrorException` confirmed on MySQL 8.0
 - Added `isMySQL()` method to `DatabaseManager` for clean dialect detection
 
+### Platform
+- Targets **Paper 26.1+** (Java 25, `api-version: '26.1'`)
+- Uses Paper's `RegistryAccess` / `RegistryKey` API for enchantment lookups
+- CI tested against Paper 26.1.2 build 61
+- For Paper 1.21.x support, see the `compat/paper-1.21` branch
+
 ## v1.4.3 - CI & Testing Infrastructure
 
 **Automated in-game testing ensures every command works correctly on Paper 26.1.2.**
