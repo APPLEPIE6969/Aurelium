@@ -125,6 +125,25 @@ web:
  api-key: ""
  sync-interval: 30
 
+
+# --- Custom Item Scanner ---
+custom-items:
+  enabled: true
+  scan-on-startup: true
+  scan-interval-minutes: 10
+  auto-add-to-market: true
+  default-price-multiplier: 1.5
+  discovery-methods:
+    plugin-api: true
+    pdc-scan: true
+    custom-model-data: true
+    lore-pattern: true
+    inventory-scan: true
+    interaction-detect: true
+  excluded-namespaces:
+    - minecraft
+    - aureleconomy
+
 # --- Market Items (auto-generated, don't edit unless you know what you're doing) ---
 # Prices below are managed by the plugin. They update based on player activity.
 # Delete an entry to reset it to its default price on next restart.
