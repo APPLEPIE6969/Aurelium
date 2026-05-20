@@ -4,6 +4,9 @@ import com.aureleconomy.database.DatabaseManager;
 import com.aureleconomy.scanner.CustomItemRegistry;
 import com.aureleconomy.scanner.UnifiedItemScanner;
 import com.aureleconomy.scanner.ItemDiscoveryListener;
+import com.aureleconomy.scanner.CustomItemRegistry;
+import com.aureleconomy.scanner.UnifiedItemScanner;
+import com.aureleconomy.scanner.ItemDiscoveryListener;
 import com.aureleconomy.economy.EconomyManager;
 import com.aureleconomy.economy.VaultEconomy;
 import net.milkbowl.vault.economy.Economy;
@@ -36,6 +39,8 @@ public class AurelEconomy extends JavaPlugin {
     private VaultEconomy vaultEconomy;
     private com.aureleconomy.web.WebServer webServer;
     private com.aureleconomy.web.CloudSyncManager cloudSync;
+ private CustomItemRegistry customItemRegistry;
+ private UnifiedItemScanner unifiedScanner;
  private CustomItemRegistry customItemRegistry;
  private UnifiedItemScanner unifiedScanner;
     
@@ -77,6 +82,40 @@ public class AurelEconomy extends JavaPlugin {
         chatPromptManager = new com.aureleconomy.utils.ChatPromptManager(this);
         orderManager = new com.aureleconomy.orders.OrderManager(this);
         orderManager.loadOrders();
+
+ // Initialize custom item system
+ if (getConfig().getBoolean("custom-items.enabled", true)) {
+     this.customItemRegistry = new CustomItemRegistry(this);
+     this.unifiedScanner = new UnifiedItemScanner(this, customItemRegistry);
+
+     // Phase 1: Load previously discovered items from database
+     customItemRegistry.loadFromDatabase(databaseManager);
+
+     // Phase 2: Plugin API scan (delayed 1s for other plugins to load)
+     getServer().getScheduler().runTaskLater(this, () -> {
+         if (unifiedScanner != null) {
+             unifiedScanner.scanAllPluginAPIs();
+             unifiedScanner.scanPlayerInventories();
+             getLogger().info("[CustomItems] Scan complete: " + customItemRegistry.getTotalItems()
+                 + " unique items, " + customItemRegistry.getDuplicatesPrevented() + " duplicates prevented");
+         }
+     }, 20L);
+
+     // Phase 3: Register runtime detection listeners
+     getServer().getPluginManager().registerEvents(new ItemDiscoveryListener(unifiedScanner), this);
+
+     // Phase 4: Periodic rescan
+     int scanInterval = getConfig().getInt("custom-items.scan-interval-minutes", 10);
+     new org.bukkit.scheduler.BukkitRunnable() {
+         @Override
+         public void run() {
+             if (unifiedScanner != null) {
+                 unifiedScanner.scanPlayerInventories();
+                 customItemRegistry.saveToDatabase(databaseManager);
+             }
+         }
+     }.runTaskTimer(this, 20L * 60L * scanInterval, 20L * 60L * scanInterval);
+ }
  // Initialize custom item system
  if (getConfig().getBoolean("custom-items.enabled", true)) {
      this.customItemRegistry = new CustomItemRegistry(this);
@@ -135,6 +174,7 @@ public class AurelEconomy extends JavaPlugin {
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (marketManager != null) marketManager.persistPrices();
  if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
+ if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
         }, 6000L, 6000L);
 
         getComponentLogger().info("AurelEconomy has been enabled!");
@@ -157,6 +197,13 @@ public class AurelEconomy extends JavaPlugin {
         getCommand("orders").setTabCompleter(ordersCmd);
 
         // Custom Items command
+ com.aureleconomy.commands.CustomItemsCommand customItemsCmd = new com.aureleconomy.commands.CustomItemsCommand(this);
+ if (getCommand("customitems") != null) {
+     getCommand("customitems").setExecutor(customItemsCmd);
+     getCommand("customitems").setTabCompleter(customItemsCmd);
+ }
+
+ // Custom Items command
  com.aureleconomy.commands.CustomItemsCommand customItemsCmd = new com.aureleconomy.commands.CustomItemsCommand(this);
  if (getCommand("customitems") != null) {
      getCommand("customitems").setExecutor(customItemsCmd);
@@ -186,6 +233,7 @@ public class AurelEconomy extends JavaPlugin {
                 else if (holder instanceof com.aureleconomy.gui.AuctionGUI gui) gui.refresh();
                 else if (holder instanceof com.aureleconomy.gui.OrderMaterialGUI gui) gui.refresh();
                 else if (holder instanceof com.aureleconomy.gui.OrdersGUI gui) gui.refresh();
+ else if (holder instanceof com.aureleconomy.gui.CustomItemsGUI gui) gui.setupItems();
                 else if (holder == null) activeViewers.remove(p);
             }
         }, 20L, 20L);
@@ -210,6 +258,7 @@ public class AurelEconomy extends JavaPlugin {
         if (cloudSync != null) cloudSync.stop();
         if (marketManager != null) marketManager.persistPrices();
  if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
+ if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
         if (databaseManager != null) databaseManager.close();
         getComponentLogger().info("AurelEconomy has been disabled!");
     }
@@ -227,6 +276,8 @@ public class AurelEconomy extends JavaPlugin {
  public CustomItemRegistry getCustomItemRegistry() { return customItemRegistry; }
  public UnifiedItemScanner getUnifiedScanner() { return unifiedScanner; }
     public com.aureleconomy.web.CloudSyncManager getCloudSync() { return cloudSync; }
+ public CustomItemRegistry getCustomItemRegistry() { return customItemRegistry; }
+ public UnifiedItemScanner getUnifiedScanner() { return unifiedScanner; }
 
     private void upgradeConfig() {
         java.io.File configFile = new java.io.File(getDataFolder(), "config.yml");
