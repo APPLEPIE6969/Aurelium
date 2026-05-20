@@ -571,6 +571,17 @@ public class AuctionManager {
   * Returns the display name of an item, preferring custom display name over material name.
   */
 	private String getItemDisplayName(ItemStack item) {
+		// Check custom item registry first
+		com.aureleconomy.scanner.CustomItemRegistry registry = plugin.getCustomItemRegistry();
+		if (registry != null) {
+			java.util.Optional<String> customId = registry.resolveItemId(item);
+			if (customId.isPresent()) {
+				com.aureleconomy.scanner.CustomMarketItem customItem = registry.getById(customId.get());
+				if (customItem != null && customItem.getDisplayName() != null && !customItem.getDisplayName().isEmpty()) {
+					return customItem.getDisplayName();
+				}
+			}
+		}
 		if (item.hasItemMeta()) {
 			ItemMeta meta = item.getItemMeta();
 			// Paper 26.1.2: displayName() returns a Component (may be null even with custom name)
