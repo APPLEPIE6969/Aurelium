@@ -31,7 +31,8 @@ public class MarketItems {
                 BUILDING(Material.BRICKS, "Building Blocks"),
                 DECORATION(Material.PAINTING, "Decoration"),
                 ENCHANTMENTS(Material.ENCHANTED_BOOK, "Enchantment Books"),
-                ALL_ITEMS(Material.COMPASS, "All Items (Searchable)");
+                CUSTOM_ITEMS(Material.NETHER_STAR, "Custom Items"),
+ ALL_ITEMS(Material.COMPASS, "All Items (Searchable)");
 
                 public final Material icon;
                 public final String name;
