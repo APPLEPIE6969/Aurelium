@@ -4,9 +4,6 @@ import com.aureleconomy.database.DatabaseManager;
 import com.aureleconomy.scanner.CustomItemRegistry;
 import com.aureleconomy.scanner.UnifiedItemScanner;
 import com.aureleconomy.scanner.ItemDiscoveryListener;
-import com.aureleconomy.scanner.CustomItemRegistry;
-import com.aureleconomy.scanner.UnifiedItemScanner;
-import com.aureleconomy.scanner.ItemDiscoveryListener;
 import com.aureleconomy.economy.EconomyManager;
 import com.aureleconomy.economy.VaultEconomy;
 import net.milkbowl.vault.economy.Economy;
@@ -39,8 +36,6 @@ public class AurelEconomy extends JavaPlugin {
     private VaultEconomy vaultEconomy;
     private com.aureleconomy.web.WebServer webServer;
     private com.aureleconomy.web.CloudSyncManager cloudSync;
- private CustomItemRegistry customItemRegistry;
- private UnifiedItemScanner unifiedScanner;
  private CustomItemRegistry customItemRegistry;
  private UnifiedItemScanner unifiedScanner;
     
@@ -174,7 +169,6 @@ public class AurelEconomy extends JavaPlugin {
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (marketManager != null) marketManager.persistPrices();
  if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
- if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
         }, 6000L, 6000L);
 
         getComponentLogger().info("AurelEconomy has been enabled!");
@@ -257,7 +251,6 @@ public class AurelEconomy extends JavaPlugin {
         if (webServer != null) webServer.stop();
         if (cloudSync != null) cloudSync.stop();
         if (marketManager != null) marketManager.persistPrices();
- if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
  if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
         if (databaseManager != null) databaseManager.close();
         getComponentLogger().info("AurelEconomy has been disabled!");
