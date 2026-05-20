@@ -32,6 +32,7 @@ public class MarketItems {
                 DECORATION(Material.PAINTING, "Decoration"),
                 ENCHANTMENTS(Material.ENCHANTED_BOOK, "Enchantment Books"),
                 CUSTOM_ITEMS(Material.NETHER_STAR, "Custom Items"),
+ CUSTOM_ITEMS(Material.NETHER_STAR, "Custom Items"),
  ALL_ITEMS(Material.COMPASS, "All Items (Searchable)");
 
                 public final Material icon;
