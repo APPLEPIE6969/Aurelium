@@ -169,6 +169,8 @@ public class DatabaseManager {
         } catch (SQLException e) {
             plugin.getComponentLogger().error("Could not create tables for " + databaseType + "!", e);
         }
+
+  createCustomItemsTable();
     }
 
     private void runMigrations() {
@@ -363,7 +365,6 @@ public class DatabaseManager {
      }
  }
 
- createCustomItemsTable();
 
 
 }
