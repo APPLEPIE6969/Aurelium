@@ -85,6 +85,7 @@ public class AurelEconomy extends JavaPlugin {
 
      // Phase 1: Load previously discovered items from database
      customItemRegistry.loadFromDatabase(databaseManager);
+        customItemRegistry.loadConfigOverrides();
 
      // Phase 2: Plugin API scan (delayed 1s for other plugins to load)
      getServer().getScheduler().runTaskLater(this, () -> {
