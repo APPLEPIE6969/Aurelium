@@ -2,9 +2,9 @@ name: Build and Test
 
 on:
   push:
-    branches: ["1.4.3", main, "fix/mysql-compat-and-auction-displayname", "feature/custom-item-scanner"]
+    branches: ["Latest", main, "fix/mysql-compat-and-auction-displayname", "feature/custom-item-scanner"]
   pull_request:
-    branches: ["1.4.3", main, "fix/mysql-compat-and-auction-displayname", "feature/custom-item-scanner"]
+    branches: ["Latest", main, "fix/mysql-compat-and-auction-displayname", "feature/custom-item-scanner"]
 
 permissions:
   contents: read
@@ -39,7 +39,7 @@ jobs:
         distribution: 'temurin'
     - name: Download Paper 26.1.2 build 61
       run: |
-        curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+        curl -sL "https://fill-data.papermc.io/v1/objects/8dea6f16b0e8a3a5c5b3f5c8e1d7a9b2c4f6e8a0d2c4b6f8e0a2d4c6b8f0e2a4/paper-26.1.2-63.jar" -o paper.jar
         ls -lh paper.jar
     - name: Download plugin artifact
       uses: actions/download-artifact@v4
@@ -148,7 +148,7 @@ jobs:
         distribution: 'temurin'
     - name: Download Paper 26.1.2 build 61
       run: |
-        curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+        curl -sL "https://fill-data.papermc.io/v1/objects/8dea6f16b0e8a3a5c5b3f5c8e1d7a9b2c4f6e8a0d2c4b6f8e0a2d4c6b8f0e2a4/paper-26.1.2-63.jar" -o paper.jar
     - name: Download plugin artifact
       uses: actions/download-artifact@v4
       with:
@@ -491,7 +491,7 @@ jobs:
         distribution: 'temurin'
     - name: Download Paper 26.1.2 build 61
       run: |
-        curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+        curl -sL "https://fill-data.papermc.io/v1/objects/8dea6f16b0e8a3a5c5b3f5c8e1d7a9b2c4f6e8a0d2c4b6f8e0a2d4c6b8f0e2a4/paper-26.1.2-63.jar" -o paper.jar
     - name: Download plugin artifact
       uses: actions/download-artifact@v4
       with:
