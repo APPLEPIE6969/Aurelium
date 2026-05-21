@@ -15,6 +15,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
 /**
@@ -164,7 +165,7 @@ public class AuctionManager {
                             Player prev = Bukkit.getPlayer(previousBidder);
                             if (prev != null) {
                                 String formatted = plugin.getEconomyManager().getFormattedWithSymbol(previousPrice, currency);
-                                prev.sendMessage(Component.text(String.format(MSG_OUTBID, auction.getItem().getType().name(), formatted), NamedTextColor.YELLOW));
+                                prev.sendMessage(Component.text(String.format(MSG_OUTBID, getItemDisplayName(auction.getItem()), formatted), NamedTextColor.YELLOW));
                             }
                         }
                     }
@@ -295,9 +296,7 @@ public class AuctionManager {
                 ps.setString(1, uuid.toString());
                 ps.setBigDecimal(2, amount);
 
-                String itemName = item.hasItemMeta() && item.getItemMeta().hasDisplayName()
-                        ? ((net.kyori.adventure.text.TextComponent) item.getItemMeta().displayName()).content()
-                        : item.getType().name();
+                String itemName = getItemDisplayName(item);
                 String display = itemName + " (x" + item.getAmount() + ")";
 
                 ps.setString(3, display);
@@ -402,7 +401,7 @@ public class AuctionManager {
                 Player seller = Bukkit.getPlayer(ai.getSeller());
                 if (seller != null) {
                     seller.sendMessage(Component.text(
-                            String.format(MSG_NEW_OFFER, amount, ai.getItem().getType().name()), NamedTextColor.GOLD));
+                            String.format(MSG_NEW_OFFER, amount, getItemDisplayName(ai.getItem())), NamedTextColor.GOLD));
                 }
             } catch (SQLException e) {
                 plugin.getComponentLogger().error("Database error making offer", e);
@@ -448,7 +447,7 @@ public class AuctionManager {
                                     bidder.getInventory().addItem(ai.getItem().clone());
                                     markCollected(ai.getId());
                                     bidder.sendMessage(Component.text(
-                                            String.format(MSG_OFFER_ACCEPTED_BIDDER, ai.getItem().getType().name()),
+                                            String.format(MSG_OFFER_ACCEPTED_BIDDER, getItemDisplayName(ai.getItem())),
                                             NamedTextColor.GREEN));
                                 } else {
                                     bidder.sendMessage(Component.text(
@@ -568,7 +567,36 @@ public class AuctionManager {
         });
     }
 
-    private String itemToBase64(ItemStack item) {
+    /**
+  * Returns the display name of an item, preferring custom display name over material name.
+  */
+	private String getItemDisplayName(ItemStack item) {
+		// Check custom item registry first
+		com.aureleconomy.scanner.CustomItemRegistry registry = plugin.getCustomItemRegistry();
+		if (registry != null) {
+			java.util.Optional<String> customId = registry.resolveItemId(item);
+			if (customId.isPresent()) {
+				com.aureleconomy.scanner.CustomMarketItem customItem = registry.getById(customId.get());
+				if (customItem != null && customItem.getDisplayName() != null && !customItem.getDisplayName().isEmpty()) {
+					return customItem.getDisplayName();
+				}
+			}
+		}
+		if (item.hasItemMeta()) {
+			ItemMeta meta = item.getItemMeta();
+			// Paper 26.1.2: displayName() returns a Component (may be null even with custom name)
+			if (meta.hasDisplayName() || meta.displayName() != null) {
+				net.kyori.adventure.text.Component display = meta.displayName();
+				if (display != null) {
+					return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+							.serialize(display);
+				}
+			}
+		}
+		return item.getType().name();
+	}
+
+ private String itemToBase64(ItemStack item) {
         return Base64Coder.encodeLines(item.serializeAsBytes());
     }
 
