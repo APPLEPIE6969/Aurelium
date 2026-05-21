@@ -232,6 +232,9 @@ public class DatabaseManager {
                 addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
                 addColumnIfNotExists("auction_offers", "currency", "VARCHAR(32)");
                 break;
+                case 2:
+                 createCustomItemsTable();
+                 break;
         }
     }
 
