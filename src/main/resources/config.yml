@@ -145,7 +145,6 @@ custom-items:
     - aureleconomy
 
 
-# --- Custom Item Scanner ---
 custom-items:
   enabled: true
   scan-on-startup: true
