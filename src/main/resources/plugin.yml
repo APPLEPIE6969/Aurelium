@@ -1,11 +1,11 @@
 name: Aurelium
-version: '1.4.3'
+version: '1.4.5'
 main: com.aureleconomy.AurelEconomy
 api-version: '26.1'
 description: Economy plugin with market, auction house, and web dashboard.
 authors:
   - APPLEPIE6969
-softdepend: [Vault]
+softdepend: [Vault, ItemsAdder, Oraxen, MMOItems, MythicMobs, ExecutableItems, Nexo, SX-Item]
 
 commands:
   bal:
