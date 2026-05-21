@@ -20,7 +20,14 @@ public class DatabaseManager {
         this.databaseType = plugin.getConfig().getString("database.type", "sqlite").toLowerCase();
     }
 
-    private static final int LATEST_SCHEMA_VERSION = 1;
+	/**
+	 * Returns true if the configured database type is MySQL/MariaDB.
+	 */
+	public boolean isMySQL() {
+		return "mysql".equals(databaseType);
+	}
+
+    private static final int LATEST_SCHEMA_VERSION = 2;
 
     public boolean initialize() {
         try {
@@ -308,4 +315,92 @@ public class DatabaseManager {
             statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         }
     }
+
+ private void createCustomItemsTable() {
+     try (Statement statement = connection.createStatement()) {
+         if ("mysql".equals(databaseType)) {
+             statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+                 "canonical_id VARCHAR(255) PRIMARY KEY, " +
+                 "source_plugin VARCHAR(64) NOT NULL, " +
+                 "display_name VARCHAR(256), " +
+                 "item_data TEXT NOT NULL, " +
+                 "pdc_key VARCHAR(255), " +
+                 "model_data_key VARCHAR(128), " +
+                 "lore_hash VARCHAR(64), " +
+                 "plugin_native_id VARCHAR(255), " +
+                 "category VARCHAR(64), " +
+                 "buy_price DOUBLE DEFAULT -1, " +
+                 "sell_price DOUBLE DEFAULT -1, " +
+                 "enabled TINYINT(1) DEFAULT 1, " +
+                 "discovery_methods VARCHAR(256), " +
+                 "first_discovered BIGINT NOT NULL, " +
+                 "last_seen BIGINT NOT NULL" +
+                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+         } else {
+             statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+                 "canonical_id TEXT PRIMARY KEY, " +
+                 "source_plugin TEXT NOT NULL, " +
+                 "display_name TEXT, " +
+                 "item_data TEXT NOT NULL, " +
+                 "pdc_key TEXT, " +
+                 "model_data_key TEXT, " +
+                 "lore_hash TEXT, " +
+                 "plugin_native_id TEXT, " +
+                 "category TEXT, " +
+                 "buy_price REAL DEFAULT -1, " +
+                 "sell_price REAL DEFAULT -1, " +
+                 "enabled INTEGER DEFAULT 1, " +
+                 "discovery_methods TEXT, " +
+                 "first_discovered INTEGER NOT NULL, " +
+                 "last_seen INTEGER NOT NULL" +
+                 ")");
+         }
+     } catch (SQLException e) {
+         plugin.getComponentLogger().error("Could not create custom_items table for " + databaseType + "!", e);
+     }
+ }
+
+ private void createCustomItemsTable() {
+     try (Statement statement = connection.createStatement()) {
+         if ("mysql".equals(databaseType)) {
+             statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+                 "canonical_id VARCHAR(255) PRIMARY KEY, " +
+                 "source_plugin VARCHAR(64) NOT NULL, " +
+                 "display_name VARCHAR(256), " +
+                 "item_data TEXT NOT NULL, " +
+                 "pdc_key VARCHAR(255), " +
+                 "model_data_key VARCHAR(128), " +
+                 "lore_hash VARCHAR(64), " +
+                 "plugin_native_id VARCHAR(255), " +
+                 "category VARCHAR(64), " +
+                 "buy_price DOUBLE DEFAULT -1, " +
+                 "sell_price DOUBLE DEFAULT -1, " +
+                 "enabled TINYINT(1) DEFAULT 1, " +
+                 "discovery_methods VARCHAR(256), " +
+                 "first_discovered BIGINT NOT NULL, " +
+                 "last_seen BIGINT NOT NULL" +
+                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+         } else {
+             statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+                 "canonical_id TEXT PRIMARY KEY, " +
+                 "source_plugin TEXT NOT NULL, " +
+                 "display_name TEXT, " +
+                 "item_data TEXT NOT NULL, " +
+                 "pdc_key TEXT, " +
+                 "model_data_key TEXT, " +
+                 "lore_hash TEXT, " +
+                 "plugin_native_id TEXT, " +
+                 "category TEXT, " +
+                 "buy_price REAL DEFAULT -1, " +
+                 "sell_price REAL DEFAULT -1, " +
+                 "enabled INTEGER DEFAULT 1, " +
+                 "discovery_methods TEXT, " +
+                 "first_discovered INTEGER NOT NULL, " +
+                 "last_seen INTEGER NOT NULL" +
+                 ")");
+         }
+     } catch (SQLException e) {
+         plugin.getComponentLogger().error("Could not create custom_items table for " + databaseType + "!", e);
+     }
+ }
 }
