@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.aureleconomy"
-version = "1.4.3"
+version = "1.4.5"
 
 java {
  toolchain.languageVersion.set(JavaLanguageVersion.of(25))
@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
- compileOnly("io.papermc.paper:paper-api:26.1.2.build.53-stable")
+ compileOnly("io.papermc.paper:paper-api:26.1.2.build.64-stable")
  compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
  exclude(group = "org.bukkit", module = "bukkit")
  }
