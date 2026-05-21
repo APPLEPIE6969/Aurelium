@@ -363,5 +363,7 @@ public class DatabaseManager {
      }
  }
 
+ createCustomItemsTable();
+
 
 }
