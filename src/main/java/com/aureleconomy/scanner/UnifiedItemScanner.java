@@ -247,20 +247,7 @@ public class UnifiedItemScanner {
                     ItemStack itemStack = (ItemStack) buildItemMethod.invoke(eiItemObj);
                     if (itemStack == null || id == null) continue;
 
-                    // Try to get display name from the official API
-                    String displayName = null;
-                    try {
-                        Method getDisplayNameMethod = eiItemObj.getClass().getMethod("getDisplayName");
-                        Object nameResult = getDisplayNameMethod.invoke(eiItemObj);
-                        if (nameResult instanceof String) {
-                            displayName = (String) nameResult;
-                        }
-                    } catch (Exception ignored) {}
-
                     CustomMarketItem item = buildCustomItem(itemStack, "executableitems:" + id, "ExecutableItems", DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
-                    if (displayName != null && !displayName.isEmpty()) {
-                        item.setDisplayName(displayName);
-                    }
                     registry.register(item, DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
                 } catch (Exception e) {
                     plugin.getLogger().log(Level.FINE, "[Scanner] ExecutableItems item scan error", e);
