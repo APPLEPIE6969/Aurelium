@@ -670,7 +670,7 @@ jobs:
       - name: Download Aurelium JAR
         uses: actions/download-artifact@v4
         with:
-          name: Aurelium-plugin
+          name: Aurelium
           path: artifact/
 
       - name: Setup Java 25
