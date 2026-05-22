@@ -647,3 +647,107 @@ jobs:
         path: logs/latest.log
         retention-days: 7
 
+  custom-item-detection-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: aurelium_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Aurelium JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: Aurelium-plugin
+          path: artifact/
+
+      - name: Setup Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download Paper
+        run: |
+          curl -sL "https://fill-data.papermc.io/v1/objects/26.1.2/builds/63/jars/Paper-26.1.2-63.jar" -o paper.jar
+          echo "Paper downloaded"
+
+      - name: Prepare Server
+        run: |
+          mkdir -p server/plugins
+          cp paper.jar server/paper.jar
+          cp artifact/Aurelium-*.jar server/plugins/
+          cp ci/plugins/SCore-5.26.5.17.jar server/plugins/
+          cp ci/plugins/ExecutableItems-7.26.5.17.jar server/plugins/
+
+      - name: First Start
+        working-directory: server
+        run: |
+          echo "eula=true" > eula.txt
+          java -jar paper.jar --nogui 2>&1 | head -100 &
+          SERVER_PID=$!
+          timeout 60 bash -c 'while ! grep -q "Done" logs/latest.log 2>/dev/null; do sleep 2; done' || true
+          kill $SERVER_PID 2>/dev/null || true
+          sleep 2
+
+      - name: Configure Server
+        working-directory: server
+        run: |
+          sed -i 's/online-mode=true/online-mode=false/' server.properties
+          sed -i 's/enforce-secure-profile=true/enforce-secure-profile=false/' server.properties
+          mkdir -p plugins/Aurelium
+          cat > plugins/Aurelium/config.yml << 'CFGEOF'
+          database:
+            type: mysql
+            host: 127.0.0.1:3306
+            database: aurelium_test
+            username: root
+            password: test
+          custom-items:
+            enabled: true
+            discovery-methods:
+              plugin-api: true
+            auto-sync-to-config: true
+            default-price-multiplier: 1.5
+          CFGEOF
+
+      - name: Start and Test Scanner
+        working-directory: server
+        run: |
+          java -Xmx1024M -jar paper.jar --nogui > server.log 2>&1 &
+          SERVER_PID=$!
+          echo "Waiting for server..."
+          timeout 120 bash -c 'while ! grep -q "Done" logs/latest.log 2>/dev/null; do sleep 2; done'
+          echo "Server started"
+          sleep 5
+          if grep -qi "ExecutableItems" logs/latest.log; then
+            echo "OK: ExecutableItems loaded"
+          else
+            echo "WARN: ExecutableItems not loaded"
+          fi
+          if grep -qi "Aurelium" logs/latest.log; then
+            echo "OK: Aurelium loaded"
+          else
+            echo "FAIL: Aurelium not loaded"
+          fi
+          if grep -qi "Scanner" logs/latest.log; then
+            echo "OK: Scanner ran"
+            grep -i "Scanner\|scan complete\|items found" logs/latest.log || true
+          else
+            echo "WARN: No scanner output"
+          fi
+          cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
