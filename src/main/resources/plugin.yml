@@ -51,6 +51,11 @@ commands:
     usage: /web
     permission: aureleconomy.web
 
+customitems:
+    description: Manage discovered custom items
+    usage: /customitems <scan|list|info|reload|toggle|price>
+    permission: aureleconomy.admin
+
 permissions:
   aureleconomy.admin:
     description: Admin commands
