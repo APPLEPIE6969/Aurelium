@@ -681,8 +681,9 @@ jobs:
 
       - name: Download Paper
         run: |
-          curl -sL "https://fill-data.papermc.io/v1/objects/26.1.2/builds/63/jars/Paper-26.1.2-63.jar" -o paper.jar
-          echo "Paper downloaded"
+          curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+          ls -lh paper.jar
+          file paper.jar | head -1
 
       - name: Prepare Server
         run: |
