@@ -225,18 +225,71 @@ public class UnifiedItemScanner {
     private void scanExecutableItems() {
         if (Bukkit.getPluginManager().getPlugin("ExecutableItems") == null) return;
         try {
+            // Use the official SCore API: ExecutableItemsAPI
+            Class<?> apiClass = Class.forName("com.ssomar.score.api.executableitems.ExecutableItemsAPI");
+            Method getInstanceMethod = apiClass.getMethod("getInstance");
+            Object apiInstance = getInstanceMethod.invoke(null);
+            Method getManagerMethod = apiClass.getMethod("getExecutableItemsManager");
+            Object manager = getManagerMethod.invoke(apiInstance);
+
+            // ExecutableItemsManagerInterface.getAllExecutableItems()
+            Method getAllMethod = manager.getClass().getMethod("getAllExecutableItems");
+            @SuppressWarnings("unchecked")
+            Collection<?> items = (Collection<?>) getAllMethod.invoke(manager);
+            if (items == null) return;
+
+            for (Object eiItemObj : items) {
+                try {
+                    // ExecutableItemInterface extends SObject -> getId(), buildItem()
+                    Method getIdMethod = eiItemObj.getClass().getMethod("getId");
+                    Method buildItemMethod = eiItemObj.getClass().getMethod("buildItem");
+                    String id = (String) getIdMethod.invoke(eiItemObj);
+                    ItemStack itemStack = (ItemStack) buildItemMethod.invoke(eiItemObj);
+                    if (itemStack == null || id == null) continue;
+
+                    // Try to get display name from the official API
+                    String displayName = null;
+                    try {
+                        Method getDisplayNameMethod = eiItemObj.getClass().getMethod("getDisplayName");
+                        Object nameResult = getDisplayNameMethod.invoke(eiItemObj);
+                        if (nameResult instanceof String) {
+                            displayName = (String) nameResult;
+                        }
+                    } catch (Exception ignored) {}
+
+                    CustomMarketItem item = buildCustomItem(itemStack, "executableitems:" + id, "ExecutableItems", DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
+                    if (displayName != null && !displayName.isEmpty()) {
+                        item.setDisplayName(displayName);
+                    }
+                    registry.register(item, DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
+                } catch (Exception e) {
+                    plugin.getLogger().log(Level.FINE, "[Scanner] ExecutableItems item scan error", e);
+                }
+            }
+            plugin.getComponentLogger().info("[Scanner] ExecutableItems scan complete: " + items.size() + " items found");
+        } catch (ClassNotFoundException | NoClassDefFoundError e) {
+            // Plugin not present or API changed — try legacy fallback
+            scanExecutableItemsLegacy();
+        } catch (Exception e) {
+            plugin.getComponentLogger().warn("[Scanner] ExecutableItems scan failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Legacy fallback for older EI versions that don't expose the SCore API.
+     * Uses the internal ExecutableItems plugin class directly.
+     */
+    private void scanExecutableItemsLegacy() {
+        try {
             Class<?> eiPluginClass = Class.forName("com.ssomar.executableitems.ExecutableItems");
             Method getPluginMethod = eiPluginClass.getMethod("getPlugin");
             Object eiPlugin = getPluginMethod.invoke(null);
-
             Method getItemManagerMethod = eiPluginClass.getMethod("getItemManager");
             Object itemManager = getItemManagerMethod.invoke(eiPlugin);
-
             Method getAllItemsMethod = itemManager.getClass().getMethod("getAllItems");
             @SuppressWarnings("unchecked")
             Collection<?> items = (Collection<?>) getAllItemsMethod.invoke(itemManager);
             if (items == null) return;
-
             for (Object eiItem : items) {
                 try {
                     Method getIdMethod = eiItem.getClass().getMethod("getId");
@@ -244,16 +297,15 @@ public class UnifiedItemScanner {
                     String id = (String) getIdMethod.invoke(eiItem);
                     ItemStack itemStack = (ItemStack) buildItemMethod.invoke(eiItem, 1);
                     if (itemStack == null || id == null) continue;
-
-                    CustomMarketItem item = buildCustomItem(itemStack, "executableitems:" + id, "ExecutableItems",
-                            DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
+                    CustomMarketItem item = buildCustomItem(itemStack, "executableitems:" + id, "ExecutableItems", DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
                     registry.register(item, DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
                 } catch (Exception ignored) {}
             }
+            plugin.getComponentLogger().info("[Scanner] ExecutableItems (legacy) scan complete");
         } catch (ClassNotFoundException | NoClassDefFoundError e) {
-            // Skip
+            // Plugin not present, skip silently
         } catch (Exception e) {
-            plugin.getComponentLogger().warn("[Scanner] ExecutableItems scan failed: " + e.getMessage());
+            plugin.getComponentLogger().warn("[Scanner] ExecutableItems legacy scan failed: " + e.getMessage());
         }
     }
 
