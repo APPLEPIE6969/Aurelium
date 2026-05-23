@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      persist-credentials: false
+      with:
+        persist-credentials: false
     - name: Set up JDK 25
       uses: actions/setup-java@c5195efecf7bdfc98df9cd71ab8c5a7a7aa89211 # v5
       with:
@@ -486,7 +487,8 @@ jobs:
           --health-retries=10
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      persist-credentials: false
+      with:
+        persist-credentials: false
     - uses: actions/setup-java@c5195efecf7bdfc98df9cd71ab8c5a7a7aa89211 # v5
       with:
         java-version: '25'
@@ -654,7 +656,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      persist-credentials: false
+      with:
+        persist-credentials: false
       - uses: actions/setup-java@c5195efecf7bdfc98df9cd71ab8c5a7a7aa89211 # v5
         with:
           java-version: '25'
