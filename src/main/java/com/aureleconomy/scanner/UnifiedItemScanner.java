@@ -56,7 +56,11 @@ public class UnifiedItemScanner {
     // ===== METHOD 1: Plugin-Specific API Scanning =====
 
     public void scanAllPluginAPIs() {
-        if (!methodPluginApi) return;
+        if (!methodPluginApi) {
+            plugin.getLogger().info("[CustomItems] Plugin API scanning disabled in config");
+            return;
+        }
+        plugin.getLogger().info("[CustomItems] Starting plugin API scan...");
         scanItemsAdder();
         scanOraxen();
         scanMMOItems();
@@ -64,10 +68,11 @@ public class UnifiedItemScanner {
         scanExecutableItems();
         scanNexo();
         scanSXItem();
+        plugin.getLogger().info("[CustomItems] Plugin API scan finished. Registry: " + registry.getTotalItems() + " items");
     }
 
     private void scanItemsAdder() {
-        if (Bukkit.getPluginManager().getPlugin("ItemsAdder") == null) return;
+        if (Bukkit.getPluginManager().getPlugin("ItemsAdder") == null) { plugin.getLogger().fine("[CustomItems] ItemsAdder not found, skipping"); return; }
         try {
             Class<?> customStackClass = Class.forName("dev.lone.itemsadder.api.CustomStack");
             Method getItemsMethod = customStackClass.getMethod("getItems");
@@ -100,7 +105,7 @@ public class UnifiedItemScanner {
     }
 
     private void scanOraxen() {
-        if (Bukkit.getPluginManager().getPlugin("Oraxen") == null) return;
+        if (Bukkit.getPluginManager().getPlugin("Oraxen") == null) { plugin.getLogger().fine("[CustomItems] Oraxen not found, skipping"); return; }
         try {
             Class<?> oraxenItemsClass = Class.forName("io.th0rgal.oraxen.api.OraxenItems");
             Method getItemsMethod = oraxenItemsClass.getMethod("getItems");
@@ -133,7 +138,7 @@ public class UnifiedItemScanner {
     }
 
     private void scanMMOItems() {
-        if (Bukkit.getPluginManager().getPlugin("MMOItems") == null) return;
+        if (Bukkit.getPluginManager().getPlugin("MMOItems") == null) { plugin.getLogger().fine("[CustomItems] MMOItems not found, skipping"); return; }
         try {
             Class<?> mmoItemsPlugin = Class.forName("net.Indyuce.mmoitems.MMOItems");
             Method getPluginMethod = mmoItemsPlugin.getMethod("getPlugin");
@@ -184,7 +189,7 @@ public class UnifiedItemScanner {
     }
 
     private void scanMythicMobs() {
-        if (Bukkit.getPluginManager().getPlugin("MythicMobs") == null) return;
+        if (Bukkit.getPluginManager().getPlugin("MythicMobs") == null) { plugin.getLogger().fine("[CustomItems] MythicMobs not found, skipping"); return; }
         try {
             Class<?> mythicBukkitClass = Class.forName("io.lumine.mythic.bukkit.BukkitAdapter");
             Class<?> mythicPluginClass = Class.forName("io.lumine.mythic.bukkit.MythicBukkit");
@@ -223,7 +228,7 @@ public class UnifiedItemScanner {
     }
 
     private void scanExecutableItems() {
-        if (Bukkit.getPluginManager().getPlugin("ExecutableItems") == null) return;
+        if (Bukkit.getPluginManager().getPlugin("ExecutableItems") == null) { plugin.getLogger().fine("[CustomItems] ExecutableItems not found, skipping"); return; }
         try {
             // Use the official SCore API: ExecutableItemsAPI
             Class<?> apiClass = Class.forName("com.ssomar.score.api.executableitems.ExecutableItemsAPI");
@@ -297,7 +302,7 @@ public class UnifiedItemScanner {
     }
 
     private void scanNexo() {
-        if (Bukkit.getPluginManager().getPlugin("Nexo") == null) return;
+        if (Bukkit.getPluginManager().getPlugin("Nexo") == null) { plugin.getLogger().fine("[CustomItems] Nexo not found, skipping"); return; }
         try {
             Class<?> nexoItemsClass = Class.forName("com.nexomc.nexo.items.NexoItems");
             Method valuesMethod = nexoItemsClass.getMethod("values");
@@ -327,7 +332,7 @@ public class UnifiedItemScanner {
     }
 
     private void scanSXItem() {
-        if (Bukkit.getPluginManager().getPlugin("SX-Item") == null) return;
+        if (Bukkit.getPluginManager().getPlugin("SX-Item") == null) { plugin.getLogger().fine("[CustomItems] SX-Item not found, skipping"); return; }
         try {
             Class<?> sxPluginClass = Class.forName("com.sucy.sxitem.SXItem");
             Method getPluginMethod = sxPluginClass.getMethod("getPlugin");
