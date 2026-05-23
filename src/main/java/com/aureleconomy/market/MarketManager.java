@@ -325,19 +325,23 @@ public class MarketManager {
         for (Category cat : Category.values()) {
             if (cat.name.equalsIgnoreCase(categoryName) || cat.name().equalsIgnoreCase(categoryName)) {
                 return MarketItems.getOrderItems(cat);
+            }
+        }
+        return new java.util.ArrayList<>();
+    }
 
     /**
      * Add a custom item to the market system.
      */
     public void addCustomMarketItem(String canonicalId, CustomMarketItem customItem) {
         String key = canonicalId;
-        
+
         if (!entryCache.containsKey(key)) {
             MarketEntry entry = new MarketEntry(customItem.getItemStack().getType(),
                     customItem.getBuyPrice().doubleValue());
             entryCache.put(key, entry);
         }
-        
+
         if (!buyPrices.containsKey(key) || customItem.getBuyPrice().compareTo(BigDecimal.ZERO) >= 0) {
             buyPrices.put(key, customItem.getBuyPrice().compareTo(BigDecimal.ZERO) >= 0
                     ? customItem.getBuyPrice() : getBuyPrice(customItem.getItemStack().getType()));
@@ -346,7 +350,7 @@ public class MarketManager {
             sellPrices.put(key, customItem.getSellPrice().compareTo(BigDecimal.ZERO) >= 0
                     ? customItem.getSellPrice() : getSellPrice(customItem.getItemStack().getType()));
         }
-        
+
         if (!itemCurrencies.containsKey(key)) {
             itemCurrencies.put(key, plugin.getEconomyManager().getDefaultCurrency());
         }
