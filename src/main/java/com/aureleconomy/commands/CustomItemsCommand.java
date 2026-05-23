@@ -216,7 +216,7 @@ public class CustomItemsCommand implements TabExecutor {
                 .build();
 
         // Replace in registry
-        registry.register(updated, registry.getDiscoveryMethods(id).iterator().next());
+        registry.upsert(updated);
 
         String stateStr = newState ? "<green>enabled</green>" : "<red>disabled</red>";
         sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <white>" + id + "</white> is now " + stateStr));
