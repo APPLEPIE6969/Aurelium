@@ -325,40 +325,31 @@ public class MarketManager {
         for (Category cat : Category.values()) {
             if (cat.name.equalsIgnoreCase(categoryName) || cat.name().equalsIgnoreCase(categoryName)) {
                 return MarketItems.getOrderItems(cat);
-            }
+
+    /**
+     * Add a custom item to the market system.
+     */
+    public void addCustomMarketItem(String canonicalId, CustomMarketItem customItem) {
+        String key = canonicalId;
+        
+        if (!entryCache.containsKey(key)) {
+            MarketEntry entry = new MarketEntry(customItem.getItemStack().getType(),
+                    customItem.getBuyPrice().doubleValue());
+            entryCache.put(key, entry);
         }
-        return new java.util.ArrayList<>();
+        
+        if (!buyPrices.containsKey(key) || customItem.getBuyPrice().compareTo(BigDecimal.ZERO) >= 0) {
+            buyPrices.put(key, customItem.getBuyPrice().compareTo(BigDecimal.ZERO) >= 0
+                    ? customItem.getBuyPrice() : getBuyPrice(customItem.getItemStack().getType()));
+        }
+        if (!sellPrices.containsKey(key) || customItem.getSellPrice().compareTo(BigDecimal.ZERO) >= 0) {
+            sellPrices.put(key, customItem.getSellPrice().compareTo(BigDecimal.ZERO) >= 0
+                    ? customItem.getSellPrice() : getSellPrice(customItem.getItemStack().getType()));
+        }
+        
+        if (!itemCurrencies.containsKey(key)) {
+            itemCurrencies.put(key, plugin.getEconomyManager().getDefaultCurrency());
+        }
     }
-
-}
-  * Add a custom item to the market system.
-  */
- public void addCustomMarketItem(String canonicalId, CustomMarketItem customItem) {
-     String key = canonicalId;
-     
-     if (!entryCache.containsKey(key)) {
-         // Create a MarketEntry-like mapping for the custom item
-         MarketEntry entry = new MarketEntry(customItem.getItemStack().getType(), 
-                 customItem.getBuyPrice().doubleValue());
-         entryCache.put(key, entry);
-     }
-     
-     if (!buyPrices.containsKey(key) || customItem.getBuyPrice().compareTo(BigDecimal.ZERO) >= 0) {
-         buyPrices.put(key, customItem.getBuyPrice().compareTo(BigDecimal.ZERO) >= 0 
-                 ? customItem.getBuyPrice() : getBuyPrice(customItem.getItemStack().getType()));
-     }
-     if (!sellPrices.containsKey(key) || customItem.getSellPrice().compareTo(BigDecimal.ZERO) >= 0) {
-         sellPrices.put(key, customItem.getSellPrice().compareTo(BigDecimal.ZERO) >= 0
-                 ? customItem.getSellPrice() : getSellPrice(customItem.getItemStack().getType()));
-     }
-     
-     if (!itemCurrencies.containsKey(key)) {
-         itemCurrencies.put(key, plugin.getEconomyManager().getDefaultCurrency());
-     }
- }
-
-}
-  * Add a custom item to the market system.
-  */
 
 }
