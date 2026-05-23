@@ -103,16 +103,22 @@ public class CustomItemRegistry {
             }
         }
 
-        // NEW ITEM - insert into all stores
-        itemsById.put(canonicalId, item);
-
-        if (item.getPdcKey() != null) pdcKeyToId.put(item.getPdcKey(), canonicalId);
-        if (item.getModelDataKey() != null) modelDataToId.put(item.getModelDataKey(), canonicalId);
-        if (item.getLoreHash() != null) loreHashToId.put(item.getLoreHash(), canonicalId);
-        if (item.getPluginNativeId() != null) pluginNativeIdToId.put(item.getPluginNativeId(), canonicalId);
-        itemHashToId.put(itemHash, canonicalId);
-
-        addDiscoveryMethod(canonicalId, method);
+        // NEW ITEM - insert into all stores (synchronized to prevent race between check and insert)
+        synchronized (this) {
+            // Double-check under lock to prevent TOCTOU race
+            if (itemsById.containsKey(canonicalId)) {
+                addDiscoveryMethod(canonicalId, method);
+                duplicatesPrevented.incrementAndGet();
+                return RegistrationResult.alreadyExists(canonicalId, method);
+            }
+            itemsById.put(canonicalId, item);
+            if (item.getPdcKey() != null) pdcKeyToId.put(item.getPdcKey(), canonicalId);
+            if (item.getModelDataKey() != null) modelDataToId.put(item.getModelDataKey(), canonicalId);
+            if (item.getLoreHash() != null) loreHashToId.put(item.getLoreHash(), canonicalId);
+            if (item.getPluginNativeId() != null) pluginNativeIdToId.put(item.getPluginNativeId(), canonicalId);
+            itemHashToId.put(itemHash, canonicalId);
+            addDiscoveryMethod(canonicalId, method);
+        }
 
         // Add to market if auto-add is enabled and price is set
         if (plugin.getConfig().getBoolean("custom-items.auto-add-to-market", true)) {
@@ -136,36 +142,40 @@ public class CustomItemRegistry {
      */
     public void upsert(CustomMarketItem item) {
         String canonicalId = item.getCanonicalId();
-        // Remove old dedup keys from previous version
-        CustomMarketItem old = itemsById.get(canonicalId);
-        if (old != null) {
-            if (old.getPdcKey() != null) pdcKeyToId.remove(old.getPdcKey());
-            if (old.getModelDataKey() != null) modelDataToId.remove(old.getModelDataKey());
-            if (old.getLoreHash() != null) loreHashToId.remove(old.getLoreHash());
-            if (old.getPluginNativeId() != null) pluginNativeIdToId.remove(old.getPluginNativeId());
-            itemHashToId.remove(computeItemHash(old.getItemStack()));
+        synchronized (this) {
+            // Remove old dedup keys from previous version
+            CustomMarketItem old = itemsById.get(canonicalId);
+            if (old != null) {
+                if (old.getPdcKey() != null) pdcKeyToId.remove(old.getPdcKey());
+                if (old.getModelDataKey() != null) modelDataToId.remove(old.getModelDataKey());
+                if (old.getLoreHash() != null) loreHashToId.remove(old.getLoreHash());
+                if (old.getPluginNativeId() != null) pluginNativeIdToId.remove(old.getPluginNativeId());
+                itemHashToId.remove(computeItemHash(old.getItemStack()));
+            }
+            // Replace in primary store
+            itemsById.put(canonicalId, item);
+            // Re-index dedup keys with new values
+            if (item.getPdcKey() != null) pdcKeyToId.put(item.getPdcKey(), canonicalId);
+            if (item.getModelDataKey() != null) modelDataToId.put(item.getModelDataKey(), canonicalId);
+            if (item.getLoreHash() != null) loreHashToId.put(item.getLoreHash(), canonicalId);
+            if (item.getPluginNativeId() != null) pluginNativeIdToId.put(item.getPluginNativeId(), canonicalId);
+            itemHashToId.put(computeItemHash(item.getItemStack()), canonicalId);
         }
-        // Replace in primary store
-        itemsById.put(canonicalId, item);
-        // Re-index dedup keys with new values
-        if (item.getPdcKey() != null) pdcKeyToId.put(item.getPdcKey(), canonicalId);
-        if (item.getModelDataKey() != null) modelDataToId.put(item.getModelDataKey(), canonicalId);
-        if (item.getLoreHash() != null) loreHashToId.put(item.getLoreHash(), canonicalId);
-        if (item.getPluginNativeId() != null) pluginNativeIdToId.put(item.getPluginNativeId(), canonicalId);
-        itemHashToId.put(computeItemHash(item.getItemStack()), canonicalId);
     }
 
     /**
      * Clear all in-memory maps. Used before reload to avoid stale entries.
      */
     public void clear() {
-        itemsById.clear();
-        pdcKeyToId.clear();
-        modelDataToId.clear();
-        loreHashToId.clear();
-        pluginNativeIdToId.clear();
-        itemHashToId.clear();
-        discoveryMethods.clear();
+        synchronized (this) {
+            itemsById.clear();
+            pdcKeyToId.clear();
+            modelDataToId.clear();
+            loreHashToId.clear();
+            pluginNativeIdToId.clear();
+            itemHashToId.clear();
+            discoveryMethods.clear();
+        }
     }
 
     /**
@@ -321,12 +331,14 @@ public class CustomItemRegistry {
      */
     public void saveToDatabase(DatabaseManager dbManager) {
         org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            for (Map.Entry<String, CustomMarketItem> entry : itemsById.entrySet()) {
-                try {
-                    saveCustomItem(dbManager, entry.getKey(), entry.getValue(),
-                            discoveryMethods.getOrDefault(entry.getKey(), Collections.emptySet()));
-                } catch (SQLException e) {
-                    plugin.getComponentLogger().error("[CustomItems] Failed to save item: " + entry.getKey(), e);
+            synchronized (dbManager.getWriteLock()) {
+                for (Map.Entry<String, CustomMarketItem> entry : itemsById.entrySet()) {
+                    try {
+                        saveCustomItem(dbManager, entry.getKey(), entry.getValue(),
+                                discoveryMethods.getOrDefault(entry.getKey(), Collections.emptySet()));
+                    } catch (SQLException e) {
+                        plugin.getComponentLogger().error("[CustomItems] Failed to save item: " + entry.getKey(), e);
+                    }
                 }
             }
         });
