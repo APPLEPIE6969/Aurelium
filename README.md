@@ -36,6 +36,30 @@ Aurelium includes a modern, responsive web application that players can use to b
 - **Database**: SQLite or MySQL storage with automatic migration support.
 - **Offline Earnings**: Get paid for auction sales even when you're offline.
 
+### Custom Item Detection
+
+Aurelium automatically discovers custom items from popular third-party plugins and makes them available in the server market -- no manual config required.
+
+- **Auto-Scan on Startup**: The scanner runs once when the server starts, detecting all custom items from installed plugins.
+- **Supported Plugins** (zero hard dependencies -- all via reflection):
+  - ItemsAdder
+  - Oraxen
+  - MMOItems
+  - MythicMobs
+  - ExecutableItems
+  - Nexo
+  - SX-Item
+- **`/customitems` Command**:
+  - `/customitems scan` -- Force a rescan of all supported plugins
+  - `/customitems list` -- View all discovered custom items
+  - `/customitems info <id>` -- Show details for a specific item
+  - `/customitems reload` -- Reload config overrides from disk
+  - `/customitems toggle <id>` -- Enable or disable a discovered item in the market
+  - `/customitems price <id> <buy> [sell]` -- Set buy/sell prices for a discovered item
+- **Config Sync**: Discovered items are written to `config.yml` under `discovered-items:` with source plugin, display name, material, and default prices. Edits in config are loaded on startup or via `/customitems reload`.
+- **Database Tracking**: Custom items are persisted in a `custom_items` table (schema v2, auto-migrates from v1).
+- **Safe Fallbacks**: If no supported custom item plugins are installed, the scanner silently skips with zero overhead.
+
 ### Market
 A server-owned shop that functions like a **Stock Market**, with **three interface modes**:
 - **Classic**: Traditional chest-based inventory GUI.
