@@ -420,12 +420,14 @@ public class CustomItemRegistry {
             discoveryMethods.remove(canonicalId);
         }
         org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
-                    "DELETE FROM custom_items WHERE canonical_id = ?")) {
-                ps.setString(1, canonicalId);
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                plugin.getComponentLogger().error("[CustomItems] Failed to delete item: " + canonicalId, e);
+            synchronized (dbManager.getWriteLock()) {
+                try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
+                        "DELETE FROM custom_items WHERE canonical_id = ?")) {
+                    ps.setString(1, canonicalId);
+                    ps.executeUpdate();
+                } catch (SQLException e) {
+                    plugin.getComponentLogger().error("[CustomItems] Failed to delete item: " + canonicalId, e);
+                }
             }
         });
     }
@@ -435,14 +437,16 @@ public class CustomItemRegistry {
      */
     public void updateCustomItemPrice(DatabaseManager dbManager, String canonicalId, double buyPrice, double sellPrice) {
         org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
-                    "UPDATE custom_items SET buy_price = ?, sell_price = ? WHERE canonical_id = ?")) {
-                ps.setDouble(1, buyPrice);
-                ps.setDouble(2, sellPrice);
-                ps.setString(3, canonicalId);
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                plugin.getComponentLogger().error("[CustomItems] Failed to update price for: " + canonicalId, e);
+            synchronized (dbManager.getWriteLock()) {
+                try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
+                        "UPDATE custom_items SET buy_price = ?, sell_price = ? WHERE canonical_id = ?")) {
+                    ps.setDouble(1, buyPrice);
+                    ps.setDouble(2, sellPrice);
+                    ps.setString(3, canonicalId);
+                    ps.executeUpdate();
+                } catch (SQLException e) {
+                    plugin.getComponentLogger().error("[CustomItems] Failed to update price for: " + canonicalId, e);
+                }
             }
         });
     }
