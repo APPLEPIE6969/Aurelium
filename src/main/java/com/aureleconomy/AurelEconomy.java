@@ -98,7 +98,7 @@ public class AurelEconomy extends JavaPlugin {
      }, 20L);
 
      // Phase 3: Register runtime detection listeners
-     getServer().getPluginManager().registerEvents(new ItemDiscoveryListener(unifiedScanner), this);
+     getServer().getPluginManager().registerEvents(new ItemDiscoveryListener(this, unifiedScanner), this);
 
      // Phase 4: Periodic rescan
      int scanInterval = getConfig().getInt("custom-items.scan-interval-minutes", 10);
