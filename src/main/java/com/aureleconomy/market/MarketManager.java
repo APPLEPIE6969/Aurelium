@@ -3,7 +3,6 @@ package com.aureleconomy.market;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.market.MarketItems.Category;
 import com.aureleconomy.scanner.CustomMarketItem;
-import com.aureleconomy.scanner.CustomMarketItem;
 import com.aureleconomy.market.MarketItems.MarketEntry;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
