@@ -14,6 +14,8 @@ public class DatabaseManager {
     private final AurelEconomy plugin;
     private Connection connection;
     private String databaseType;
+    // Lock for serializing all async DB writes to prevent concurrent Connection use
+    private final Object dbWriteLock = new Object();
 
     public DatabaseManager(AurelEconomy plugin) {
         this.plugin = plugin;
@@ -25,6 +27,19 @@ public class DatabaseManager {
 	 */
 	public boolean isMySQL() {
 		return "mysql".equals(databaseType);
+	}
+
+	/**
+	 * Returns the lock object for serializing async DB write operations.
+	 * All async tasks that use getConnection() for writes should synchronize on this.
+	 * <pre>
+	 *   synchronized (dbManager.getWriteLock()) {
+	 *       try (PreparedStatement ps = dbManager.getConnection().prepareStatement(...)) { ... }
+	 *   }
+	 * </pre>
+	 */
+	public Object getWriteLock() {
+		return dbWriteLock;
 	}
 
     private static final int LATEST_SCHEMA_VERSION = 2;
