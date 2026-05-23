@@ -19,7 +19,7 @@ public class MockItemsAdder extends JavaPlugin {
         items.put("itemsadder:sapphire_helmet", new MockItem("itemsadder:sapphire_helmet",
             org.bukkit.Material.DIAMOND_HELMET, "Sapphire Helmet", 10003));
 
-        getLogger().info("MockItemsAdder loaded with " + items.size() + " custom items");
+        getLogger().info("ItemsAdder (mock) loaded with " + items.size() + " custom items");
     }
 
     public static Map<String, MockItem> getItems() {
