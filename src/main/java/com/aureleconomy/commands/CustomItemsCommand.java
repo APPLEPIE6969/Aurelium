@@ -215,7 +215,7 @@ public class CustomItemsCommand implements TabExecutor {
                 .build();
 
         // Replace in registry
-        registry.register(updated, registry.getDiscoveryMethods(id).iterator().next());
+        registry.upsert(updated);
 
         String stateStr = newState ? "<green>enabled</green>" : "<red>disabled</red>";
         sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <white>" + id + "</white> is now " + stateStr));
@@ -257,7 +257,7 @@ public class CustomItemsCommand implements TabExecutor {
                     .build();
 
             Set<DiscoveryMethod> methods = registry.getDiscoveryMethods(id);
-            registry.register(updated, methods.isEmpty() ? DiscoveryMethod.PDC_SCAN : methods.iterator().next());
+            registry.upsert(updated);
             registry.updateCustomItemPrice(plugin.getDatabaseManager(), id, buy, sell);
 
             sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <white>" + id + "</white> price set: " +
