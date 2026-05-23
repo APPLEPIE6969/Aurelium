@@ -1,4 +1,4 @@
-name: MockItemsAdder
+name: ItemsAdder
 version: '1.0'
 main: mock.MockItemsAdder
 api-version: '26.1'
