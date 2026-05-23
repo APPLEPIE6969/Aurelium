@@ -130,6 +130,45 @@ public class CustomItemRegistry {
     }
 
     /**
+     * Update an existing custom item in-place (for toggle/price changes).
+     * Unlike register(), this overwrites the existing entry instead of
+     * returning alreadyExists.
+     */
+    public void upsert(CustomMarketItem item) {
+        String canonicalId = item.getCanonicalId();
+        // Remove old dedup keys from previous version
+        CustomMarketItem old = itemsById.get(canonicalId);
+        if (old != null) {
+            if (old.getPdcKey() != null) pdcKeyToId.remove(old.getPdcKey());
+            if (old.getModelDataKey() != null) modelDataToId.remove(old.getModelDataKey());
+            if (old.getLoreHash() != null) loreHashToId.remove(old.getLoreHash());
+            if (old.getPluginNativeId() != null) pluginNativeIdToId.remove(old.getPluginNativeId());
+            itemHashToId.remove(computeItemHash(old.getItemStack()));
+        }
+        // Replace in primary store
+        itemsById.put(canonicalId, item);
+        // Re-index dedup keys with new values
+        if (item.getPdcKey() != null) pdcKeyToId.put(item.getPdcKey(), canonicalId);
+        if (item.getModelDataKey() != null) modelDataToId.put(item.getModelDataKey(), canonicalId);
+        if (item.getLoreHash() != null) loreHashToId.put(item.getLoreHash(), canonicalId);
+        if (item.getPluginNativeId() != null) pluginNativeIdToId.put(item.getPluginNativeId(), canonicalId);
+        itemHashToId.put(computeItemHash(item.getItemStack()), canonicalId);
+    }
+
+    /**
+     * Clear all in-memory maps. Used before reload to avoid stale entries.
+     */
+    public void clear() {
+        itemsById.clear();
+        pdcKeyToId.clear();
+        modelDataToId.clear();
+        loreHashToId.clear();
+        pluginNativeIdToId.clear();
+        itemHashToId.clear();
+        discoveryMethods.clear();
+    }
+
+    /**
      * Compute a deep hash of an ItemStack for dedup purposes.
      * Hashes: Material, ItemMeta, CustomModelData, Lore, all PDC keys+values.
      */
