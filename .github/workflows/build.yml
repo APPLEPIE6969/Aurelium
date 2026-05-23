@@ -767,8 +767,7 @@ jobs:
       - name: Build mock ItemsAdder
         run: |
           cd ci/mock-itemsadder
-          chmod +x ../../gradlew
-          ../../gradlew build
+          gradle build
           cp build/libs/*.jar ../mock-itemsadder.jar
       - name: Download Paper
         run: |
