@@ -570,29 +570,36 @@ public class AuctionManager {
     /**
   * Returns the display name of an item, preferring custom display name over material name.
   */
+	/**
+	 * Returns the display name of an item, preferring custom display name over material name.
+	 * Thread-safe: uses simplified fallback when called from async threads
+	 * (ItemMeta/PDC access is not safe off the main thread in Paper).
+	 */
 	private String getItemDisplayName(ItemStack item) {
-		// Check custom item registry first
-		com.aureleconomy.scanner.CustomItemRegistry registry = plugin.getCustomItemRegistry();
-		if (registry != null) {
-			java.util.Optional<String> customId = registry.resolveItemId(item);
-			if (customId.isPresent()) {
-				com.aureleconomy.scanner.CustomMarketItem customItem = registry.getById(customId.get());
-				if (customItem != null && customItem.getDisplayName() != null && !customItem.getDisplayName().isEmpty()) {
-					return customItem.getDisplayName();
+		if (Bukkit.isPrimaryThread()) {
+			// Full lookup only on main thread where ItemMeta/PDC is safe
+			com.aureleconomy.scanner.CustomItemRegistry registry = plugin.getCustomItemRegistry();
+			if (registry != null) {
+				java.util.Optional<String> customId = registry.resolveItemId(item);
+				if (customId.isPresent()) {
+					com.aureleconomy.scanner.CustomMarketItem customItem = registry.getById(customId.get());
+					if (customItem != null && customItem.getDisplayName() != null && !customItem.getDisplayName().isEmpty()) {
+						return customItem.getDisplayName();
+					}
+				}
+			}
+			if (item.hasItemMeta()) {
+				ItemMeta meta = item.getItemMeta();
+				if (meta.hasDisplayName() || meta.displayName() != null) {
+					net.kyori.adventure.text.Component display = meta.displayName();
+					if (display != null) {
+						return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+								.serialize(display);
+					}
 				}
 			}
 		}
-		if (item.hasItemMeta()) {
-			ItemMeta meta = item.getItemMeta();
-			// Paper 26.1.2: displayName() returns a Component (may be null even with custom name)
-			if (meta.hasDisplayName() || meta.displayName() != null) {
-				net.kyori.adventure.text.Component display = meta.displayName();
-				if (display != null) {
-					return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
-							.serialize(display);
-				}
-			}
-		}
+		// Fallback for async context: avoid ItemMeta reads
 		return item.getType().name();
 	}
 
