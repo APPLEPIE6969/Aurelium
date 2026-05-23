@@ -330,7 +330,7 @@ public class MarketManager {
         return new java.util.ArrayList<>();
     }
 
- /**
+}
   * Add a custom item to the market system.
   */
  public void addCustomMarketItem(String canonicalId, CustomMarketItem customItem) {
@@ -357,7 +357,7 @@ public class MarketManager {
      }
  }
 
- /**
+}
   * Add a custom item to the market system.
   */
 
