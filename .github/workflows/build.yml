@@ -665,9 +665,9 @@ jobs:
           cp build/libs/*.jar ../mock-itemsadder.jar
       - name: Download Paper
         run: |
-          LATEST_BUILD=$(curl -sL "https://api.papermc.io/v2/projects/paper/versions/26.1.2/builds" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['builds'][-1]['build'])" 2>/dev/null || echo "65")
-          curl -sL "https://api.papermc.io/v2/projects/paper/versions/26.1.2/builds/${LATEST_BUILD}/downloads/paper-26.1.2-${LATEST_BUILD}.jar" -o paper.jar || echo "Paper download failed"
-          ls -lh paper.jar 2>/dev/null || echo "No paper.jar"
+          curl -sL "https://fill-data.papermc.io/v1/objects/980421a4f9c4b26f15a9d2fddd7fc91125fd91320d21e189d4504e70893a79e5/paper-26.1.2-61.jar" -o paper.jar
+          ls -lh paper.jar
+          file paper.jar | head -1
       - name: Download plugin artifact
         uses: actions/download-artifact@v4
         with:
