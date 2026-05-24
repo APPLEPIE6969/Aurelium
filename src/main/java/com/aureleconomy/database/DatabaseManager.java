@@ -11,375 +11,427 @@ import java.sql.Statement;
 
 public class DatabaseManager {
 
-    private final AurelEconomy plugin;
-    private Connection connection;
-    private String databaseType;
-    // Lock for serializing all async DB writes to prevent concurrent Connection use
-    private final Object dbWriteLock = new Object();
+ private final AurelEconomy plugin;
+ private Connection connection;
+ private String databaseType;
+ // Lock for serializing all async DB writes to prevent concurrent Connection use
+ private final Object dbWriteLock = new Object();
 
-    public DatabaseManager(AurelEconomy plugin) {
-        this.plugin = plugin;
-        this.databaseType = plugin.getConfig().getString("database.type", "sqlite").toLowerCase();
-    }
-
-	/**
-	 * Returns true if the configured database type is MySQL/MariaDB.
-	 */
-	public boolean isMySQL() {
-		return "mysql".equals(databaseType);
-	}
-
-	/**
-	 * Returns the lock object for serializing async DB write operations.
-	 * All async tasks that use getConnection() for writes should synchronize on this.
-	 * <pre>
-	 *   synchronized (dbManager.getWriteLock()) {
-	 *       try (PreparedStatement ps = dbManager.getConnection().prepareStatement(...)) { ... }
-	 *   }
-	 * </pre>
-	 */
-	public Object getWriteLock() {
-		return dbWriteLock;
-	}
-
-    private static final int LATEST_SCHEMA_VERSION = 2;
-
-    public boolean initialize() {
-        try {
-            if ("mysql".equals(databaseType)) {
-                initializeMySQL();
-            } else {
-                initializeSQLite();
-            }
-            createTables();
-            runMigrations();
-            return true;
-        } catch (SQLException e) {
-            plugin.getComponentLogger().error("Could not initialize database (" + databaseType + ")!", e);
-            return false;
-        }
-    }
-
-    public void backupDatabase(String version) {
-        if (!"sqlite".equals(databaseType))
-            return;
-
-        File dbFile = new File(plugin.getDataFolder(), plugin.getConfig().getString("database.file", "database.db"));
-        if (!dbFile.exists())
-            return;
-
-        File backupFolder = new File(plugin.getDataFolder(), "backups");
-        if (!backupFolder.exists()) {
-            backupFolder.mkdirs();
-        }
-
-        File backupFile = new File(backupFolder, "database_v" + version + "_" + System.currentTimeMillis() + ".db");
-        try {
-            java.nio.file.Files.copy(dbFile.toPath(), backupFile.toPath(),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            plugin.getComponentLogger().info("Database backup created: " + backupFile.getName());
-        } catch (java.io.IOException e) {
-            plugin.getComponentLogger().error("Failed to create database backup!", e);
-        }
-    }
-
-    private void initializeSQLite() throws SQLException {
-        File dataFolder = new File(plugin.getDataFolder(),
-                plugin.getConfig().getString("database.file", "database.db"));
-        if (!dataFolder.getParentFile().exists()) {
-            dataFolder.getParentFile().mkdirs();
-        }
-
-        connection = DriverManager.getConnection("jdbc:sqlite:" + dataFolder.getAbsolutePath());
-
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("PRAGMA journal_mode=WAL;");
-            stmt.execute("PRAGMA busy_timeout=30000;");
-            stmt.execute("PRAGMA synchronous=NORMAL;");
-            stmt.execute("PRAGMA cache_size=-10000;");
-        }
-    }
-
-    private void initializeMySQL() throws SQLException {
-        FileConfiguration config = plugin.getConfig();
-        String host = config.getString("database.mysql.host", "localhost");
-        int port = config.getInt("database.mysql.port", 3306);
-        String database = config.getString("database.mysql.database", "aurelium");
-        String username = config.getString("database.mysql.username", "root");
-        String password = config.getString("database.mysql.password", "");
-
-        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false";
-        connection = DriverManager.getConnection(url, username, password);
-    }
-
-    private void createTables() {
-        String autoIncrement = "mysql".equals(databaseType) ? "INT AUTO_INCREMENT PRIMARY KEY"
-                : "INTEGER PRIMARY KEY AUTOINCREMENT";
-
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE IF NOT EXISTS database_info (" +
-                    "version INTEGER PRIMARY KEY" +
-                    ");");
-
-            statement.execute("CREATE TABLE IF NOT EXISTS players (" +
-                    "uuid VARCHAR(36) PRIMARY KEY, " +
-                    "name VARCHAR(16), " +
-                    "gui_style VARCHAR(16) DEFAULT 'MODERN'" +
-                    ");");
-
-            statement.execute("CREATE TABLE IF NOT EXISTS player_balances (" +
-                    "uuid VARCHAR(36), " +
-                    "currency VARCHAR(32), " +
-                    "balance DOUBLE NOT NULL DEFAULT 0.0, " +
-                    "PRIMARY KEY (uuid, currency)" +
-                    ");");
-
-            migrateLegacyBalances();
-
-            statement.execute("CREATE TABLE IF NOT EXISTS auctions (" +
-                    "id " + autoIncrement + ", " +
-                    "seller_uuid VARCHAR(36), " +
-                    "item_data TEXT, " +
-                    "price DOUBLE, " +
-                    "currency VARCHAR(32), " +
-                    "is_bin BOOLEAN, " +
-                    "expiration LONG, " +
-                    "highest_bidder_uuid VARCHAR(36), " +
-                    "ended BOOLEAN DEFAULT 0, " +
-                    "collected BOOLEAN DEFAULT 0, " +
-                    "listing_fee DOUBLE DEFAULT 0.0, " +
-                    "start_time LONG" +
-                    ");");
-
-            statement.execute("CREATE TABLE IF NOT EXISTS offline_earnings (" +
-                    "id " + autoIncrement + ", " +
-                    "uuid VARCHAR(36), " +
-                    "amount DOUBLE, " +
-                    "currency VARCHAR(32), " +
-                    "item_display VARCHAR(64), " +
-                    "timestamp LONG" +
-                    ");");
-
-            statement.execute("CREATE TABLE IF NOT EXISTS buy_orders (" +
-                    "id " + autoIncrement + ", " +
-                    "buyer_uuid VARCHAR(36), " +
-                    "material VARCHAR(64), " +
-                    "amount_requested INTEGER, " +
-                    "amount_filled INTEGER DEFAULT 0, " +
-                    "price_per_piece DOUBLE, " +
-                    "currency VARCHAR(32), " +
-                    "status VARCHAR(16) DEFAULT 'ACTIVE'" +
-                    ");");
-
-            statement.execute("CREATE TABLE IF NOT EXISTS price_history (" +
-                    "id " + autoIncrement + ", " +
-                    "item_key VARCHAR(128), " +
-                    "buy_price DOUBLE, " +
-                    "sell_price DOUBLE, " +
-                    "timestamp LONG" +
-                    ")");
-
-            createOffersTable(autoIncrement);
-
-        } catch (SQLException e) {
-            plugin.getComponentLogger().error("Could not create tables for " + databaseType + "!", e);
-        }
-
-  createCustomItemsTable();
-    }
-
-    private void runMigrations() {
-        int currentVersion = getDatabaseVersion();
-        if (currentVersion >= LATEST_SCHEMA_VERSION)
-            return;
-
-        plugin.getComponentLogger().info("Database outdated (v" + currentVersion
-                + "). Starting automatic migration to v" + LATEST_SCHEMA_VERSION + "...");
-
-        try {
-            connection.setAutoCommit(false);
-
-            for (int i = currentVersion + 1; i <= LATEST_SCHEMA_VERSION; i++) {
-                plugin.getComponentLogger().info("Applying database migration v" + i + "...");
-                applyMigration(i);
-            }
-
-            updateDatabaseVersion(LATEST_SCHEMA_VERSION);
-            connection.commit();
-            plugin.getComponentLogger().info("Database migration completed successfully.");
-        } catch (SQLException e) {
-            try {
-                connection.rollback();
-            } catch (SQLException ex) {
-                /* ignored */ }
-            plugin.getComponentLogger().error("Database migration FAILED! Some features might be broken.", e);
-        } finally {
-            try {
-                connection.setAutoCommit(true);
-            } catch (SQLException ex) {
-                /* ignored */ }
-        }
-    }
-
-    private int getDatabaseVersion() {
-        try (Statement statement = connection.createStatement()) {
-            var rs = statement.executeQuery("SELECT version FROM database_info LIMIT 1");
-            if (rs.next())
-                return rs.getInt("version");
-        } catch (SQLException e) {
-        }
-        return 0;
-    }
-
-    private void updateDatabaseVersion(int version) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("DELETE FROM database_info;");
-            statement.execute("INSERT INTO database_info (version) VALUES (" + version + ");");
-        }
-    }
-
-    private void applyMigration(int version) throws SQLException {
-        switch (version) {
-            case 1:
-                addColumnIfNotExists("players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
-                addColumnIfNotExists("auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
-                addColumnIfNotExists("auctions", "start_time", "LONG");
-                addColumnIfNotExists("auctions", "currency", "VARCHAR(32)");
-                addColumnIfNotExists("offline_earnings", "currency", "VARCHAR(32)");
-                addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
-                addColumnIfNotExists("auction_offers", "currency", "VARCHAR(32)");
-                break;
-                case 2:
-                 createCustomItemsTable();
-                 break;
-        }
-    }
-
-    private void createOffersTable(String autoIncrement) {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE IF NOT EXISTS auction_offers (" +
-                    "id " + autoIncrement + ", " +
-                    "auction_id INTEGER, " +
-                    "bidder_uuid VARCHAR(36), " +
-                    "amount DOUBLE, " +
-                    "currency VARCHAR(32), " +
-                    "status VARCHAR(16) DEFAULT 'PENDING', " +
-                    "timestamp LONG, " +
-                    "FOREIGN KEY(auction_id) REFERENCES auctions(id)" +
-                    ");");
-        } catch (SQLException e) {
-            plugin.getComponentLogger().error("Could not create offers table for " + databaseType + "!", e);
-        }
-    }
-
-    private boolean migrationChecked = false;
-
-    private void migrateLegacyBalances() {
-        if (migrationChecked)
-            return;
-        migrationChecked = true;
-
-        try (Statement statement = connection.createStatement()) {
-            statement.executeQuery("SELECT balance FROM players LIMIT 1");
-
-            plugin.getComponentLogger()
-                    .info("Legacy single-currency database detected. Migrating to multi-currency system...");
-            String defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
-
-            statement.execute("INSERT INTO player_balances (uuid, currency, balance) " +
-                    "SELECT uuid, '" + defaultCurrency + "', balance FROM players " +
-                    "WHERE uuid NOT IN (SELECT uuid FROM player_balances WHERE currency = '" + defaultCurrency + "');");
-
-            try {
-                statement.execute("ALTER TABLE players DROP COLUMN balance;");
-            } catch (SQLException dropError) {
-            }
-
-            plugin.getComponentLogger().info("Multi-currency database migration completed successfully.");
-        } catch (SQLException e) {
-        }
-    }
-
-    public Connection getConnection() {
-        try {
-            if (connection == null || connection.isClosed()) {
-                if ("mysql".equals(databaseType)) {
-                    initializeMySQL();
-                } else {
-                    initializeSQLite();
-                }
-            }
-        } catch (SQLException e) {
-            plugin.getComponentLogger().error("Failed to re-establish " + databaseType + " database connection!", e);
-        }
-        return connection;
-    }
-
-    public void close() {
-        try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-            }
-        } catch (SQLException e) {
-            plugin.getComponentLogger().error("Could not close database connection!", e);
-        }
-    }
-
-    private void addColumnIfNotExists(String table, String column, String type) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            try {
-                statement.executeQuery("SELECT " + column + " FROM " + table + " LIMIT 1");
-                return;
-            } catch (SQLException e) {
-            }
-            statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
-        }
-    }
-
- private void createCustomItemsTable() {
-     try (Statement statement = connection.createStatement()) {
-         if ("mysql".equals(databaseType)) {
-             statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
-                 "canonical_id VARCHAR(255) PRIMARY KEY, " +
-                 "source_plugin VARCHAR(64) NOT NULL, " +
-                 "display_name VARCHAR(256), " +
-                 "item_data TEXT NOT NULL, " +
-                 "pdc_key VARCHAR(255), " +
-                 "model_data_key VARCHAR(128), " +
-                 "lore_hash VARCHAR(64), " +
-                 "plugin_native_id VARCHAR(255), " +
-                 "category VARCHAR(64), " +
-                 "buy_price DOUBLE DEFAULT -1, " +
-                 "sell_price DOUBLE DEFAULT -1, " +
-                 "enabled TINYINT(1) DEFAULT 1, " +
-                 "discovery_methods VARCHAR(256), " +
-                 "first_discovered BIGINT NOT NULL, " +
-                 "last_seen BIGINT NOT NULL" +
-                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-         } else {
-             statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
-                 "canonical_id TEXT PRIMARY KEY, " +
-                 "source_plugin TEXT NOT NULL, " +
-                 "display_name TEXT, " +
-                 "item_data TEXT NOT NULL, " +
-                 "pdc_key TEXT, " +
-                 "model_data_key TEXT, " +
-                 "lore_hash TEXT, " +
-                 "plugin_native_id TEXT, " +
-                 "category TEXT, " +
-                 "buy_price REAL DEFAULT -1, " +
-                 "sell_price REAL DEFAULT -1, " +
-                 "enabled INTEGER DEFAULT 1, " +
-                 "discovery_methods TEXT, " +
-                 "first_discovered INTEGER NOT NULL, " +
-                 "last_seen INTEGER NOT NULL" +
-                 ")");
-         }
-     } catch (SQLException e) {
-         plugin.getComponentLogger().error("Could not create custom_items table for " + databaseType + "!", e);
-     }
+ public DatabaseManager(AurelEconomy plugin) {
+ this.plugin = plugin;
+ this.databaseType = plugin.getConfig().getString("database.type", "sqlite").toLowerCase();
  }
 
+ /**
+ * Returns true if the configured database type is MySQL/MariaDB.
+ */
+ public boolean isMySQL() {
+ return "mysql".equals(databaseType);
+ }
 
+ /**
+ * Returns the lock object for serializing async DB write operations.
+ * All async tasks that use getConnection() for writes should synchronize on this.
+ * <pre>
+ * synchronized (dbManager.getWriteLock()) {
+ * try (PreparedStatement ps = dbManager.getConnection().prepareStatement(...)) { ... }
+ * }
+ * </pre>
+ */
+ public Object getWriteLock() {
+ return dbWriteLock;
+ }
 
+ private static final int LATEST_SCHEMA_VERSION = 2;
+
+ public boolean initialize() {
+ try {
+ if ("mysql".equals(databaseType)) {
+ initializeMySQL();
+ } else {
+ initializeSQLite();
+ }
+ createTables();
+ runMigrations();
+ return true;
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Could not initialize database (" + databaseType + ")!", e);
+ return false;
+ }
+ }
+
+ public void backupDatabase(String version) {
+ if (!"sqlite".equals(databaseType))
+ return;
+
+ File dbFile = new File(plugin.getDataFolder(), plugin.getConfig().getString("database.file", "database.db"));
+ if (!dbFile.exists())
+ return;
+
+ File backupFolder = new File(plugin.getDataFolder(), "backups");
+ if (!backupFolder.exists()) {
+ backupFolder.mkdirs();
+ }
+
+ File backupFile = new File(backupFolder, "database_v" + version + "_" + System.currentTimeMillis() + ".db");
+ try {
+ java.nio.file.Files.copy(dbFile.toPath(), backupFile.toPath(),
+ java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+ plugin.getComponentLogger().info("Database backup created: " + backupFile.getName());
+ } catch (java.io.IOException e) {
+ plugin.getComponentLogger().error("Failed to create database backup!", e);
+ }
+ }
+
+ private void initializeSQLite() throws SQLException {
+ File dataFolder = new File(plugin.getDataFolder(),
+ plugin.getConfig().getString("database.file", "database.db"));
+ if (!dataFolder.getParentFile().exists()) {
+ dataFolder.getParentFile().mkdirs();
+ }
+
+ connection = DriverManager.getConnection("jdbc:sqlite:" + dataFolder.getAbsolutePath());
+
+ try (Statement stmt = connection.createStatement()) {
+ stmt.execute("PRAGMA journal_mode=WAL;");
+ stmt.execute("PRAGMA busy_timeout=30000;");
+ stmt.execute("PRAGMA synchronous=NORMAL;");
+ stmt.execute("PRAGMA cache_size=-10000;");
+ }
+ }
+
+ private void initializeMySQL() throws SQLException {
+ FileConfiguration config = plugin.getConfig();
+ String host = config.getString("database.mysql.host", "localhost");
+ int port = config.getInt("database.mysql.port", 3306);
+ String database = config.getString("database.mysql.database", "aurelium");
+ String username = config.getString("database.mysql.username", "root");
+ String password = config.getString("database.mysql.password", "");
+
+ String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false";
+ connection = DriverManager.getConnection(url, username, password);
+ }
+
+ private void createTables() {
+ String autoIncrement = "mysql".equals(databaseType) ? "INT AUTO_INCREMENT PRIMARY KEY"
+ : "INTEGER PRIMARY KEY AUTOINCREMENT";
+
+ try (Statement statement = connection.createStatement()) {
+ statement.execute("CREATE TABLE IF NOT EXISTS database_info (" +
+ "version INTEGER PRIMARY KEY" +
+ ");");
+
+ statement.execute("CREATE TABLE IF NOT EXISTS players (" +
+ "uuid VARCHAR(36) PRIMARY KEY, " +
+ "name VARCHAR(16), " +
+ "gui_style VARCHAR(16) DEFAULT 'MODERN'" +
+ ");");
+
+ statement.execute("CREATE TABLE IF NOT EXISTS player_balances (" +
+ "uuid VARCHAR(36), " +
+ "currency VARCHAR(32), " +
+ "balance DOUBLE NOT NULL DEFAULT 0.0, " +
+ "PRIMARY KEY (uuid, currency)" +
+ ");");
+
+ migrateLegacyBalances();
+
+ statement.execute("CREATE TABLE IF NOT EXISTS auctions (" +
+ "id " + autoIncrement + ", " +
+ "seller_uuid VARCHAR(36), " +
+ "item_data TEXT, " +
+ "price DOUBLE, " +
+ "currency VARCHAR(32), " +
+ "is_bin BOOLEAN, " +
+ "expiration LONG, " +
+ "highest_bidder_uuid VARCHAR(36), " +
+ "ended BOOLEAN DEFAULT 0, " +
+ "collected BOOLEAN DEFAULT 0, " +
+ "listing_fee DOUBLE DEFAULT 0.0, " +
+ "start_time LONG" +
+ ");");
+
+ statement.execute("CREATE TABLE IF NOT EXISTS offline_earnings (" +
+ "id " + autoIncrement + ", " +
+ "uuid VARCHAR(36), " +
+ "amount DOUBLE, " +
+ "currency VARCHAR(32), " +
+ "item_display VARCHAR(64), " +
+ "timestamp LONG" +
+ ");");
+
+ statement.execute("CREATE TABLE IF NOT EXISTS buy_orders (" +
+ "id " + autoIncrement + ", " +
+ "buyer_uuid VARCHAR(36), " +
+ "material VARCHAR(64), " +
+ "amount_requested INTEGER, " +
+ "amount_filled INTEGER DEFAULT 0, " +
+ "price_per_piece DOUBLE, " +
+ "currency VARCHAR(32), " +
+ "status VARCHAR(16) DEFAULT 'ACTIVE'" +
+ ");");
+
+ statement.execute("CREATE TABLE IF NOT EXISTS price_history (" +
+ "id " + autoIncrement + ", " +
+ "item_key VARCHAR(128), " +
+ "buy_price DOUBLE, " +
+ "sell_price DOUBLE, " +
+ "timestamp LONG" +
+ ")");
+
+ createOffersTable(autoIncrement);
+
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Could not create tables for " + databaseType + "!", e);
+ }
+
+ createCustomItemsTable();
+ }
+
+ private void runMigrations() {
+ int currentVersion = getDatabaseVersion();
+ if (currentVersion >= LATEST_SCHEMA_VERSION)
+ return;
+
+ plugin.getComponentLogger().info("Database outdated (v" + currentVersion
+ + "). Starting automatic migration to v" + LATEST_SCHEMA_VERSION + "...");
+
+ try {
+ connection.setAutoCommit(false);
+
+ for (int i = currentVersion + 1; i <= LATEST_SCHEMA_VERSION; i++) {
+ plugin.getComponentLogger().info("Applying database migration v" + i + "...");
+ applyMigration(i);
+ }
+
+ updateDatabaseVersion(LATEST_SCHEMA_VERSION);
+ connection.commit();
+ plugin.getComponentLogger().info("Database migration completed successfully.");
+ } catch (SQLException e) {
+ try {
+ connection.rollback();
+ } catch (SQLException ex) {
+ /* ignored */
+ }
+ plugin.getComponentLogger().error("Database migration FAILED! Some features might be broken.", e);
+ } finally {
+ try {
+ connection.setAutoCommit(true);
+ } catch (SQLException ex) {
+ /* ignored */
+ }
+ }
+ }
+
+ private int getDatabaseVersion() {
+ try (Statement statement = connection.createStatement()) {
+ var rs = statement.executeQuery("SELECT version FROM database_info LIMIT 1");
+ if (rs.next())
+ return rs.getInt("version");
+ } catch (SQLException e) {
+ }
+ return 0;
+ }
+
+ private void updateDatabaseVersion(int version) throws SQLException {
+ try (Statement statement = connection.createStatement()) {
+ statement.execute("DELETE FROM database_info;");
+ statement.execute("INSERT INTO database_info (version) VALUES (" + version + ");");
+ }
+ }
+
+ private void applyMigration(int version) throws SQLException {
+ switch (version) {
+ case 1:
+ addColumnIfNotExists("players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
+ addColumnIfNotExists("auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
+ addColumnIfNotExists("auctions", "start_time", "LONG");
+ addColumnIfNotExists("auctions", "currency", "VARCHAR(32)");
+ addColumnIfNotExists("offline_earnings", "currency", "VARCHAR(32)");
+ addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
+ addColumnIfNotExists("auction_offers", "currency", "VARCHAR(32)");
+ break;
+ case 2:
+ // Fix: propagate DDL failure — throw instead of swallowing
+ createCustomItemsTableOrThrow();
+ break;
+ }
+ }
+
+ private void createOffersTable(String autoIncrement) {
+ try (Statement statement = connection.createStatement()) {
+ statement.execute("CREATE TABLE IF NOT EXISTS auction_offers (" +
+ "id " + autoIncrement + ", " +
+ "auction_id INTEGER, " +
+ "bidder_uuid VARCHAR(36), " +
+ "amount DOUBLE, " +
+ "currency VARCHAR(32), " +
+ "status VARCHAR(16) DEFAULT 'PENDING', " +
+ "timestamp LONG, " +
+ "FOREIGN KEY(auction_id) REFERENCES auctions(id)" +
+ ");");
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Could not create offers table for " + databaseType + "!", e);
+ }
+ }
+
+ private boolean migrationChecked = false;
+
+ private void migrateLegacyBalances() {
+ if (migrationChecked)
+ return;
+ migrationChecked = true;
+
+ try (Statement statement = connection.createStatement()) {
+ statement.executeQuery("SELECT balance FROM players LIMIT 1");
+
+ plugin.getComponentLogger()
+ .info("Legacy single-currency database detected. Migrating to multi-currency system...");
+ String defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
+
+ statement.execute("INSERT INTO player_balances (uuid, currency, balance) " +
+ "SELECT uuid, '" + defaultCurrency + "', balance FROM players " +
+ "WHERE uuid NOT IN (SELECT uuid FROM player_balances WHERE currency = '" + defaultCurrency + "');");
+
+ try {
+ statement.execute("ALTER TABLE players DROP COLUMN balance;");
+ } catch (SQLException dropError) {
+ }
+
+ plugin.getComponentLogger().info("Multi-currency database migration completed successfully.");
+ } catch (SQLException e) {
+ }
+ }
+
+ public Connection getConnection() {
+ try {
+ if (connection == null || connection.isClosed()) {
+ if ("mysql".equals(databaseType)) {
+ initializeMySQL();
+ } else {
+ initializeSQLite();
+ }
+ }
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Failed to re-establish " + databaseType + " database connection!", e);
+ }
+ return connection;
+ }
+
+ public void close() {
+ try {
+ if (connection != null && !connection.isClosed()) {
+ connection.close();
+ }
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Could not close database connection!", e);
+ }
+ }
+
+ private void addColumnIfNotExists(String table, String column, String type) throws SQLException {
+ try (Statement statement = connection.createStatement()) {
+ try {
+ statement.executeQuery("SELECT " + column + " FROM " + table + " LIMIT 1");
+ return;
+ } catch (SQLException e) {
+ }
+ statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
+ }
+ }
+
+ /**
+ * Creates the custom_items table. Logs errors but does NOT throw.
+ * Used during initial createTables() where failure is non-fatal
+ * (table may already exist or be created later via migration).
+ */
+ private void createCustomItemsTable() {
+ try (Statement statement = connection.createStatement()) {
+ if ("mysql".equals(databaseType)) {
+ statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+ "canonical_id VARCHAR(255) PRIMARY KEY, " +
+ "source_plugin VARCHAR(64) NOT NULL, " +
+ "display_name VARCHAR(256), " +
+ "item_data TEXT NOT NULL, " +
+ "pdc_key VARCHAR(255), " +
+ "model_data_key VARCHAR(128), " +
+ "lore_hash VARCHAR(64), " +
+ "plugin_native_id VARCHAR(255), " +
+ "category VARCHAR(64), " +
+ "buy_price DOUBLE DEFAULT -1, " +
+ "sell_price DOUBLE DEFAULT -1, " +
+ "enabled TINYINT(1) DEFAULT 1, " +
+ "discovery_methods VARCHAR(256), " +
+ "first_discovered BIGINT NOT NULL, " +
+ "last_seen BIGINT NOT NULL" +
+ ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+ } else {
+ statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+ "canonical_id TEXT PRIMARY KEY, " +
+ "source_plugin TEXT NOT NULL, " +
+ "display_name TEXT, " +
+ "item_data TEXT NOT NULL, " +
+ "pdc_key TEXT, " +
+ "model_data_key TEXT, " +
+ "lore_hash TEXT, " +
+ "plugin_native_id TEXT, " +
+ "category TEXT, " +
+ "buy_price REAL DEFAULT -1, " +
+ "sell_price REAL DEFAULT -1, " +
+ "enabled INTEGER DEFAULT 1, " +
+ "discovery_methods TEXT, " +
+ "first_discovered INTEGER NOT NULL, " +
+ "last_seen INTEGER NOT NULL" +
+ ")");
+ }
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Could not create custom_items table for " + databaseType + "!", e);
+ }
+ }
+
+ /**
+ * Creates the custom_items table and throws on failure.
+ * Used during migration case 2 so that DDL failures prevent
+ * the schema version from being bumped to v2.
+ */
+ private void createCustomItemsTableOrThrow() throws SQLException {
+ try (Statement statement = connection.createStatement()) {
+ if ("mysql".equals(databaseType)) {
+ statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+ "canonical_id VARCHAR(255) PRIMARY KEY, " +
+ "source_plugin VARCHAR(64) NOT NULL, " +
+ "display_name VARCHAR(256), " +
+ "item_data TEXT NOT NULL, " +
+ "pdc_key VARCHAR(255), " +
+ "model_data_key VARCHAR(128), " +
+ "lore_hash VARCHAR(64), " +
+ "plugin_native_id VARCHAR(255), " +
+ "category VARCHAR(64), " +
+ "buy_price DOUBLE DEFAULT -1, " +
+ "sell_price DOUBLE DEFAULT -1, " +
+ "enabled TINYINT(1) DEFAULT 1, " +
+ "discovery_methods VARCHAR(256), " +
+ "first_discovered BIGINT NOT NULL, " +
+ "last_seen BIGINT NOT NULL" +
+ ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+ } else {
+ statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+ "canonical_id TEXT PRIMARY KEY, " +
+ "source_plugin TEXT NOT NULL, " +
+ "display_name TEXT, " +
+ "item_data TEXT NOT NULL, " +
+ "pdc_key TEXT, " +
+ "model_data_key TEXT, " +
+ "lore_hash TEXT, " +
+ "plugin_native_id TEXT, " +
+ "category TEXT, " +
+ "buy_price REAL DEFAULT -1, " +
+ "sell_price REAL DEFAULT -1, " +
+ "enabled INTEGER DEFAULT 1, " +
+ "discovery_methods TEXT, " +
+ "first_discovered INTEGER NOT NULL, " +
+ "last_seen INTEGER NOT NULL" +
+ ")");
+ }
+ }
+ }
 }
