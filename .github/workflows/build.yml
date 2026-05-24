@@ -241,36 +241,46 @@ jobs:
         import struct
         import sys
         import re
-        import time
+
+        def _recv_all(sock, n):
+            data = b''
+            while len(data) < n:
+                chunk = sock.recv(n - len(data))
+                if not chunk:
+                    raise ConnectionError(f"Connection closed: got {len(data)}/{n} bytes")
+                data += chunk
+            return data
+
+        def _send_all(sock, data):
+            total = 0
+            while total < len(data):
+                sent = sock.send(data[total:])
+                if sent == 0:
+                    raise ConnectionError("Socket connection broken during send")
+                total += sent
 
         def rcon(host, port, password, command):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(10)
-            sock.connect((host, port))
-            _send_packet(sock, 3, password)
-            req_id, resp = _receive_packet(sock)
-            if req_id == -1:
-                print("RCON auth failed!")
+            try:
+                sock.connect((host, port))
+                _send_all(sock, _build_packet(3, password))
+                auth_id, _ = _recv_packet(sock)
+                if auth_id == -1:
+                    raise ConnectionError("RCON auth failed (server returned -1)")
+                _send_all(sock, _build_packet(2, command))
+                _, resp = _recv_packet(sock)
+                return resp
+            finally:
                 sock.close()
-                return None
-            _send_packet(sock, 2, command)
-            req_id, resp = _receive_packet(sock)
-            sock.close()
-            return resp
 
-        def _send_packet(sock, req_type, data):
+        def _build_packet(req_type, data):
             packet = struct.pack('<ii', req_type, req_type) + data.encode('utf-8') + b'\x00\x00'
-            length = len(packet)
-            sock.send(struct.pack('<i', length) + packet)
+            return struct.pack('<i', len(packet)) + packet
 
-        def _receive_packet(sock):
-            length = struct.unpack('<i', sock.recv(4))[0]
-            data = b''
-            while len(data) < length:
-                chunk = sock.recv(length - len(data))
-                if not chunk:
-                    break
-                data += chunk
+        def _recv_packet(sock):
+            length = struct.unpack('<i', _recv_all(sock, 4))[0]
+            data = _recv_all(sock, length)
             req_id = struct.unpack('<i', data[:4])[0]
             resp = data[8:-2].decode('utf-8', errors='replace')
             return req_id, resp
@@ -292,12 +302,16 @@ jobs:
                 failed += 1
 
         def run_cmd(cmd):
-            resp = rcon(HOST, PORT, PASS, cmd)
+            try:
+                resp = rcon(HOST, PORT, PASS, cmd)
+            except Exception as e:
+                print(f'  ERROR: RCON failed for: {cmd} - {e}')
+                return ''
             if resp is None:
-                print(f'  ERROR: RCON failed for: {cmd}')
-            else:
-                clean = re.sub(r'\u00a7[0-9a-fk-or]', '', resp)
-                print(f'  RCON [{cmd}] -> {clean[:200]}')
+                print(f'  ERROR: RCON returned None for: {cmd}')
+                return ''
+            clean = re.sub(r'\u00a7[0-9a-fk-or]', '', resp)
+            print(f'  RCON [{cmd}] -> {clean[:200]}')
             return resp or ''
 
         def strip_color(text):
@@ -477,7 +491,7 @@ jobs:
           MYSQL_ROOT_PASSWORD: testpass
           MYSQL_DATABASE: aurelium
         ports:
-          - 3306:3306
+        - 3306:3306
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 --password=testpass"
           --health-interval=10s
@@ -520,8 +534,8 @@ jobs:
             Aurels:
               symbol: "A"
               starting-balance: 100.0
-          max-balance: -1
-          min-pay-amount: 0.01
+              max-balance: -1
+              min-pay-amount: 0.01
         market:
           enabled: true
           gui-mode: modern
@@ -651,108 +665,119 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4 # v4
-      - uses: actions/setup-java@v4 # v5
-        with:
-          java-version: '25'
-          distribution: 'temurin'
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4 # v4
-      - name: Build mock ItemsAdder
-        run: |
-          cd ci/mock-itemsadder
-          gradle build
-          cp build/libs/*.jar ../mock-itemsadder.jar
-      - name: Download Paper
-        run: |
-          curl -sL "https://fill-data.papermc.io/v1/objects/cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2/paper-26.1.2-65.jar" -o paper.jar
-          ls -lh paper.jar
-          file paper.jar | head -1
-      - name: Download plugin artifact
-        uses: actions/download-artifact@v4 # v4
-        with:
-          name: Aurelium
-          path: plugins/
-      - name: Accept EULA
-        run: echo "eula=true" > eula.txt
-      - name: Start server with mock ItemsAdder
-        timeout-minutes: 5
-        run: |
-          if [ ! -f paper.jar ]; then echo "SKIP: No Paper JAR"; exit 0; fi
-          mkdir -p plugins
-          cp ci/mock-itemsadder.jar plugins/
-          java -Dpaper.playerconnection.keepalive=60 -Xmx512M -Xms512M -jar paper.jar --nogui --max-players=5 &
-          SERVER_PID=$!
-          TIMEOUT=180
-          ELAPSED=0
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            if grep -q "Done (" logs/latest.log 2>/dev/null; then
-              echo "Server started!"
-              break
-            fi
-            if grep -q "Failed to start" logs/latest.log 2>/dev/null; then
-              echo "Server failed to start"
-              tail -50 logs/latest.log
-              kill $SERVER_PID 2>/dev/null || true
-              exit 1
-            fi
-            sleep 2
-            ELAPSED=$((ELAPSED + 2))
-          done
-          if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "Server startup timed out"
-            tail -30 logs/latest.log
+    - uses: actions/checkout@v4 # v4
+    - uses: actions/setup-java@v4 # v5
+      with:
+        java-version: '25'
+        distribution: 'temurin'
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4 # v4
+    - name: Build mock ItemsAdder
+      run: |
+        cd ci/mock-itemsadder
+        gradle build
+        cp build/libs/*.jar ../mock-itemsadder.jar
+    - name: Download Paper
+      run: |
+        curl -sL "https://fill-data.papermc.io/v1/objects/cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2/paper-26.1.2-65.jar" -o paper.jar
+        ls -lh paper.jar
+        file paper.jar | head -1
+    - name: Download plugin artifact
+      uses: actions/download-artifact@v4 # v4
+      with:
+        name: Aurelium
+        path: plugins/
+    - name: Accept EULA
+      run: echo "eula=true" > eula.txt
+    - name: Start server with mock ItemsAdder
+      timeout-minutes: 5
+      run: |
+        if [ ! -f paper.jar ]; then
+          echo "FAIL: paper.jar not found (download may have failed)"
+          exit 1
+        fi
+        if [ ! -s paper.jar ]; then
+          echo "FAIL: paper.jar is empty (download produced zero-byte file)"
+          exit 1
+        fi
+        mkdir -p plugins
+        cp ci/mock-itemsadder.jar plugins/
+        java -Dpaper.playerconnection.keepalive=60 -Xmx512M -Xms512M -jar paper.jar --nogui --max-players=5 &
+        SERVER_PID=$!
+        TIMEOUT=180
+        ELAPSED=0
+        while [ $ELAPSED -lt $TIMEOUT ]; do
+          if grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server started!"
+            break
+          fi
+          if grep -q "Failed to start" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"
+            tail -50 logs/latest.log
             kill $SERVER_PID 2>/dev/null || true
             exit 1
           fi
-          # Wait extra 5s for the 1s delayed scanner to run
-          sleep 5
-          echo "=== Scanner Detection Verification ==="
-          if grep -qi "\[CustomItems\]" logs/latest.log; then
-            echo "OK: CustomItems scanner logged output"
-            grep -i "\[CustomItems\]" logs/latest.log || true
-          else
-            echo "FAIL: No [CustomItems] output found in server log"
-            tail -100 logs/latest.log
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
-          fi
-          if grep -qi "Scan complete" logs/latest.log; then
-            echo "OK: Scan completed"
-            grep -i "Scan complete" logs/latest.log || true
-          else
-            echo "FAIL: Scan did not complete"
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
-          fi
-          # Check that items were detected (should be 3 from mock ItemsAdder)
-          ITEM_COUNT=$(grep "Scan complete" logs/latest.log | grep -oP '\d+(?= unique)' || echo "0")
-          echo "Detected items count: $ITEM_COUNT"
-          if [ "$ITEM_COUNT" -ge "1" ]; then
-            echo "PASS: At least 1 custom item detected"
-          else
-            echo "WARN: No custom items detected (expected 3 from mock ItemsAdder)"
-          fi
-          if grep -qi "ItemsAdder" logs/latest.log; then
-            echo "OK: ItemsAdder scan ran"
-          else
-            echo "WARN: ItemsAdder scan did not appear to run"
-          fi
-          # Check for errors
-          cp logs/latest.log logs/pre-shutdown.log
-          REAL_ERRORS=$(grep -i "Exception.*aurel\|Caused by:.*aurel" logs/pre-shutdown.log 2>/dev/null | grep -vi "PLEASE RESTART\|zip file" || true)
-          if [ -n "$REAL_ERRORS" ]; then
-            echo "FAIL: Aurelium exceptions during scanner test"
-            echo "$REAL_ERRORS"
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
-          fi
+          sleep 2
+          ELAPSED=$((ELAPSED + 2))
+        done
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+          echo "Server startup timed out"
+          tail -30 logs/latest.log
           kill $SERVER_PID 2>/dev/null || true
-          wait $SERVER_PID 2>/dev/null || true
-      - name: Upload server log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4 # v4
-        with:
-          name: detection-test-log
-          path: logs/latest.log
-          retention-days: 7
+          exit 1
+        fi
+        # Wait extra 5s for the 1s delayed scanner to run
+        sleep 5
+        echo "=== Scanner Detection Verification ==="
+        if grep -qi "\[CustomItems\]" logs/latest.log; then
+          echo "OK: CustomItems scanner logged output"
+          grep -i "\[CustomItems\]" logs/latest.log || true
+        else
+          echo "FAIL: No [CustomItems] output found in server log"
+          tail -100 logs/latest.log
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
+        fi
+        if grep -qi "Scan complete" logs/latest.log; then
+          echo "OK: Scan completed"
+          grep -i "Scan complete" logs/latest.log || true
+        else
+          echo "FAIL: Scan did not complete"
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
+        fi
+        # Check that items were detected (should be 3 from mock ItemsAdder)
+        ITEM_COUNT=$(grep "Scan complete" logs/latest.log | grep -oP '\d+(?= unique)' || echo "0")
+        echo "Detected items count: $ITEM_COUNT"
+        if [ "$ITEM_COUNT" -ge "1" ]; then
+          echo "PASS: At least 1 custom item detected"
+        else
+          echo "FAIL: No custom items detected (expected 3 from mock ItemsAdder)"
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
+        fi
+        if grep -qi "ItemsAdder" logs/latest.log; then
+          echo "OK: ItemsAdder scan ran"
+        else
+          echo "FAIL: ItemsAdder scan did not appear to run"
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
+        fi
+        # Check for errors
+        cp logs/latest.log logs/pre-shutdown.log
+        REAL_ERRORS=$(grep -i "Exception.*aurel\|Caused by:.*aurel" logs/pre-shutdown.log 2>/dev/null | grep -vi "PLEASE RESTART\|zip file" || true)
+        if [ -n "$REAL_ERRORS" ]; then
+          echo "FAIL: Aurelium exceptions during scanner test"
+          echo "$REAL_ERRORS"
+          kill $SERVER_PID 2>/dev/null || true
+          exit 1
+        fi
+        kill $SERVER_PID 2>/dev/null || true
+        wait $SERVER_PID 2>/dev/null || true
+    - name: Upload server log on failure
+      if: failure()
+      uses: actions/upload-artifact@v4 # v4
+      with:
+        name: detection-test-log
+        path: logs/latest.log
+        retention-days: 7
