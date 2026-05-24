@@ -140,6 +140,13 @@ public class EconomyManager {
  });
  }
 
+ /**
+ * Withdraw if the player has sufficient funds.
+ * Now runs the DB update asynchronously with write lock to prevent
+ * JDBC Connection contention with other async DB operations.
+ * The cache is updated optimistically on the main thread for responsiveness;
+ * if the async DB update fails (race condition), the cache is reloaded from DB.
+ */
  public boolean withdrawIfSufficient(OfflinePlayer player, BigDecimal amount, String currency) {
  if (amount.compareTo(BigDecimal.ZERO) <= 0)
  return false;
@@ -149,18 +156,17 @@ public class EconomyManager {
 
  BigDecimal currentBalance = getBalance(player, currency);
 
- plugin.getComponentLogger().info("withdrawIfSufficient: player=" + player.getName() +
- ", amount=" + normalizedAmount +
- ", currency=" + currency +
- ", balance=" + currentBalance);
-
  if (currentBalance.compareTo(normalizedAmount) < 0) {
- plugin.getComponentLogger().warn("Insufficient funds: " + player.getName() +
- " has " + currentBalance + " " + currency +
- " but needs " + normalizedAmount);
  return false;
  }
 
+ // Optimistically update cache on main thread for responsiveness
+ BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
+ balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
+
+ // Persist to DB async with write lock (same pattern as deposit/withdraw)
+ scheduleAsyncWrite(() -> {
+ synchronized (plugin.getDatabaseManager().getWriteLock()) {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
  "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
  ps.setBigDecimal(1, normalizedAmount);
@@ -169,28 +175,23 @@ public class EconomyManager {
  ps.setBigDecimal(4, normalizedAmount);
 
  int affectedRows = ps.executeUpdate();
- plugin.getComponentLogger().info("Database update affected " + affectedRows + " rows");
-
  if (affectedRows == 0) {
- plugin.getComponentLogger().warn("Database update failed - reloading balance");
+ // Race condition: balance changed between check and update.
+ // Reload from DB to correct the optimistic cache update.
  loadBalance(uuid, currency);
- return false;
- }
-
- BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
-
- scheduleAsyncWrite(() -> {
+ } else {
  updatePlayerMetadata(player);
- });
-
- plugin.getComponentLogger().info("Withdrawal successful: " + player.getName() +
- " new balance: " + newBalance);
- return true;
+ loadBalance(uuid, currency);
+ }
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error in withdrawIfSufficient", e);
- return false;
+ // On error, reload balance from DB to fix cache
+ loadBalance(uuid, currency);
  }
+ }
+ });
+
+ return true;
  }
 
  private void updatePlayerMetadata(OfflinePlayer player) {
