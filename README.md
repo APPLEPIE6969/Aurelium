@@ -22,7 +22,7 @@ Aurelium includes a modern, responsive web application that players can use to b
 - **Price History**: Prices are recorded every 10 minutes and stored for 7 days for charts.
 - **Cloud Mode**: Optional cloud hosting via Render for **almost** always-accessible dashboards.
 - **Multi-Currency UI**: Correctly displays custom currency symbols (e.g., `₳`, `$`, `€`) synced perfectly from your `config.yml`.
-- **Icon Fallbacks**: Robust image loading seamlessly falls back to older Minecraft versions  if modern icons aren't available from external APIs yet.
+- **Icon Fallbacks**: Robust image loading seamlessly falls back to older Minecraft versions if modern icons aren't available from external APIs yet.
 - **Secure Sessions**: Players use `/web` in-game to get a time-limited clickable link. Sessions use a rolling 1-hour timeout that resets on activity. Visiting the dashboard without a session shows a friendly error screen with instructions.
 - **Tab Sleep Mode**: When a player switches to another browser tab or minimizes the window, the entire dashboard goes to sleep — no network requests, no CPU usage. When they return, it instantly wakes up and loads fresh data.
 - **RAM Optimized**: Bulk data (auctions, orders, stocks, price history) is cached as raw JSON strings, keeping per-server memory usage under 1MB.
@@ -72,9 +72,9 @@ A server-owned shop that functions like a **Stock Market**, with **three interfa
 - **Searchable Menus**: Easily find any item in the Market or Auction House using the new **Compass** search button.
 - **Market Crash Alerts**: Server-wide announcements when high-value items (Diamonds, Spawners, etc.) drop to bargain prices.
 - **Performance Optimized**: 
- - **Viewer-Only Refresh**: Logic remains completely dormant unless a player has a menu open.
- - **Batched Disk I/O**: Transaction data is saved in backgrounds batches, preventing server "lag spikes" during high-volume trading.
- - **O(1) Data Access**: Market prices use ultra-fast local caching for near-zero CPU impact.
+  - **Viewer-Only Refresh**: Logic remains completely dormant unless a player has a menu open.
+  - **Batched Disk I/O**: Transaction data is saved in backgrounds batches, preventing server "lag spikes" during high-volume trading.
+  - **O(1) Data Access**: Market prices use ultra-fast local caching for near-zero CPU impact.
 - **Smart Inventory Logistics**: Purchasing items securely fills your existing partial stacks instead of strictly demanding empty inventory slots.
 - **Massive Catalog**: Includes **ALL Building Blocks** (Stones, Deepslate, Wood, Glass, Nature, etc.) and over **60+ Mob Spawners**. 
 
@@ -103,8 +103,8 @@ A global request system that lets players buy things they want even while offlin
 ### Stocks
 - **Real-time Tracking**: View the incredibly accurate *Current Buy Price* and *Current Sell Price* of every item in the market.
 - **Trends**:
- - **Green (▲ +%)**: Demand is peaking.
- - **Red (▼ -%)**: Market is oversaturated.
+  - **Green (▲ +%)**: Demand is peaking.
+  - **Red (▼ -%)**: Market is oversaturated.
 
 ## Commands
 
@@ -143,7 +143,7 @@ A global request system that lets players buy things they want even while offlin
 1. Download `Aurelium-1.4.5.jar`.
 2. Place it in your server's `plugins/` folder.
 3. **Restart** the server.
- - *Note: If Vault is not detected, Aurelium will automatically extract and install it into your plugins folder for you upon first run.*
+   - *Note: If Vault is not detected, Aurelium will automatically extract and install it into your plugins folder for you upon first run.*
 
 ## Config
 
@@ -152,14 +152,14 @@ Control every price directly in the config:
 
 ```yaml
 market-items:
- DIAMOND:
- buy: 5000.0 # Cost to buy from server
- sell: 0.0 # 0.0 = Selling DISABLED
- DIRT:
- buy: 1.0
- sell: 0.5 # Players can sell dirt for 0.5
- BEDROCK:
- buy: -1.0 # -1.0 = Buying DISABLED
+  DIAMOND:
+    buy: 5000.0 # Cost to buy from server
+    sell: 0.0 # 0.0 = Selling DISABLED
+  DIRT:
+    buy: 1.0
+    sell: 0.5 # Players can sell dirt for 0.5
+  BEDROCK:
+    buy: -1.0 # -1.0 = Buying DISABLED
 ```
 
 ### Network Syncing (MySQL Required)
@@ -178,62 +178,62 @@ Control the plugin's behavior in `config.yml`:
 
 ```yaml
 database:
- type: sqlite # Supported types: sqlite, mysql
- file: "database.db" # Active only if type is 'sqlite'
- mysql: # Active only if type is 'mysql'
- host: "localhost"
- port: 3306
- database: "aurelium"
- username: "root"
- password: "password"
- 
+  type: sqlite # Supported types: sqlite, mysql
+  file: "database.db" # Active only if type is 'sqlite'
+  mysql: # Active only if type is 'mysql'
+    host: "localhost"
+    port: 3306
+    database: "aurelium"
+    username: "root"
+    password: "password"
+  
 economy:
- default-currency: "Aurels" # Default currency for Vault & fallbacks
- currencies:
- Aurels:
- symbol: "₳"
- starting-balance: 100.0
- # Dollars:
- # symbol: "$"
- # starting-balance: 0.0
- max-balance: -1 # Max balance (-1 = unlimited)
- min-pay-amount: 0.01 # Minimum /pay transaction
+  default-currency: "Aurels" # Default currency for Vault & fallbacks
+  currencies:
+    Aurels:
+      symbol: "₳"
+      starting-balance: 100.0
+    # Dollars:
+    #   symbol: "$"
+    #   starting-balance: 0.0
+  max-balance: -1 # Max balance (-1 = unlimited)
+  min-pay-amount: 0.01 # Minimum /pay transaction
 
 market:
- enabled: true # Master toggle for /market
- gui-mode: modern # Interface for /market: "classic" or "modern"
- dynamic-pricing: true # Prices move on buy/sell
- price-increase-per-buy: 0.001 # +0.1% per buy
- price-decrease-per-sell: 0.001 # -0.1% per sell
- default-sell-ratio: 0.5 # New items default sell = 50% of buy
- price-floor: 0.2 # Can't drop below 20% of base
- price-ceiling: 5.0 # Can't rise above 500% of base
- price-recovery:
- enabled: true # Passive drift toward base
- rate: 0.01 # 1% of gap per cycle
- interval-minutes: 10 # Recovery cycle frequency
+  enabled: true # Master toggle for /market
+  gui-mode: modern # Interface for /market: "classic" or "modern"
+  dynamic-pricing: true # Prices move on buy/sell
+  price-increase-per-buy: 0.001 # +0.1% per buy
+  price-decrease-per-sell: 0.001 # -0.1% per sell
+  default-sell-ratio: 0.5 # New items default sell = 50% of buy
+  price-floor: 0.2 # Can't drop below 20% of base
+  price-ceiling: 5.0 # Can't rise above 500% of base
+  price-recovery:
+    enabled: true # Passive drift toward base
+    rate: 0.01 # 1% of gap per cycle
+    interval-minutes: 10 # Recovery cycle frequency
 
 auction-house:
- enabled: true # Master toggle for /ah
- default-duration: 86400 # 24 hours (seconds)
- max-duration: 604800 # 7 days max
- listing-fee-percent: 2.0 # Fee to list
- sales-tax-percent: 5.0 # Tax on sale
- max-listings-per-player: -1 # -1 = unlimited
- min-listing-price: 1.0 # Minimum listing price
+  enabled: true # Master toggle for /ah
+  default-duration: 86400 # 24 hours (seconds)
+  max-duration: 604800 # 7 days max
+  listing-fee-percent: 2.0 # Fee to list
+  sales-tax-percent: 5.0 # Tax on sale
+  max-listings-per-player: -1 # -1 = unlimited
+  min-listing-price: 1.0 # Minimum listing price
 
 buy-orders:
- enabled: true # Master toggle for /orders
- max-active-orders-per-player: 10 # -1 = unlimited
- min-price-per-piece: 0.1 # Minimum offer price
- max-order-value: -1 # -1 = unlimited
- creation-fee-percent: 2.0 # Order creation fee
- sales-tax-percent: 5.0 # Seller tax on fulfillment
+  enabled: true # Master toggle for /orders
+  max-active-orders-per-player: 10 # -1 = unlimited
+  min-price-per-piece: 0.1 # Minimum offer price
+  max-order-value: -1 # -1 = unlimited
+  creation-fee-percent: 2.0 # Order creation fee
+  sales-tax-percent: 5.0 # Seller tax on fulfillment
 
 web:
- enabled: true # Start the embedded web server
- port: 8585 # Port (must be opened in firewall)
- # Session timeout: rolling 1 hour of inactivity (hardcoded)
+  enabled: true # Start the embedded web server
+  port: 8585 # Port (must be opened in firewall)
+  # Session timeout: rolling 1 hour of inactivity (hardcoded)
 ```
 
 ### Language
@@ -243,11 +243,11 @@ A `messages.yml` file is generated on startup.
 
 ## FAQ
 - **"Unknown Command"**: If `/market` or `/eco` says "Unknown command", the plugin failed to load.
- - Check your server console/logs for errors.
- - Ensure you have `Aurelium-1.4.5.jar` in `plugins/`.
- - Ensure you are running **Paper** (or compatible forks: Purpur, Pufferfish, Leaves).
+  - Check your server console/logs for errors.
+  - Ensure you have `Aurelium-1.4.5.jar` in `plugins/`.
+  - Ensure you are running **Paper** (or compatible forks: Purpur, Pufferfish, Leaves).
 - **"No Permission"**:
- - Ensure you are **OP** (`/op <player>`) or have the permission node `aureleconomy.admin`.
- - Note: Standard player commands (`/bal`, `/market`, `/ah`, `/sell`) are enabled for everyone by default.
-- **Still not working?**
- - If none of the above fixes your issue, please [open an issue](https://github.com/APPLEPIE6969/Aurelium/issues) on GitHub with your server version, error logs, and steps to reproduce.
+  - Ensure you are **OP** (`/op <player>`) or have the permission node `aureleconomy.admin`.
+  - Note: Standard player commands (`/bal`, `/market`, `/ah`, `/sell`) are enabled for everyone by default.
+- **Still not working?**:
+  - If none of the above fixes your issue, please [open an issue](https://github.com/APPLEPIE6969/Aurelium/issues) on GitHub with your server version, error logs, and steps to reproduce.
