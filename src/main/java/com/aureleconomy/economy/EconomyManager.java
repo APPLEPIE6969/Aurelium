@@ -70,10 +70,11 @@ public class EconomyManager {
  // Persist to DB async (if called from async context, this is fine;
  // if called from main thread, the DB call must still be async)
  scheduleAsyncWrite(() -> {
+ synchronized (plugin.getDatabaseManager().getWriteLock()) {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
-				plugin.getDatabaseManager().isMySQL()
-				? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = player_balances.balance + new.balance"
-				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
+ plugin.getDatabaseManager().isMySQL()
+ ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = player_balances.balance + new.balance"
+ : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
 
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
@@ -87,6 +88,7 @@ public class EconomyManager {
  updatePlayerMetadata(player);
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error in EconomyManager while depositing", e);
+ }
  }
  });
  }
@@ -115,6 +117,7 @@ public class EconomyManager {
 
  // Persist to DB async
  scheduleAsyncWrite(() -> {
+ synchronized (plugin.getDatabaseManager().getWriteLock()) {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
  "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
  ps.setBigDecimal(1, normalizedAmount);
@@ -132,6 +135,7 @@ public class EconomyManager {
  loadBalance(uuid, currency);
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error in EconomyManager while withdrawing", e);
+ }
  }
  });
  }
@@ -236,8 +240,8 @@ public class EconomyManager {
  }
 
  /**
-  * Get balance from cache only (no DB call). Returns ZERO if not cached.
-  */
+ * Get balance from cache only (no DB call). Returns ZERO if not cached.
+ */
  private BigDecimal getBalanceFromCache(UUID uuid, String currency) {
  Map<String, BigDecimal> userBalances = balanceCache.get(uuid);
  if (userBalances != null && userBalances.containsKey(currency)) {
@@ -247,9 +251,10 @@ public class EconomyManager {
  }
 
  /**
-  * Schedule a write task asynchronously.
-  * If already on an async thread, run directly; otherwise schedule via Bukkit.
-  */
+ * Schedule a write task asynchronously.
+ * If already on an async thread, run directly (synchronized on dbWriteLock);
+ * otherwise schedule via Bukkit's async scheduler.
+ */
  private void scheduleAsyncWrite(Runnable task) {
  if (Bukkit.isPrimaryThread()) {
  Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
@@ -281,9 +286,9 @@ public class EconomyManager {
  BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
  .prepareStatement(
-				plugin.getDatabaseManager().isMySQL()
-				? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
-				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
+ plugin.getDatabaseManager().isMySQL()
+ ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
+ : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, startBal);
@@ -307,10 +312,11 @@ public class EconomyManager {
  balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, normalizedAmount);
 
  scheduleAsyncWrite(() -> {
+ synchronized (plugin.getDatabaseManager().getWriteLock()) {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
-				plugin.getDatabaseManager().isMySQL()
-				? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
-				: "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
+ plugin.getDatabaseManager().isMySQL()
+ ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
+ : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
  ps.setString(1, uuid.toString());
  ps.setString(2, currency);
  ps.setBigDecimal(3, normalizedAmount);
@@ -321,6 +327,7 @@ public class EconomyManager {
  updatePlayerMetadata(player);
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error in EconomyManager while saving balance", e);
+ }
  }
  });
  }
