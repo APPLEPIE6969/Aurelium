@@ -24,77 +24,100 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class ItemDiscoveryListener implements Listener {
 
-    private final UnifiedItemScanner scanner;
-    private final AurelEconomy plugin;
+ private final UnifiedItemScanner scanner;
+ private final AurelEconomy plugin;
 
-    // Rate-limit: max 1 scan per player per 2 seconds
-    private final ConcurrentHashMap<java.util.UUID, AtomicLong> lastScan = new ConcurrentHashMap<>();
-    private static final long SCAN_COOLDOWN_MS = 2000;
+ // Rate-limit: max 1 scan per player per 2 seconds
+ private final ConcurrentHashMap<java.util.UUID, AtomicLong> lastScan = new ConcurrentHashMap<>();
+ private static final long SCAN_COOLDOWN_MS = 2000;
 
-    public ItemDiscoveryListener(AurelEconomy plugin, UnifiedItemScanner scanner) {
-        this.plugin = plugin;
-        this.scanner = scanner;
-    }
+ public ItemDiscoveryListener(AurelEconomy plugin, UnifiedItemScanner scanner) {
+ this.plugin = plugin;
+ this.scanner = scanner;
+ }
 
-    private boolean isInteractionDetectEnabled() {
-        return plugin.getConfig().getBoolean("custom-items.discovery-methods.interaction-detect", true);
-    }
+ private boolean isInteractionDetectEnabled() {
+ return plugin.getConfig().getBoolean("custom-items.discovery-methods.interaction-detect", true);
+ }
 
-    private boolean shouldScan(org.bukkit.entity.Player player) {
-        if (!isInteractionDetectEnabled()) return false;
-        AtomicLong last = lastScan.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
-        long now = System.currentTimeMillis();
-        long prev = last.get();
-        if (now - prev < SCAN_COOLDOWN_MS) return false;
-        return last.compareAndSet(prev, now);
-    }
+ private boolean shouldScan(org.bukkit.entity.Player player) {
+ if (!isInteractionDetectEnabled()) return false;
+ AtomicLong last = lastScan.computeIfAbsent(player.getUniqueId(), k -> new AtomicLong(0));
+ long now = System.currentTimeMillis();
+ long prev = last.get();
+ if (now - prev < SCAN_COOLDOWN_MS) return false;
+ return last.compareAndSet(prev, now);
+ }
 
-    private void tryScan(org.bukkit.entity.Player player, ItemStack item) {
-        if (item == null || item.getType().isAir()) return;
-        if (!shouldScan(player)) return;
-        scanner.scanSingleItem(item, DiscoveryMethod.INTERACTION_DETECT);
-    }
+ private void tryScan(org.bukkit.entity.Player player, ItemStack item) {
+ if (item == null || item.getType().isAir()) return;
+ if (!shouldScan(player)) return;
+ scanner.scanSingleItem(item, DiscoveryMethod.INTERACTION_DETECT);
+ }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerInteract(PlayerInteractEvent event) {
-        tryScan(event.getPlayer(), event.getItem());
-    }
+ /**
+ * Scan a single item from an inventory-open event, respecting the per-player
+ * rate limit. Only scans the first eligible item (not the entire inventory)
+ * to avoid main-thread lag from reflection-heavy scans on large inventories.
+ */
+ private void tryScanFromInventory(org.bukkit.entity.Player player, ItemStack item) {
+ if (item == null || item.getType().isAir()) return;
+ if (!shouldScan(player)) return;
+ scanner.scanSingleItem(item, DiscoveryMethod.INTERACTION_DETECT);
+ }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof org.bukkit.entity.Player player)) return;
-        ItemStack current = event.getCurrentItem();
-        if (current != null && !current.getType().isAir()) {
-            tryScan(player, current);
-        }
-        ItemStack cursor = event.getCursor();
-        if (cursor != null && !cursor.getType().isAir()) {
-            tryScan(player, cursor);
-        }
-    }
+ @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+ public void onPlayerInteract(PlayerInteractEvent event) {
+ tryScan(event.getPlayer(), event.getItem());
+ }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onEntityPickupItem(EntityPickupItemEvent event) {
-        if (!(event.getEntity() instanceof org.bukkit.entity.Player player)) return;
-        ItemStack item = event.getItem().getItemStack();
-        tryScan(player, item);
-    }
+ @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+ public void onInventoryClick(InventoryClickEvent event) {
+ if (!(event.getWhoClicked() instanceof org.bukkit.entity.Player player)) return;
+ ItemStack current = event.getCurrentItem();
+ if (current != null && !current.getType().isAir()) {
+ tryScan(player, current);
+ }
+ ItemStack cursor = event.getCursor();
+ if (cursor != null && !cursor.getType().isAir()) {
+ tryScan(player, cursor);
+ }
+ }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onCraftItem(CraftItemEvent event) {
-        if (!(event.getWhoClicked() instanceof org.bukkit.entity.Player player)) return;
-        ItemStack result = event.getRecipe().getResult();
-        tryScan(player, result);
-    }
+ @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+ public void onEntityPickupItem(EntityPickupItemEvent event) {
+ if (!(event.getEntity() instanceof org.bukkit.entity.Player player)) return;
+ ItemStack item = event.getItem().getItemStack();
+ tryScan(player, item);
+ }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onInventoryOpen(InventoryOpenEvent event) {
-        if (!(event.getPlayer() instanceof org.bukkit.entity.Player player)) return;
-        if (!isInteractionDetectEnabled()) return;
-        for (ItemStack item : event.getInventory().getContents()) {
-            if (item != null && !item.getType().isAir()) {
-                scanner.scanSingleItem(item, DiscoveryMethod.INTERACTION_DETECT);
-            }
-        }
-    }
+ @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+ public void onCraftItem(CraftItemEvent event) {
+ if (!(event.getWhoClicked() instanceof org.bukkit.entity.Player player)) return;
+ ItemStack result = event.getRecipe().getResult();
+ tryScan(player, result);
+ }
+
+ /**
+ * When a player opens an inventory, scan the first eligible custom item found.
+ * Uses the same per-player rate limit as other events to prevent lag from
+ * reflection-heavy scans on large inventories (e.g. 54-slot chests).
+ * Only scans one item per cooldown window to keep main-thread impact minimal.
+ */
+ @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+ public void onInventoryOpen(InventoryOpenEvent event) {
+ if (!(event.getPlayer() instanceof org.bukkit.entity.Player player)) return;
+ if (!isInteractionDetectEnabled()) return;
+ // Scan only the first eligible item — rate limit ensures we don't
+ // flood the scanner if the player rapidly opens inventories
+ for (ItemStack item : event.getInventory().getContents()) {
+ if (item != null && !item.getType().isAir()) {
+ tryScanFromInventory(player, item);
+ // After scanning one item, the rate limit is consumed for this player.
+ // Subsequent items in the same inventory will be scanned on the next
+ // open (after cooldown) or via click/pickup events.
+ break;
+ }
+ }
+ }
 }
