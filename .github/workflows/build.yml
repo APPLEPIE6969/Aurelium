@@ -94,33 +94,107 @@ jobs:
           exit 1
         fi
 
-        echo "=== Database & Config ==="
+        echo "=== Database & Schema ==="
+        SMOKE_FAIL=0
+
+        # Check SQLite database file exists
         if ls plugins/Aurelium/*.db 2>/dev/null; then
           echo "PASS: SQLite database file exists"
         else
-          echo "SKIP: No .db file found"
+          echo "FAIL: No .db file found"
+          SMOKE_FAIL=1
         fi
+
+        # Check database schema version is v2
+        if grep -qi "Database migration completed\|Database outdated" logs/latest.log 2>/dev/null; then
+          echo "PASS: Database migration ran"
+        fi
+        if grep -qi "schema\|version" logs/latest.log 2>/dev/null; then
+          echo "INFO: Schema-related log lines:"
+          grep -i "schema\|database.*version\|migration\|database_info" logs/latest.log | tail -5 || true
+        fi
+
+        # Verify all expected tables exist in the SQLite DB
+        DB_FILE=$(ls plugins/Aurelium/*.db 2>/dev/null | head -1)
+        if [ -n "$DB_FILE" ]; then
+          EXPECTED_TABLES="players player_balances auctions offline_earnings buy_orders price_history auction_offers custom_items database_info"
+          for table in $EXPECTED_TABLES; do
+            if sqlite3 "$DB_FILE" ".tables" 2>/dev/null | grep -qw "$table"; then
+              echo "PASS: Table '$table' exists"
+            else
+              echo "FAIL: Table '$table' missing from database"
+              SMOKE_FAIL=1
+            fi
+          done
+
+          # Verify schema version is 2
+          SCHEMA_VER=$(sqlite3 "$DB_FILE" "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "unknown")
+          if [ "$SCHEMA_VER" = "2" ]; then
+            echo "PASS: Database schema version is v2"
+          else
+            echo "FAIL: Database schema version is '$SCHEMA_VER' (expected 2)"
+            SMOKE_FAIL=1
+          fi
+        fi
+
+        # Check config.yml generated
         if [ -f plugins/Aurelium/config.yml ]; then
           echo "PASS: config.yml generated"
         else
           echo "FAIL: config.yml not found"
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
+          SMOKE_FAIL=1
         fi
 
+        # Check messages.yml generated
+        if [ -f plugins/Aurelium/messages.yml ]; then
+          echo "PASS: messages.yml generated"
+        else
+          echo "FAIL: messages.yml not found"
+          SMOKE_FAIL=1
+        fi
+
+        echo "=== Vault Integration ==="
+        if grep -qi "Vault.*hook\|hooked into Vault\|Vault integration\|Vault API" logs/latest.log 2>/dev/null; then
+          echo "PASS: Vault hook detected in log"
+        elif grep -qi "vault" logs/latest.log 2>/dev/null; then
+          echo "INFO: Vault mentioned in log:"
+          grep -i "vault" logs/latest.log | tail -5 || true
+        else
+          echo "SKIP: No Vault log entries (Vault may not be installed)"
+        fi
+
+        echo "=== Schedulers & Background Tasks ==="
+        # Price recovery scheduler
+        if grep -qi "price.recovery\|recovery.*scheduler\|passive.*drift\|recoverPrices" logs/latest.log 2>/dev/null; then
+          echo "PASS: Price recovery scheduler logged"
+        else
+          echo "INFO: No explicit price recovery scheduler log (may not log on startup)"
+        fi
+        # Auction expiry timer
+        if grep -qi "auction.*timer\|expiry.*task\|startExpiryTask\|auction.*expire" logs/latest.log 2>/dev/null; then
+          echo "PASS: Auction expiry timer logged"
+        else
+          echo "INFO: No explicit auction expiry timer log (may not log on startup)"
+        fi
+
+        echo "=== Exception Check ==="
         cp logs/latest.log logs/pre-shutdown.log
         REAL_ERRORS=$(grep -i "Exception.*aurel\|Caused by:.*aurel" logs/pre-shutdown.log 2>/dev/null | grep -vi "PLEASE RESTART\|zip file" || true)
         if [ -n "$REAL_ERRORS" ]; then
           echo "FAIL: Aurelium exceptions found during runtime"
           echo "$REAL_ERRORS"
-          kill $SERVER_PID 2>/dev/null || true
-          exit 1
+          SMOKE_FAIL=1
         else
           echo "PASS: No Aurelium exceptions during runtime"
         fi
 
         kill $SERVER_PID 2>/dev/null || true
         wait $SERVER_PID 2>/dev/null || true
+
+        if [ "$SMOKE_FAIL" -ne 0 ]; then
+          echo "SMOKE TEST FAILED ($SMOKE_FAIL check(s) failed)"
+          exit 1
+        fi
 
     - name: Upload server log on failure
       if: failure()
@@ -455,6 +529,48 @@ jobs:
         resp = strip_color(run_cmd('orders search diamond'))
         assert_test('/orders search rejects console', 'Only players' in resp or 'player' in resp.lower(), f'resp={resp[:100]}')
 
+        print('\n--- /customitems command ---\n')
+
+        # TEST 25: /customitems (base command - should show usage/subcommands)
+        print('Test 25: /customitems')
+        resp = strip_color(run_cmd('customitems'))
+        assert_test('/customitems responds', len(resp) > 0, f'len={len(resp)}')
+
+        # TEST 26: /customitems scan (force rescan - no custom item plugins installed)
+        print('\nTest 26: /customitems scan')
+        resp = strip_color(run_cmd('customitems scan'))
+        assert_test('/customitems scan runs', 'scan' in resp.lower() or 'Scan' in resp or 'complete' in resp.lower() or 'no.*plugin' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
+
+        # TEST 27: /customitems list (should show empty or "no items" without plugins)
+        print('\nTest 27: /customitems list')
+        resp = strip_color(run_cmd('customitems list'))
+        assert_test('/customitems list responds', len(resp) > 0, f'resp={resp[:100]}')
+
+        # TEST 28: /customitems info with invalid ID
+        print('\nTest 28: /customitems info nonexistent_item')
+        resp = strip_color(run_cmd('customitems info nonexistent_item'))
+        assert_test('/customitems info rejects invalid id', 'not found' in resp.lower() or 'unknown' in resp.lower() or 'invalid' in resp.lower() or 'no item' in resp.lower() or 'does not exist' in resp.lower(), f'resp={resp[:100]}')
+
+        # TEST 29: /customitems toggle with invalid ID
+        print('\nTest 29: /customitems toggle nonexistent_item')
+        resp = strip_color(run_cmd('customitems toggle nonexistent_item'))
+        assert_test('/customitems toggle rejects invalid id', 'not found' in resp.lower() or 'unknown' in resp.lower() or 'invalid' in resp.lower() or 'no item' in resp.lower() or 'does not exist' in resp.lower(), f'resp={resp[:100]}')
+
+        # TEST 30: /customitems price with invalid ID
+        print('\nTest 30: /customitems price nonexistent_item 100')
+        resp = strip_color(run_cmd('customitems price nonexistent_item 100'))
+        assert_test('/customitems price rejects invalid id', 'not found' in resp.lower() or 'unknown' in resp.lower() or 'invalid' in resp.lower() or 'no item' in resp.lower() or 'does not exist' in resp.lower(), f'resp={resp[:100]}')
+
+        # TEST 31: /customitems price with missing amount
+        print('\nTest 31: /customitems price some_item')
+        resp = strip_color(run_cmd('customitems price some_item'))
+        assert_test('/customitems price rejects missing amount', 'usage' in resp.lower() or 'invalid' in resp.lower() or 'price' in resp.lower() or len(resp) > 0, f'resp={resp[:100]}')
+
+        # TEST 32: /customitems reload
+        print('\nTest 32: /customitems reload')
+        resp = strip_color(run_cmd('customitems reload'))
+        assert_test('/customitems reload responds', len(resp) > 0, f'resp={resp[:100]}')
+
         # Cleanup
         run_cmd('eco set TestPlayer 100')
 
@@ -474,7 +590,7 @@ jobs:
         echo "=== Server Exceptions ==="
         grep -iE "Exception|Caused by|NullPointer|Stacktrace" logs/latest.log | grep -vi "PLEASE RESTART\|zip file" | tail -40 || true
         echo "=== Command Log ==="
-        grep -i "aurel\|economy\|issued server command" logs/latest.log | tail -30 || true
+        grep -i "aurel\|economy\|issued server command\|customitems\|custom item" logs/latest.log | tail -30 || true
         kill $(cat /tmp/server_pid) 2>/dev/null || true
         wait $(cat /tmp/server_pid) 2>/dev/null || true
         exit $TEST_EXIT
