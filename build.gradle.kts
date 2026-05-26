@@ -1,5 +1,8 @@
 plugins {
  id("java")
+ id("checkstyle")
+ id("com.github.spotbugs") version "6.0.7"
+ id("jacoco")
 }
 
 group = "com.aureleconomy"
@@ -25,6 +28,44 @@ dependencies {
  testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
  testImplementation("org.mockito:mockito-core:5.11.0")
  testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
+}
+
+checkstyle {
+ toolVersion = "10.15.0"
+ configFile = file("config/checkstyle/checkstyle.xml")
+}
+
+spotbugs {
+ effort.set(com.github.spotbugs.snom.Effort.MAX)
+ reportLevel.set(com.github.spotbugs.snom.Confidence.HIGH)
+}
+
+tasks.spotbugsMain {
+ reports.create("html") {
+ required.set(true)
+ }
+}
+
+tasks.jacocoTestReport {
+ dependsOn(tasks.test)
+ reports {
+ xml.required = true
+ html.required = true
+ }
+}
+
+tasks.jacocoTestCoverageVerification {
+ violationRules {
+ rule {
+ limit {
+ minimum = "0.50".toBigDecimal()
+ }
+ }
+ }
+}
+
+tasks.check {
+ dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
 tasks.withType<JavaCompile>().configureEach {
