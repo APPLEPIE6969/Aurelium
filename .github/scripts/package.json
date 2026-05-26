@@ -1,0 +1,13 @@
+{
+ "name": "aurelium-ci-mineflayer",
+ "version": "1.0.0",
+ "private": true,
+ "description": "Mineflayer GUI test suite for Aurelium CI",
+ "scripts": {
+ "test:gui": "node test_gui_mineflayer.js",
+ "test:gui-mysql": "node test_gui_mineflayer_mysql.js"
+ },
+ "dependencies": {
+ "mineflayer": "^4.20.1"
+ }
+}
