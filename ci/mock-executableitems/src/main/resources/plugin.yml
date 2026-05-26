@@ -1,0 +1,5 @@
+name: ExecutableItems
+version: '1.0'
+main: mock.MockExecutableItems
+api-version: '26.1'
+description: Mock ExecutableItems for CI testing
