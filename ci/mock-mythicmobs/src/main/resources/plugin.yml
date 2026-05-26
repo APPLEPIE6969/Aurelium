@@ -1,0 +1,5 @@
+name: MythicMobs
+version: '1.0'
+main: mock.MockMythicMobs
+api-version: '26.1'
+description: Mock MythicMobs for CI testing

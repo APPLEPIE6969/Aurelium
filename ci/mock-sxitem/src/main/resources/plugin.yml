@@ -1,0 +1,5 @@
+name: SX-Item
+version: '1.0'
+main: mock.MockSXItem
+api-version: '26.1'
+description: Mock SX-Item for CI testing

@@ -1,0 +1,5 @@
+name: Oraxen
+version: '1.0'
+main: mock.MockOraxen
+api-version: '26.1'
+description: Mock Oraxen for CI testing

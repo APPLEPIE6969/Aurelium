@@ -1,0 +1,5 @@
+name: MMOItems
+version: '1.0'
+main: mock.MockMMOItems
+api-version: '26.1'
+description: Mock MMOItems for CI testing
