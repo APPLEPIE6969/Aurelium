@@ -1,0 +1,9 @@
+# Default owners
+* @NanoBotAgent
+
+# Scanner code
+/src/main/java/com/aureleconomy/scanner/ @NanoBotAgent
+
+# CI/CD
+/.github/ @NanoBotAgent
+/ci/ @NanoBotAgent
