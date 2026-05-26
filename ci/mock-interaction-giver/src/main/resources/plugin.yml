@@ -1,0 +1,5 @@
+name: InteractionGiver
+version: '1.0'
+main: mock.InteractionGiver
+api-version: '26.1'
+description: Gives custom items on join for interaction-detect CI testing
