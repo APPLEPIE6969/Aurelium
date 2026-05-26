@@ -1,0 +1,5 @@
+name: CMD-Giver
+version: '1.0'
+main: mock.MockCMDGiver
+api-version: '26.1'
+description: Gives items with CustomModelData for CI testing
