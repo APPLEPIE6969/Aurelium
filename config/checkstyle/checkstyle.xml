@@ -13,8 +13,7 @@
  <property name="basicOffset" value="4"/>
  <property name="braceAdjustment" value="0"/>
  </module>
- <module name="TrailingSpace"/>
- <module name="JavadocMethod">
+  <module name="JavadocMethod">
  <property name="accessModifiers" value="public"/>
  <property name="severity" value="warning"/>
  </module>
