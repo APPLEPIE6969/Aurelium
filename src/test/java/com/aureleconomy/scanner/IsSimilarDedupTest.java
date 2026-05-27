@@ -99,7 +99,7 @@ public class IsSimilarDedupTest {
                 .build();
 
         registry.register(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        registry.register(cmi2, DiscoveryMethod.PLUGIN_API_ORUGIN_API_ORAXEN);
+        registry.register(cmi2, DiscoveryMethod.PLUGIN_API_ORAXEN);
 
         assertEquals(2, registry.getTotalItems());
     }
