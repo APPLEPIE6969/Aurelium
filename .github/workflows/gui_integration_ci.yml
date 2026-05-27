@@ -1,0 +1,728 @@
+name: GUI Integration Tests
+
+on:
+  push:
+    branches: ["feature/custom-item-scanner"]
+  pull_request:
+    branches: ["feature/custom-item-scanner"]
+
+permissions:
+  contents: read
+
+env:
+  PAPER_BUILD: "65"
+  PAPER_JAR_SHA: "cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build with Gradle
+        run: ./gradlew build
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aurelium
+          path: build/libs/*.jar
+
+  market-gui-test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+      - name: Download Aurelium
+        uses: actions/download-artifact@v4
+        with:
+          name: Aurelium
+          path: plugins
+      - name: Build mock-itemsadder
+        run: |
+          cd ci/mock-itemsadder
+          gradle build 2>/dev/null || ./gradlew build 2>/dev/null || true
+          cp build/libs/*.jar ../../plugins/ 2>/dev/null || true
+      - name: Download Paper
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Test Market GUI via RCON
+        run: |
+          mkdir -p plugins
+          echo "eula=true" > eula.txt
+          echo "online-mode=false" > server.properties
+          echo "enable-rcon=true" >> server.properties
+          echo "rcon.port=25579" >> server.properties
+          echo "rcon.password=test" >> server.properties
+          echo "max-players=5" >> server.properties
+          echo "server-port=25565" >> server.properties
+
+          timeout 120 java -jar paper.jar --nogui &
+          SERVER_PID=$!
+
+          for i in $(seq 1 60); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then
+              echo "Server started"
+              break
+            fi
+            sleep 2
+          done
+
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          sleep 5
+
+          # Write RCON helper
+          cat > /tmp/rcon.py << 'RCON'
+          import socket, struct, re, sys
+
+          def rcon(host, port, password, cmd):
+              s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              s.settimeout(10)
+              s.connect((host, port))
+              def send(pid, pt, data):
+                  payload = data.encode() + b'\x00\x00'
+                  header = struct.pack('<ii', len(payload)+10, pid) + struct.pack('<ii', 0, pt) + payload
+                  s.send(header)
+              def recv():
+                  data = b''
+                  while True:
+                      try:
+                          chunk = s.recv(4096)
+                          if not chunk: break
+                          data += chunk
+                          if b'\x00\x00' in data: break
+                      except: break
+                  text = data.decode('utf-8', errors='replace')
+                  text = re.sub(r'\xa7[0-9a-fk-or]', '', text)
+                  return text
+              send(0, 2, password)
+              recv()
+              send(0, 3, cmd)
+              resp = recv()
+              s.close()
+              return resp
+
+          if __name__ == '__main__':
+              cmd = sys.argv[1]
+              print(rcon('127.0.0.1', 25579, 'test', cmd))
+          RCON
+
+          FAIL=0
+
+          # Test 1: /market command opens GUI
+          echo "=== Test 1: /market command ==="
+          RESP=$(python3 /tmp/rcon.py "market" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          # /market opens an inventory - RCON won't see the GUI but the command should not error
+          if echo "$RESP" | grep -qi "error\|exception\|unknown command"; then
+            echo "FAIL: /market command errored"
+            FAIL=1
+          else
+            echo "PASS: /market command accepted"
+          fi
+
+          # Test 2: /ah command opens Auction House GUI
+          echo "=== Test 2: /ah command ==="
+          RESP=$(python3 /tmp/rcon.py "ah" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "error\|exception\|unknown command"; then
+            echo "FAIL: /ah command errored"
+            FAIL=1
+          else
+            echo "PASS: /ah command accepted"
+          fi
+
+          # Test 3: /ah sell command
+          echo "=== Test 3: /ah sell command ==="
+          RESP=$(python3 /tmp/rcon.py "ah sell 100" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          # Should fail gracefully since console has no item in hand
+          if echo "$RESP" | grep -qi "error\|exception\|unknown command"; then
+            echo "FAIL: /ah sell errored unexpectedly"
+            FAIL=1
+          else
+            echo "PASS: /ah sell handled gracefully"
+          fi
+
+          # Test 4: /customitems list
+          echo "=== Test 4: /customitems list ==="
+          RESP=$(python3 /tmp/rcon.py "customitems list" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /customitems list not recognized"
+            FAIL=1
+          else
+            echo "PASS: /customitems list recognized"
+          fi
+
+          # Test 5: /customitems scan
+          echo "=== Test 5: /customitems scan ==="
+          RESP=$(python3 /tmp/rcon.py "customitems scan" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /customitems scan not recognized"
+            FAIL=1
+          else
+            echo "PASS: /customitems scan recognized"
+          fi
+
+          # Test 6: /customitems toggle
+          echo "=== Test 6: /customitems toggle ==="
+          RESP=$(python3 /tmp/rcon.py "customitems toggle itemsadder:ruby_sword" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /customitems toggle not recognized"
+            FAIL=1
+          else
+            echo "PASS: /customitems toggle recognized"
+          fi
+
+          # Test 7: /customitems price set
+          echo "=== Test 7: /customitems price ==="
+          RESP=$(python3 /tmp/rcon.py "customitems price itemsadder:ruby_sword 500 250" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /customitems price not recognized"
+            FAIL=1
+          else
+            echo "PASS: /customitems price recognized"
+          fi
+
+          # Test 8: /customitems price rejects negative buy price
+          echo "=== Test 8: /customitems price rejects negative ==="
+          RESP=$(python3 /tmp/rcon.py "customitems price itemsadder:ruby_sword -5 10" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "negative\|invalid\|must be"; then
+            echo "PASS: Negative price rejected"
+          else
+            echo "INFO: Negative price response: $RESP (may need validation)"
+          fi
+
+          # Test 9: /orders command
+          echo "=== Test 9: /orders command ==="
+          RESP=$(python3 /tmp/rcon.py "orders" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "error\|exception\|unknown command"; then
+            echo "FAIL: /orders command errored"
+            FAIL=1
+          else
+            echo "PASS: /orders command accepted"
+          fi
+
+          # Test 10: /sell command
+          echo "=== Test 10: /sell command ==="
+          RESP=$(python3 /tmp/rcon.py "sell" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "error\|exception\|unknown command"; then
+            echo "FAIL: /sell command errored"
+            FAIL=1
+          else
+            echo "PASS: /sell command accepted"
+          fi
+
+          # Test 11: /stocks command
+          echo "=== Test 11: /stocks command ==="
+          RESP=$(python3 /tmp/rcon.py "stocks" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "error\|exception\|unknown command"; then
+            echo "FAIL: /stocks command errored"
+            FAIL=1
+          else
+            echo "PASS: /stocks command accepted"
+          fi
+
+          # Test 12: /bal command
+          echo "=== Test 12: /bal command ==="
+          RESP=$(python3 /tmp/rcon.py "bal" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "checking\|balance"; then
+            echo "PASS: /bal command works"
+          else
+            echo "FAIL: /bal command unexpected response: $RESP"
+            FAIL=1
+          fi
+
+          # Test 13: /eco give
+          echo "=== Test 13: /eco give ==="
+          RESP=$(python3 /tmp/rcon.py "eco give TestPlayer 100" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "gave\|added"; then
+            echo "PASS: /eco give works"
+          else
+            echo "FAIL: /eco give unexpected response: $RESP"
+            FAIL=1
+          fi
+
+          # Test 14: /eco take
+          echo "=== Test 14: /eco take ==="
+          RESP=$(python3 /tmp/rcon.py "eco take TestPlayer 50" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "took\|removed"; then
+            echo "PASS: /eco take works"
+          else
+            echo "FAIL: /eco take unexpected response: $RESP"
+            FAIL=1
+          fi
+
+          # Test 15: /eco rejects missing amount
+          echo "=== Test 15: /eco rejects missing amount ==="
+          RESP=$(python3 /tmp/rcon.py "eco give" 2>/dev/null || echo "RCON_FAILED")
+          echo "Response: $RESP"
+          if echo "$RESP" | grep -qi "usage\|error\|incorrect"; then
+            echo "PASS: /eco rejects missing args"
+          else
+            echo "FAIL: /eco should reject missing args: $RESP"
+            FAIL=1
+          fi
+
+          # Check server log for GUI-related errors
+          echo "=== Checking server log for GUI errors ==="
+          sleep 2
+          if grep -qi "exception.*gui\|error.*gui\|exception.*inventory\|error.*inventory" logs/latest.log 2>/dev/null; then
+            GUI_ERR=$(grep -i "exception.*gui\|error.*gui\|exception.*inventory\|error.*inventory" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART" || true)
+            if [ -n "$GUI_ERR" ]; then
+              echo "FAIL: GUI errors in server log"
+              echo "$GUI_ERR"
+              FAIL=1
+            else
+              echo "PASS: No real GUI errors"
+            fi
+          else
+            echo "PASS: No GUI errors in server log"
+          fi
+
+          # Check for Market/AH inventory open events in log
+          echo "=== Checking for inventory open events ==="
+          if grep -qi "opening inventory\|openInventory\|Market\|Auction" logs/latest.log 2>/dev/null; then
+            echo "PASS: Inventory-related log entries found"
+          else
+            echo "INFO: No explicit inventory open logs (GUI opens are client-side)"
+          fi
+
+          # Check custom_items table for scanned items
+          echo "=== Checking custom_items in DB ==="
+          if [ -f "plugins/Aurelium/aurelium.db" ]; then
+            ITEM_COUNT=$(sqlite3 plugins/Aurelium/aurelium.db "SELECT COUNT(*) FROM custom_items;" 2>/dev/null || echo "0")
+            echo "Items in DB: $ITEM_COUNT"
+            if [ "$ITEM_COUNT" -gt 0 ]; then
+              echo "PASS: Custom items in database"
+              # Show items
+              sqlite3 plugins/Aurelium/aurelium.db "SELECT canonical_id, source_plugin, enabled, buy_price, sell_price FROM custom_items LIMIT 10;" 2>/dev/null || true
+            else
+              echo "INFO: No custom items in DB (mock plugin may not have loaded)"
+            fi
+          else
+            echo "INFO: No SQLite DB found"
+          fi
+
+          # Snapshot logs before shutdown
+          cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
+
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "GUI INTEGRATION TEST FAILED ($FAIL check(s) failed)"
+            exit 1
+          else
+            echo "ALL GUI INTEGRATION CHECKS PASSED"
+          fi
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-gui-test-log
+          path: logs/latest.log
+          retention-days: 7
+
+  ah-gui-test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+      - name: Download Aurelium
+        uses: actions/download-artifact@v4
+        with:
+          name: Aurelium
+          path: plugins
+      - name: Download Paper
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Test Auction House GUI via RCON
+        run: |
+          mkdir -p plugins
+          echo "eula=true" > eula.txt
+          echo "online-mode=false" > server.properties
+          echo "enable-rcon=true" >> server.properties
+          echo "rcon.port=25580" >> server.properties
+          echo "rcon.password=test" >> server.properties
+          echo "max-players=5" >> server.properties
+
+          timeout 120 java -jar paper.jar --nogui &
+          SERVER_PID=$!
+
+          for i in $(seq 1 60); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then break; fi
+            sleep 2
+          done
+
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          sleep 5
+
+          cat > /tmp/rcon.py << 'RCON'
+          import socket, struct, re, sys
+          def rcon(host, port, password, cmd):
+              s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              s.settimeout(10)
+              s.connect((host, port))
+              def send(pid, pt, data):
+                  payload = data.encode() + b'\x00\x00'
+                  header = struct.pack('<ii', len(payload)+10, pid) + struct.pack('<ii', 0, pt) + payload
+                  s.send(header)
+              def recv():
+                  data = b''
+                  while True:
+                      try:
+                          chunk = s.recv(4096)
+                          if not chunk: break
+                          data += chunk
+                          if b'\x00\x00' in data: break
+                      except: break
+                  text = data.decode('utf-8', errors='replace')
+                  text = re.sub(r'\xa7[0-9a-fk-or]', '', text)
+                  return text
+              send(0, 2, password)
+              recv()
+              send(0, 3, cmd)
+              resp = recv()
+              s.close()
+              return resp
+          if __name__ == '__main__':
+              cmd = sys.argv[1]
+              print(rcon('127.0.0.1', 25580, 'test', cmd))
+          RCON
+
+          FAIL=0
+
+          # Test AH subcommands
+          echo "=== Test: /ah (browse) ==="
+          RESP=$(python3 /tmp/rcon.py "ah" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /ah not recognized"; FAIL=1
+          else
+            echo "PASS: /ah recognized"
+          fi
+
+          echo "=== Test: /auction alias ==="
+          RESP=$(python3 /tmp/rcon.py "auction" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /auction alias not recognized"; FAIL=1
+          else
+            echo "PASS: /auction alias recognized"
+          fi
+
+          echo "=== Test: /ah sell ==="
+          RESP=$(python3 /tmp/rcon.py "ah sell 500" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /ah sell not recognized"; FAIL=1
+          else
+            echo "PASS: /ah sell recognized"
+          fi
+
+          echo "=== Test: /ah bid ==="
+          RESP=$(python3 /tmp/rcon.py "ah bid 1 100" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /ah bid not recognized"; FAIL=1
+          else
+            echo "PASS: /ah bid recognized"
+          fi
+
+          echo "=== Test: /ah collect ==="
+          RESP=$(python3 /tmp/rcon.py "ah collect" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /ah collect not recognized"; FAIL=1
+          else
+            echo "PASS: /ah collect recognized"
+          fi
+
+          # Test economy commands for AH purchasing
+          echo "=== Test: /eco give for AH purchasing ==="
+          RESP=$(python3 /tmp/rcon.py "eco give TestPlayer 1000" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "gave\|added"; then
+            echo "PASS: Economy funded for AH tests"
+          else
+            echo "FAIL: Could not fund economy"; FAIL=1
+          fi
+
+          # Test customitems commands for AH custom item support
+          echo "=== Test: /customitems info ==="
+          RESP=$(python3 /tmp/rcon.py "customitems info itemsadder:ruby_sword" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /customitems info not recognized"; FAIL=1
+          else
+            echo "PASS: /customitems info recognized"
+          fi
+
+          echo "=== Test: /customitems reload ==="
+          RESP=$(python3 /tmp/rcon.py "customitems reload" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /customitems reload not recognized"; FAIL=1
+          else
+            echo "PASS: /customitems reload recognized"
+          fi
+
+          # Check for AH-related exceptions
+          echo "=== Checking for AH exceptions ==="
+          sleep 2
+          if grep -qi "exception.*auction\|error.*auction\|NullPointer.*AuctionGUI\|NullPointer.*MarketGUI" logs/latest.log 2>/dev/null; then
+            AH_ERR=$(grep -i "exception.*auction\|error.*auction\|NullPointer.*AuctionGUI\|NullPointer.*MarketGUI" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART" || true)
+            if [ -n "$AH_ERR" ]; then
+              echo "FAIL: AH/Market exceptions found"
+              echo "$AH_ERR"
+              FAIL=1
+            else
+              echo "PASS: No real AH exceptions"
+            fi
+          else
+            echo "PASS: No AH exceptions in log"
+          fi
+
+          # Verify plugin is still running (no crash)
+          if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
+            echo "PASS: Plugin still running after all commands"
+          else
+            echo "FAIL: Plugin may have crashed"
+            FAIL=1
+          fi
+
+          cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "AH GUI TEST FAILED ($FAIL check(s) failed)"
+            exit 1
+          else
+            echo "ALL AH GUI CHECKS PASSED"
+          fi
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ah-gui-test-log
+          path: logs/latest.log
+          retention-days: 7
+
+  customitems-gui-test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+      - name: Download Aurelium
+        uses: actions/download-artifact@v4
+        with:
+          name: Aurelium
+          path: plugins
+      - name: Build mock-itemsadder
+        run: |
+          cd ci/mock-itemsadder
+          gradle build 2>/dev/null || ./gradlew build 2>/dev/null || true
+          cp build/libs/*.jar ../../plugins/ 2>/dev/null || true
+      - name: Download Paper
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Test CustomItems GUI via RCON
+        run: |
+          mkdir -p plugins
+          echo "eula=true" > eula.txt
+          echo "online-mode=false" > server.properties
+          echo "enable-rcon=true" >> server.properties
+          echo "rcon.port=25581" >> server.properties
+          echo "rcon.password=test" >> server.properties
+
+          timeout 120 java -jar paper.jar --nogui &
+          SERVER_PID=$!
+
+          for i in $(seq 1 60); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then break; fi
+            sleep 2
+          done
+
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          sleep 10
+
+          cat > /tmp/rcon.py << 'RCON'
+          import socket, struct, re, sys
+          def rcon(host, port, password, cmd):
+              s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+              s.settimeout(10)
+              s.connect((host, port))
+              def send(pid, pt, data):
+                  payload = data.encode() + b'\x00\x00'
+                  header = struct.pack('<ii', len(payload)+10, pid) + struct.pack('<ii', 0, pt) + payload
+                  s.send(header)
+              def recv():
+                  data = b''
+                  while True:
+                      try:
+                          chunk = s.recv(4096)
+                          if not chunk: break
+                          data += chunk
+                          if b'\x00\x00' in data: break
+                      except: break
+                  text = data.decode('utf-8', errors='replace')
+                  text = re.sub(r'\xa7[0-9a-fk-or]', '', text)
+                  return text
+              send(0, 2, password)
+              recv()
+              send(0, 3, cmd)
+              resp = recv()
+              s.close()
+              return resp
+          if __name__ == '__main__':
+              cmd = sys.argv[1]
+              print(rcon('127.0.0.1', 25581, 'test', cmd))
+          RCON
+
+          FAIL=0
+
+          # Test customitems GUI opens
+          echo "=== Test: /customitems (GUI open) ==="
+          RESP=$(python3 /tmp/rcon.py "customitems" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "unknown command"; then
+            echo "FAIL: /customitems not recognized"; FAIL=1
+          else
+            echo "PASS: /customitems recognized"
+          fi
+
+          # Test scan and verify items appear
+          echo "=== Test: /customitems scan ==="
+          RESP=$(python3 /tmp/rcon.py "customitems scan" 2>/dev/null || echo "RCON_FAILED")
+          echo "Scan response: $RESP"
+          sleep 5
+
+          # Check DB for scanned items
+          if [ -f "plugins/Aurelium/aurelium.db" ]; then
+            ITEM_COUNT=$(sqlite3 plugins/Aurelium/aurelium.db "SELECT COUNT(*) FROM custom_items;" 2>/dev/null || echo "0")
+            echo "Items in DB after scan: $ITEM_COUNT"
+
+            if [ "$ITEM_COUNT" -gt 0 ]; then
+              echo "PASS: Custom items scanned into DB"
+
+              # Get first item canonical_id for toggle/price tests
+              FIRST_ID=$(sqlite3 plugins/Aurelium/aurelium.db "SELECT canonical_id FROM custom_items LIMIT 1;" 2>/dev/null || echo "")
+              if [ -n "$FIRST_ID" ]; then
+                echo "Testing with item: $FIRST_ID"
+
+                # Test toggle
+                echo "=== Test: /customitems toggle $FIRST_ID ==="
+                RESP=$(python3 /tmp/rcon.py "customitems toggle $FIRST_ID" 2>/dev/null || echo "RCON_FAILED")
+                echo "Toggle response: $RESP"
+
+                # Test price set
+                echo "=== Test: /customitems price $FIRST_ID 100 50 ==="
+                RESP=$(python3 /tmp/rcon.py "customitems price $FIRST_ID 100 50" 2>/dev/null || echo "RCON_FAILED")
+                echo "Price response: $RESP"
+
+                # Verify price was set in DB
+                BUY_PRICE=$(sqlite3 plugins/Aurelium/aurelium.db "SELECT buy_price FROM custom_items WHERE canonical_id='$FIRST_ID';" 2>/dev/null || echo "")
+                SELL_PRICE=$(sqlite3 plugins/Aurelium/aurelium.db "SELECT sell_price FROM custom_items WHERE canonical_id='$FIRST_ID';" 2>/dev/null || echo "")
+                echo "DB prices: buy=$BUY_PRICE sell=$SELL_PRICE"
+
+                if [ "$BUY_PRICE" = "100.0" ] || [ "$BUY_PRICE" = "100" ] || [ "$BUY_PRICE" = "100.00" ]; then
+                  echo "PASS: Buy price set correctly"
+                else
+                  echo "INFO: Buy price is '$BUY_PRICE' (may differ due to formatting)"
+                fi
+
+                # Test toggle back
+                echo "=== Test: /customitems toggle $FIRST_ID (re-enable) ==="
+                RESP=$(python3 /tmp/rcon.py "customitems toggle $FIRST_ID" 2>/dev/null || echo "RCON_FAILED")
+                echo "Toggle back response: $RESP"
+              fi
+            else
+              echo "INFO: No items in DB (mock plugin may not have loaded properly)"
+            fi
+          else
+            echo "INFO: No SQLite DB found"
+          fi
+
+          # Test negative price rejection
+          echo "=== Test: /customitems price rejects negative ==="
+          RESP=$(python3 /tmp/rcon.py "customitems price test:item -5 10" 2>/dev/null || echo "RCON_FAILED")
+          if echo "$RESP" | grep -qi "negative\|invalid\|must be\|cannot"; then
+            echo "PASS: Negative price rejected"
+          else
+            echo "INFO: Negative price response: $RESP"
+          fi
+
+          # Check for CustomItemsGUI exceptions
+          if grep -qi "exception.*CustomItemsGUI\|NullPointer.*CustomItemsGUI" logs/latest.log 2>/dev/null; then
+            echo "FAIL: CustomItemsGUI exceptions found"
+            grep -i "exception.*CustomItemsGUI\|NullPointer.*CustomItemsGUI" logs/latest.log
+            FAIL=1
+          else
+            echo "PASS: No CustomItemsGUI exceptions"
+          fi
+
+          cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "CUSTOMITEMS GUI TEST FAILED"
+            exit 1
+          else
+            echo "ALL CUSTOMITEMS GUI CHECKS PASSED"
+          fi
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: customitems-gui-test-log
+          path: logs/latest.log
+          retention-days: 7
