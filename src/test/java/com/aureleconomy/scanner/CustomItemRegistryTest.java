@@ -32,7 +32,7 @@ class CustomItemRegistryTest {
     registry = new CustomItemRegistry(null);
  }
 
- private ItemStack mockItemStack(Material material, int customModelData, String displayName, List<String> lore) {
+ private ItemStack mockItemStack(Material material, int customModelData, String displayName, List<Component> lore) {
     ItemStack item = Mockito.mock(ItemStack.class);
     ItemMeta meta = Mockito.mock(ItemMeta.class);
     PersistentDataContainer pdc = Mockito.mock(PersistentDataContainer.class);
