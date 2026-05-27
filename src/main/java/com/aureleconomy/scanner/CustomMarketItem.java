@@ -17,6 +17,11 @@ public class CustomMarketItem {
  /** Sentinel value indicating the price has not been explicitly set. */
  public static final BigDecimal PRICE_UNSET = BigDecimal.valueOf(-1);
 
+ /** Convenience factory matching the test-call convention. */
+ public static Builder builder() {
+ return new Builder();
+ }
+
  private final String canonicalId;
  private final ItemStack itemStack;
  private final String sourcePlugin;
