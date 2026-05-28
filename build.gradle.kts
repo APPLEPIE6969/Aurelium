@@ -77,4 +77,8 @@ tasks.withType<ProcessResources>().configureEach {
 
 tasks.test {
  useJUnitPlatform()
+ // Enable Mockito inline mocking for Bukkit final classes on JDK 25
+ jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
+ "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
+ "--add-opens", "java.base/sun.reflect=ALL-UNNAMED")
 }
