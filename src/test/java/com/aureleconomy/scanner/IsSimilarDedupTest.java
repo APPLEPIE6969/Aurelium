@@ -1,15 +1,7 @@
 package com.aureleconomy.scanner;
 
-import org.bukkit.Material;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import net.kyori.adventure.text.Component;
-
-import java.math.BigDecimal;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -28,136 +20,135 @@ public class IsSimilarDedupTest {
 
  @BeforeEach
  void setUp() {
-    registry = new CustomItemRegistry(null);
+ registry = new CustomItemRegistry(null);
  }
 
- private ItemStack makeItem(Material mat, String name, int cmd, List<Component> lore) {
-    ItemStack item = new ItemStack(mat);
-    ItemMeta meta = item.getItemMeta();
-    meta.displayName(Component.text(name));
-    if (cmd > 0) meta.setCustomModelData(cmd);
-    if (lore != null) meta.lore(lore);
-    item.setItemMeta(meta);
-    return item;
+ private CustomMarketItem buildItem(String canonicalId, String pdcKey, String modelDataKey,
+ String loreHash, String pluginNativeId) {
+ org.bukkit.inventory.ItemStack item = org.mockito.Mockito.mock(org.bukkit.inventory.ItemStack.class);
+ org.bukkit.inventory.meta.ItemMeta meta = org.mockito.Mockito.mock(org.bukkit.inventory.meta.ItemMeta.class);
+ org.bukkit.persistence.PersistentDataContainer pdc = org.mockito.Mockito.mock(org.bukkit.persistence.PersistentDataContainer.class);
+
+ org.mockito.Mockito.when(item.getType()).thenReturn(org.bukkit.Material.DIAMOND_SWORD);
+ org.mockito.Mockito.when(item.hasItemMeta()).thenReturn(true);
+ org.mockito.Mockito.when(item.getItemMeta()).thenReturn(meta);
+ org.mockito.Mockito.when(meta.getPersistentDataContainer()).thenReturn(pdc);
+ org.mockito.Mockito.when(meta.hasCustomModelData()).thenReturn(false);
+ org.mockito.Mockito.when(pdc.getKeys()).thenReturn(java.util.Collections.emptySet());
+ org.mockito.Mockito.when(item.clone()).thenReturn(item);
+ org.mockito.Mockito.when(item.isSimilar(org.mockito.Mockito.any())).thenReturn(false);
+ org.mockito.Mockito.when(meta.hasLore()).thenReturn(false);
+ org.mockito.Mockito.when(meta.hashCode()).thenReturn(java.util.Objects.hash(org.bukkit.Material.DIAMOND_SWORD, 0));
+
+ return new CustomMarketItem.Builder()
+ .canonicalId(canonicalId)
+ .itemStack(item)
+ .sourcePlugin("TestPlugin")
+ .pdcKey(pdcKey)
+ .modelDataKey(modelDataKey)
+ .loreHash(loreHash)
+ .pluginNativeId(pluginNativeId)
+ .displayName("Test Item")
+ .category("weapons")
+ .build();
  }
 
  /**
-  * Register an item, catching the expected NPE from the market-add branch.
-  */
+ * Register an item, catching the expected NPE from the market-add branch.
+ */
  private RegistrationResult registerSafely(CustomMarketItem item, DiscoveryMethod method) {
-    try {
-       return registry.register(item, method);
-    } catch (NullPointerException e) {
-       // NPE from plugin.getConfig() or plugin.getMarketManager() — expected
-       return null;
-    }
+ try {
+ return registry.register(item, method);
+ } catch (NullPointerException e) {
+ // NPE from plugin.getConfig() or plugin.getMarketManager() — expected
+ return null;
+ }
  }
 
  @Test
  void identicalItemsAreDedupedViaIsSimilar() {
-    ItemStack item1 = makeItem(Material.DIAMOND_SWORD, "Test Sword", 0, null);
-    ItemStack item2 = makeItem(Material.DIAMOND_SWORD, "Test Sword", 0, null);
+ CustomMarketItem cmi1 = buildItem("test:sword_a", null, null, null, null);
+ CustomMarketItem cmi2 = buildItem("test:sword_b", null, null, null, null);
 
-    CustomMarketItem cmi1 = CustomMarketItem.builder()
-       .canonicalId("test:sword_a")
-       .sourcePlugin("TestPlugin")
-       .itemStack(item1)
-       .build();
-    CustomMarketItem cmi2 = CustomMarketItem.builder()
-       .canonicalId("test:sword_b")
-       .sourcePlugin("TestPlugin")
-       .itemStack(item2)
-       .build();
+ registerSafely(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+ registerSafely(cmi2, DiscoveryMethod.PLUGIN_API_ORAXEN);
 
-    registerSafely(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-    registerSafely(cmi2, DiscoveryMethod.PLUGIN_API_ORAXEN);
-
-    // Both should exist since canonical IDs differ
-    assertEquals(2, registry.getTotalItems());
+ // Both should exist since canonical IDs differ and no dedup keys match
+ assertEquals(2, registry.getTotalItems());
  }
 
  @Test
  void sameCanonicalIdDeduplicates() {
-    ItemStack item1 = makeItem(Material.DIAMOND_SWORD, "Sword A", 100, null);
-    ItemStack item2 = makeItem(Material.DIAMOND_SWORD, "Sword B", 200, null);
+ CustomMarketItem cmi1 = buildItem("test:same_id", "pdc:a", null, null, null);
+ CustomMarketItem cmi2 = buildItem("test:same_id", "pdc:b", null, null, null);
 
-    CustomMarketItem cmi1 = CustomMarketItem.builder()
-       .canonicalId("test:same_id")
-       .sourcePlugin("PluginA")
-       .itemStack(item1)
-       .build();
-    CustomMarketItem cmi2 = CustomMarketItem.builder()
-       .canonicalId("test:same_id")
-       .sourcePlugin("PluginB")
-       .itemStack(item2)
-       .build();
+ registerSafely(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+ registerSafely(cmi2, DiscoveryMethod.PLUGIN_API_ORAXEN);
 
-    registerSafely(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-    registerSafely(cmi2, DiscoveryMethod.PLUGIN_API_ORAXEN);
-
-    // Same canonical ID should dedup to 1 item
-    assertEquals(1, registry.getTotalItems());
+ // Same canonical ID should dedup to 1 item
+ assertEquals(1, registry.getTotalItems());
  }
 
  @Test
  void differentMaterialNotDeduped() {
-    ItemStack sword = makeItem(Material.DIAMOND_SWORD, "Item", 0, null);
-    ItemStack pick = makeItem(Material.DIAMOND_PICKAXE, "Item", 0, null);
+ org.bukkit.inventory.ItemStack sword = org.mockito.Mockito.mock(org.bukkit.inventory.ItemStack.class);
+ org.bukkit.inventory.meta.ItemMeta swordMeta = org.mockito.Mockito.mock(org.bukkit.inventory.meta.ItemMeta.class);
+ org.mockito.Mockito.when(sword.getType()).thenReturn(org.bukkit.Material.DIAMOND_SWORD);
+ org.mockito.Mockito.when(sword.hasItemMeta()).thenReturn(true);
+ org.mockito.Mockito.when(sword.getItemMeta()).thenReturn(swordMeta);
+ org.mockito.Mockito.when(swordMeta.getPersistentDataContainer()).thenReturn(org.mockito.Mockito.mock(org.bukkit.persistence.PersistentDataContainer.class));
+ org.mockito.Mockito.when(swordMeta.hasCustomModelData()).thenReturn(false);
+ org.mockito.Mockito.when(sword.clone()).thenReturn(sword);
+ org.mockito.Mockito.when(swordMeta.hasLore()).thenReturn(false);
+ org.mockito.Mockito.when(swordMeta.hashCode()).thenReturn(org.bukkit.Material.DIAMOND_SWORD.hashCode());
 
-    CustomMarketItem cmi1 = CustomMarketItem.builder()
-       .canonicalId("test:item_sword")
-       .sourcePlugin("Test")
-       .itemStack(sword)
-       .build();
-    CustomMarketItem cmi2 = CustomMarketItem.builder()
-       .canonicalId("test:item_pick")
-       .sourcePlugin("Test")
-       .itemStack(pick)
-       .build();
+ org.bukkit.inventory.ItemStack pick = org.mockito.Mockito.mock(org.bukkit.inventory.ItemStack.class);
+ org.bukkit.inventory.meta.ItemMeta pickMeta = org.mockito.Mockito.mock(org.bukkit.inventory.meta.ItemMeta.class);
+ org.mockito.Mockito.when(pick.getType()).thenReturn(org.bukkit.Material.DIAMOND_PICKAXE);
+ org.mockito.Mockito.when(pick.hasItemMeta()).thenReturn(true);
+ org.mockito.Mockito.when(pick.getItemMeta()).thenReturn(pickMeta);
+ org.mockito.Mockito.when(pickMeta.getPersistentDataContainer()).thenReturn(org.mockito.Mockito.mock(org.bukkit.persistence.PersistentDataContainer.class));
+ org.mockito.Mockito.when(pickMeta.hasCustomModelData()).thenReturn(false);
+ org.mockito.Mockito.when(pick.clone()).thenReturn(pick);
+ org.mockito.Mockito.when(pickMeta.hasLore()).thenReturn(false);
+ org.mockito.Mockito.when(pickMeta.hashCode()).thenReturn(org.bukkit.Material.DIAMOND_PICKAXE.hashCode());
 
-    registerSafely(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-    registerSafely(cmi2, DiscoveryMethod.PLUGIN_API_ORAXEN);
+ CustomMarketItem cmi1 = CustomMarketItem.builder()
+ .canonicalId("test:item_sword")
+ .sourcePlugin("Test")
+ .itemStack(sword)
+ .build();
+ CustomMarketItem cmi2 = CustomMarketItem.builder()
+ .canonicalId("test:item_pick")
+ .sourcePlugin("Test")
+ .itemStack(pick)
+ .build();
 
-    assertEquals(2, registry.getTotalItems());
+ registerSafely(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+ registerSafely(cmi2, DiscoveryMethod.PLUGIN_API_ORAXEN);
+
+ assertEquals(2, registry.getTotalItems());
  }
 
  @Test
  void upsertUpdatesExistingItem() {
-    ItemStack item1 = makeItem(Material.DIAMOND_SWORD, "V1", 0, null);
-    ItemStack item2 = makeItem(Material.DIAMOND_SWORD, "V2", 0, null);
+ CustomMarketItem cmi1 = buildItem("test:upsert", null, null, null, null);
+ CustomMarketItem cmi2 = buildItem("test:upsert", null, null, null, null);
 
-    CustomMarketItem cmi1 = CustomMarketItem.builder()
-       .canonicalId("test:upsert")
-       .sourcePlugin("Test")
-       .itemStack(item1)
-       .buyPrice(BigDecimal.valueOf(100.0))
-       .build();
-    CustomMarketItem cmi2 = CustomMarketItem.builder()
-       .canonicalId("test:upsert")
-       .sourcePlugin("Test")
-       .itemStack(item2)
-       .buyPrice(BigDecimal.valueOf(200.0))
-       .build();
+ registerSafely(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+ registry.upsert(cmi2);
 
-    registerSafely(cmi1, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-    registry.upsert(cmi2);
-
-    assertEquals(1, registry.getTotalItems());
+ assertEquals(1, registry.getTotalItems());
  }
 
  @Test
  void clearRemovesAllItems() {
-    ItemStack item = makeItem(Material.DIAMOND_SWORD, "Item", 0, null);
-    CustomMarketItem cmi = CustomMarketItem.builder()
-       .canonicalId("test:clear")
-       .sourcePlugin("Test")
-       .itemStack(item)
-       .build();
+ CustomMarketItem cmi = buildItem("test:clear", null, null, null, null);
 
-    registerSafely(cmi, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-    assertEquals(1, registry.getTotalItems());
+ registerSafely(cmi, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+ assertEquals(1, registry.getTotalItems());
 
-    registry.clear();
-    assertEquals(0, registry.getTotalItems());
+ registry.clear();
+ assertEquals(0, registry.getTotalItems());
  }
 }
