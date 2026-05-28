@@ -25,9 +25,8 @@ dependencies {
 
  // Test dependencies
  testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
- testImplementation("org.mockito:mockito-core:5.11.0")
- testImplementation("org.mockito:mockito-inline:5.11.0")
- testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
+ testImplementation("org.mockito:mockito-core:5.14.2")
+ testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
  testImplementation("io.papermc.paper:paper-api:26.1.2.build.64-stable")
  testImplementation("net.kyori:adventure-api:4.17.0")
  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -78,4 +77,6 @@ tasks.withType<ProcessResources>().configureEach {
 
 tasks.test {
  useJUnitPlatform()
+ // Enable inline mocking for Bukkit final classes via Mockito 5.x agent
+ jvmArgs("-javaagent:${configurations.testRuntimeClasspath.get().files.find { it.name.startsWith(\"mockito-core\") }}")
 }
