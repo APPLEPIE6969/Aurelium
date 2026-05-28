@@ -77,6 +77,4 @@ tasks.withType<ProcessResources>().configureEach {
 
 tasks.test {
  useJUnitPlatform()
- // Enable inline mocking for Bukkit final classes via Mockito 5.x agent
- jvmArgs("-javaagent:${configurations.testRuntimeClasspath.get().files.find { it.name.startsWith(\"mockito-core\") }}")
 }
