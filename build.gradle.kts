@@ -78,11 +78,8 @@ tasks.withType<ProcessResources>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
-    // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
-    val mockitoAgent = configurations.testRuntimeClasspath.get().find { it.name.contains("mockito-core") }
-    if (mockitoAgent != null) {
-        jvmArgs("-javaagent:${mockitoAgent.absolutePath}")
-    }
+    // Mockito 5.x inline mock maker is enabled via src/test/resources/mockito-extensions/
+    // No javaagent needed — the extension file activates final-class mocking
     jvmArgs(
         "--enable-preview",
         "-Dnet.bytebuddy.experimental=true",
