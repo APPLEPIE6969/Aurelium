@@ -66,6 +66,16 @@ tasks.check {
  dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
+tasks.test {
+    useJUnitPlatform()
+    // Enable Mockito inline mocking for final classes on JDK 25+
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
+            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
+            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED",
+            "-Dnet.bytebuddy.experimental=true",
+            "--enable-preview")
+}
+
 tasks.withType<JavaCompile>().configureEach {
  options.encoding = Charsets.UTF_8.name()
  options.release = 25
@@ -75,22 +85,3 @@ tasks.withType<ProcessResources>().configureEach {
  filteringCharset = Charsets.UTF_8.name()
 }
 
-tasks.withType<Test>().configureEach {
- useJUnitPlatform()
- // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
- jvmArgumentProviders.add(org.gradle.api.tasks.CommandLineArgumentProvider {
-  override fun getArguments(): MutableIterable<String> {
-   val args = mutableListOf<String>()
-   val mockitoAgent = classpath.files.firstOrNull {
-    it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
-   }
-   if (mockitoAgent != null) {
-    args.add("-javaagent:${mockitoAgent.absolutePath}")
-   }
-   return args
-  }
- })
- jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
-         "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-         "--add-opens", "java.base/sun.reflect=ALL-UNNAMED")
-}
