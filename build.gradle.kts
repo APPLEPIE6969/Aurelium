@@ -80,7 +80,7 @@ tasks.test {
     // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
     doFirst {
         val mockitoCoreJar = configurations.testRuntimeClasspath.get().files.find {
-            it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
+            it.isFile && it.name.startsWith("mockito-core")
         }
         if (mockitoCoreJar != null) {
             jvmArgs("-javaagent:${mockitoCoreJar.absolutePath}")
