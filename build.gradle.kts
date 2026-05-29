@@ -1,3 +1,22 @@
+NEW BLOCK:
+tasks.test {
+    useJUnitPlatform()
+    // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
+    doFirst {
+        val mockitoCoreJar = configurations.testRuntimeClasspath.get().files.firstOrNull {
+            it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
+        }
+        if (mockitoCoreJar != null) {
+            jvmArgs("-javaagent:${mockitoCoreJar.absolutePath}")
+        }
+    }
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
+            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
+            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED",
+            "--add-opens", "java.base/java.util=ALL-UNNAMED")
+}
+---
+Updated successfully: True
 plugins {
  id("java")
  id("com.github.spotbugs") version "6.0.7"
@@ -76,10 +95,19 @@ tasks.withType<ProcessResources>().configureEach {
 }
 
 tasks.test {
- useJUnitPlatform()
- // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
- jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
-  "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-  "--add-opens", "java.base/sun.reflect=ALL-UNNAMED",
-  "--add-opens", "java.base/java.util=ALL-UNNAMED")
+    useJUnitPlatform()
+    // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
+    doFirst {
+        val mockitoCoreJar = configurations.testRuntimeClasspath.get().files.firstOrNull {
+            it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
+        }
+        if (mockitoCoreJar != null) {
+            jvmArgs("-javaagent:${mockitoCoreJar.absolutePath}")
+        }
+    }
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
+            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
+            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED",
+            "--add-opens", "java.base/java.util=ALL-UNNAMED")
 }
+
