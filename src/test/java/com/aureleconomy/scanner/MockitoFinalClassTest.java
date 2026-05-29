@@ -39,7 +39,7 @@ class MockitoFinalClassTest {
         
         // Stub behavior
         when(mockMeta.hasDisplayName()).thenReturn(true);
-        when(mockMeta.getDisplayName()).thenReturn(org.bukkit.chat.Component.text("Test Sword"));
+        when(mockMeta.getDisplayName()).thenReturn("Test Sword");
         
         // Verify
         assertTrue(mockMeta.hasDisplayName());
