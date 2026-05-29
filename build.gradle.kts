@@ -85,13 +85,6 @@ tasks.check {
  dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    // Enable Mockito inline mocking for final classes on JDK 25+
-    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
-            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED")
-}
 
 tasks.withType<JavaCompile>().configureEach {
  options.encoding = Charsets.UTF_8.name()
@@ -102,20 +95,4 @@ tasks.withType<ProcessResources>().configureEach {
  filteringCharset = Charsets.UTF_8.name()
 }
 
-tasks.test {
-    useJUnitPlatform()
-    // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
-    doFirst {
-        val mockitoCoreJar = configurations.testRuntimeClasspath.get().files.firstOrNull {
-            it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
-        }
-        if (mockitoCoreJar != null) {
-            jvmArgs("-javaagent:${mockitoCoreJar.absolutePath}")
-        }
-    }
-    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
-            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED",
-            "--add-opens", "java.base/java.util=ALL-UNNAMED")
-}
 
