@@ -76,14 +76,12 @@ tasks.withType<ProcessResources>().configureEach {
 }
 
 tasks.test {
-    useJUnitPlatform()
-    // Enable Mockito inline mocking for final classes on JDK 25+
-    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
-            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED",
-            "-Dnet.bytebuddy.experimental=true",
-            "--enable-preview")
-}
+ useJUnitPlatform()
+ // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
+ doFirst {
+  val mockitoAgent = classpath.files.firstOrNull {
+   it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
+  }
   if (mockitoAgent != null) {
    jvmArgs("-javaagent:${mockitoAgent.absolutePath}")
   }
