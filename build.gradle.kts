@@ -75,17 +75,21 @@ tasks.withType<ProcessResources>().configureEach {
  filteringCharset = Charsets.UTF_8.name()
 }
 
-tasks.test {
+tasks.withType<Test>().configureEach {
  useJUnitPlatform()
  // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
- doFirst {
-  val mockitoAgent = classpath.files.firstOrNull {
-   it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
+ jvmArgumentProviders.add(org.gradle.api.tasks.CommandLineArgumentProvider {
+  override fun getArguments(): MutableIterable<String> {
+   val args = mutableListOf<String>()
+   val mockitoAgent = classpath.files.firstOrNull {
+    it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
+   }
+   if (mockitoAgent != null) {
+    args.add("-javaagent:${mockitoAgent.absolutePath}")
+   }
+   return args
   }
-  if (mockitoAgent != null) {
-   jvmArgs("-javaagent:${mockitoAgent.absolutePath}")
-  }
- }
+ })
  jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
          "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
          "--add-opens", "java.base/sun.reflect=ALL-UNNAMED")
