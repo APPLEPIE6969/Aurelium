@@ -50,8 +50,7 @@ commands:
     description: Open the web dashboard
     usage: /web
     permission: aureleconomy.web
-
-customitems:
+  customitems:
     description: Manage discovered custom items
     usage: /customitems <scan|list|info|reload|toggle|price>
     permission: aureleconomy.admin
