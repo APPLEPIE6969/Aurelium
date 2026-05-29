@@ -25,7 +25,7 @@ dependencies {
 
     // Test dependencies
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito:mockito-inline:5.14.2")
     testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
     testImplementation("io.papermc.paper:paper-api:26.1.2.build.64-stable")
     testImplementation("net.kyori:adventure-api:4.17.0")
@@ -78,16 +78,6 @@ tasks.withType<ProcessResources>().configureEach {
 tasks.test {
     useJUnitPlatform()
     // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
-    doFirst {
-        // Resolve mockito-core jar from testRuntimeClasspath artifacts
-        val mockitoCoreArtifact = configurations.testRuntimeClasspath.get().resolvedConfiguration.resolvedArtifacts.find {
-            it.moduleVersion.id.name.startsWith("mockito-core")
-        }
-        if (mockitoCoreArtifact != null) {
-            jvmArgs("-javaagent:${mockitoCoreArtifact.file.absolutePath}")
-        }
-    }
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
-            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED")
+            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED")
 }
