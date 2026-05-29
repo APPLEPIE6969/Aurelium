@@ -1,7 +1,7 @@
 NEW BLOCK:
 tasks.test {
     useJUnitPlatform()
-    // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
+    // Enable Mockito inline mocking for final classes on JDK 25+
     doFirst {
         val mockitoCoreJar = configurations.testRuntimeClasspath.get().files.firstOrNull {
             it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
@@ -44,7 +44,7 @@ dependencies {
 
  // Test dependencies
  testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
- testImplementation("org.mockito:mockito-inline:5.11.0")
+ testImplementation("org.mockito:mockito-core:5.14.2")
  testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
  testImplementation("io.papermc.paper:paper-api:26.1.2.build.64-stable")
  testImplementation("net.kyori:adventure-api:4.17.0")
