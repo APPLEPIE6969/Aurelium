@@ -79,9 +79,12 @@ tasks.test {
     useJUnitPlatform()
     // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
     doFirst {
-        val mockitoCoreJar = configurations.testRuntimeClasspath.get().files.find {
-            it.isFile && it.name.startsWith("mockito-core")
-        }
+        // Try multiple approaches to find mockito-core jar
+        val mockitoCoreJar = configurations.testRuntimeClasspath.get().files.firstOrNull {
+            it.isFile && it.name.startsWith("mockito-core") && it.name.endsWith(".jar")
+        } ?: file(System.getenv("GRADLE_USER_HOME") ?: "${System.getProperty("user.home")}/.gradle")
+            .walkTopDown()
+            .firstOrNull { f -> f.isFile && f.name.startsWith("mockito-core-") && f.name.endsWith(".jar") }
         if (mockitoCoreJar != null) {
             jvmArgs("-javaagent:${mockitoCoreJar.absolutePath}")
         }
