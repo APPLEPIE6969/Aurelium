@@ -1,5 +1,4 @@
 import org.gradle.api.tasks.CommandLineArgumentProvider
-
 plugins {
  id("java")
  id("com.github.spotbugs") version "6.0.7"
@@ -81,7 +80,7 @@ tasks.test {
  useJUnitPlatform()
  // Load Mockito as a Java agent so ByteBuddy can mock final classes on JDK 25+
  jvmArgumentProviders.add(object : CommandLineArgumentProvider {
-  override fun getArguments(): MutableIterable<String> {
+  override fun asArguments(): MutableIterable<String> {
    val args = mutableListOf<String>()
    val mockitoAgent = classpath.files.firstOrNull {
     it.isFile && it.name.startsWith("mockito-core-") && it.name.endsWith(".jar")
