@@ -85,20 +85,6 @@ tasks.check {
  dependsOn(tasks.jacocoTestCoverageVerification)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    // Enable Mockito inline mocking for final classes on JDK 25+
-    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
-            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED")
-}
-tasks.test {
-    useJUnitPlatform()
-    // Enable Mockito inline mocking for final classes on JDK 25+
-    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
-            "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-            "--add-opens", "java.base/sun.reflect=ALL-UNNAMED")
-}
 
 
 tasks.withType<JavaCompile>().configureEach {
