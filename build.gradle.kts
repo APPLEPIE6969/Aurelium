@@ -84,5 +84,6 @@ tasks.test {
  }
  jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED",
   "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
-  "--add-opens", "java.base/sun.reflect=ALL-UNNAMED")
+  "--add-opens", "java.base/sun.reflect=ALL-UNNAMED",
+  "--add-opens", "java.base/java.util=ALL-UNNAMED")
 }
