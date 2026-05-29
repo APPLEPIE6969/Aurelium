@@ -27,6 +27,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
+    testImplementation("org.mockito:mockito-inline:5.14.2")
     testImplementation("io.papermc.paper:paper-api:26.1.2.build.64-stable")
     testImplementation("net.kyori:adventure-api:4.17.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -78,8 +79,7 @@ tasks.withType<ProcessResources>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
-    // Mockito 5.x inline mock maker is enabled via src/test/resources/mockito-extensions/
-    // No javaagent needed — the extension file activates final-class mocking
+    // Mockito inline mock maker enabled via mockito-inline dependency + extension file
     jvmArgs(
         "--enable-preview",
         "-Dnet.bytebuddy.experimental=true",
