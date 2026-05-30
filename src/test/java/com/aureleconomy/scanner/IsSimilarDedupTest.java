@@ -38,7 +38,6 @@ public class IsSimilarDedupTest {
  org.mockito.Mockito.when(item.clone()).thenReturn(item);
  org.mockito.Mockito.when(item.isSimilar(org.mockito.Mockito.any())).thenReturn(false);
  org.mockito.Mockito.when(meta.hasLore()).thenReturn(false);
- org.mockito.Mockito.when(meta.hashCode()).thenReturn(java.util.Objects.hash(org.bukkit.Material.DIAMOND_SWORD, 0));
 
  return new CustomMarketItem.Builder()
  .canonicalId(canonicalId)
@@ -100,7 +99,6 @@ public class IsSimilarDedupTest {
  org.mockito.Mockito.when(swordMeta.hasCustomModelData()).thenReturn(false);
  org.mockito.Mockito.when(sword.clone()).thenReturn(sword);
  org.mockito.Mockito.when(swordMeta.hasLore()).thenReturn(false);
- org.mockito.Mockito.when(swordMeta.hashCode()).thenReturn(org.bukkit.Material.DIAMOND_SWORD.hashCode());
 
  org.bukkit.inventory.ItemStack pick = org.mockito.Mockito.mock(org.bukkit.inventory.ItemStack.class);
  org.bukkit.inventory.meta.ItemMeta pickMeta = org.mockito.Mockito.mock(org.bukkit.inventory.meta.ItemMeta.class);
@@ -111,7 +109,6 @@ public class IsSimilarDedupTest {
  org.mockito.Mockito.when(pickMeta.hasCustomModelData()).thenReturn(false);
  org.mockito.Mockito.when(pick.clone()).thenReturn(pick);
  org.mockito.Mockito.when(pickMeta.hasLore()).thenReturn(false);
- org.mockito.Mockito.when(pickMeta.hashCode()).thenReturn(org.bukkit.Material.DIAMOND_PICKAXE.hashCode());
 
  CustomMarketItem cmi1 = CustomMarketItem.builder()
  .canonicalId("test:item_sword")
