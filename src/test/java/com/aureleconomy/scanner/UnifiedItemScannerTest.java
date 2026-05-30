@@ -339,7 +339,7 @@ class UnifiedItemScannerTest {
 
     @Test
     void autoAssignCategory_unknown_returns_custom() {
-        ItemStack item = new ItemStack(Material.CHAIN);
+        ItemStack item = new ItemStack(Material.PAPER);
         assertEquals(MarketItems.Category.CUSTOM_ITEMS, scanner.autoAssignCategory(item));
     }
 
