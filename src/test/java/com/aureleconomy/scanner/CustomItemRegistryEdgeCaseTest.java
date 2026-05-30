@@ -52,20 +52,39 @@ class CustomItemRegistryEdgeCaseTest {
     // ======================================================
 
     @Test
-    void register_sameItemTwice_returnsAlreadyExists() {
-        RegistrationResult first = registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
-        assertEquals(RegistrationResult.Status.NEW, first.status());
-        RegistrationResult second = registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
-        assertEquals(RegistrationResult.Status.ALREADY_EXISTS, second.status());
+    void register_sameItemTwice_returnsDuplicate() {
+        RegistrationResult first = registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        assertTrue(first.isNew());
+        RegistrationResult second = registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        assertTrue(second.isDuplicate());
         assertEquals(1, registry.getTotalItems());
         assertEquals(1, registry.getDuplicatesPrevented());
     }
 
     @Test
     void register_twoDifferentItems_increasesCount() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
-        registry.register(testItem2, DiscoveryMethod.ORAXEN_API);
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registry.register(testItem2, DiscoveryMethod.PLUGIN_API_ORAXEN);
         assertEquals(2, registry.getTotalItems());
+    }
+
+    // ======================================================
+    // Dedup by PDC key
+    // ======================================================
+
+    @Test
+    void register_samePdcKeyDifferentId_dedups() {
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        CustomMarketItem samePdcItem = new CustomMarketItem.Builder()
+                .canonicalId("test:sword2")
+                .itemStack(new ItemStack(Material.DIAMOND_SWORD))
+                .sourcePlugin("TestPlugin")
+                .displayName("Test Sword 2")
+                .pdcKey("testplugin:sword")
+                .build();
+        RegistrationResult result = registry.register(samePdcItem, DiscoveryMethod.PDC_SCAN);
+        assertTrue(result.isDuplicate());
+        assertEquals("test:sword", result.getCanonicalId());
     }
 
     // ======================================================
@@ -105,7 +124,7 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void upsert_existingItem_updatesInPlace() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
         CustomMarketItem updated = new CustomMarketItem.Builder()
                 .canonicalId("test:sword")
                 .itemStack(new ItemStack(Material.DIAMOND_SWORD))
@@ -119,44 +138,27 @@ class CustomItemRegistryEdgeCaseTest {
     }
 
     @Test
-    void upsert_clearsDiscoveryMethods() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
-        registry.register(testItem, DiscoveryMethod.PDC_SCAN);
-        assertEquals(2, registry.getDiscoveryMethods("test:sword").size());
+    void upsert_nullItem_throwsNullPointer() {
+        assertThrows(NullPointerException.class, () -> registry.upsert(null));
+    }
+
+    @Test
+    void upsert_sameCanonicalId_dedupMapsConsistent() {
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        assertEquals(1, registry.getTotalItems());
+
+        // Upsert with updated values but same canonical ID
         CustomMarketItem updated = new CustomMarketItem.Builder()
                 .canonicalId("test:sword")
                 .itemStack(new ItemStack(Material.DIAMOND_SWORD))
                 .sourcePlugin("TestPlugin")
                 .displayName("Updated Sword")
+                .buyPrice(BigDecimal.valueOf(200))
+                .sellPrice(BigDecimal.valueOf(100))
                 .build();
         registry.upsert(updated);
-        // upsert replaces the item, so discovery methods should be reset or preserved
-        // At minimum the item should still be there
-        assertNotNull(registry.getById("test:sword"));
-    }
-
-    // ======================================================
-    // toggle
-    // ======================================================
-
-    @Test
-    void toggle_disabled_itemIsDisabled() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
-        registry.toggle("test:sword");
-        assertFalse(registry.getById("test:sword").isEnabled());
-    }
-
-    @Test
-    void toggle_enabled_itemIsEnabled() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
-        registry.toggle("test:sword");
-        registry.toggle("test:sword");
-        assertTrue(registry.getById("test:sword").isEnabled());
-    }
-
-    @Test
-    void toggle_nonexistentItem_doesNotThrow() {
-        assertDoesNotThrow(() -> registry.toggle("nonexistent:id"));
+        assertEquals(1, registry.getTotalItems(), "Same ID should not create duplicate");
+        assertEquals(BigDecimal.valueOf(200), registry.getById("test:sword").getBuyPrice());
     }
 
     // ======================================================
@@ -165,8 +167,8 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void clear_afterRegister_emptiesRegistry() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
-        registry.register(testItem2, DiscoveryMethod.ORAXEN_API);
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registry.register(testItem2, DiscoveryMethod.PLUGIN_API_ORAXEN);
         registry.clear();
         assertTrue(registry.isEmpty());
         assertEquals(0, registry.getTotalItems());
@@ -178,8 +180,14 @@ class CustomItemRegistryEdgeCaseTest {
     }
 
     @Test
-    void isNewlyEmpty_returnsTrue() {
+    void isEmpty_newRegistry_returnsTrue() {
         assertTrue(registry.isEmpty());
+    }
+
+    @Test
+    void isEmpty_afterRegister_returnsFalse() {
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        assertFalse(registry.isEmpty());
     }
 
     // ======================================================
@@ -188,7 +196,7 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void getDiscoveryMethods_newItem_returnsMethods() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
         registry.register(testItem, DiscoveryMethod.PDC_SCAN);
         assertEquals(2, registry.getDiscoveryMethods("test:sword").size());
     }
@@ -265,23 +273,8 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void getAllItems_returnsUnmodifiableCollection() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
         assertThrows(UnsupportedOperationException.class, () -> registry.getAllItems().clear());
-    }
-
-    // ======================================================
-    // getAllDiscoveryMethods
-    // ======================================================
-
-    @Test
-    void multipleDiscoveryMethodsPerItem_tracksCorrectly() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
-        registry.register(testItem, DiscoveryMethod.PDC_SCAN);
-        registry.register(testItem2, DiscoveryMethod.ORAXEN_API);
-        // First item has 2 methods
-        assertEquals(2, registry.getDiscoveryMethods("test:sword").size());
-        // Second item has 1 method
-        assertEquals(1, registry.getDiscoveryMethods("test:pickaxe").size());
     }
 
     // ======================================================
@@ -309,6 +302,12 @@ class CustomItemRegistryEdgeCaseTest {
         assertNotNull(hash);
     }
 
+    @Test
+    void computeItemHash_nullItem_returnsEmptyString() {
+        String hash = registry.computeItemHash(null);
+        assertEquals("", hash, "Null item should produce empty hash");
+    }
+
     // ======================================================
     // resolveItemId
     // ======================================================
@@ -321,9 +320,22 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void resolveItemId_registeredItem_findsId() {
-        registry.register(testItem, DiscoveryMethod.ITEMSADDER_API);
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
         Optional<String> result = registry.resolveItemId(new ItemStack(Material.DIAMOND_SWORD));
         assertTrue(result.isPresent());
         assertEquals("test:sword", result.get());
+    }
+
+    // ======================================================
+    // multiple discovery methods tracking
+    // ======================================================
+
+    @Test
+    void multipleDiscoveryMethodsPerItem_tracksCorrectly() {
+        registry.register(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registry.register(testItem, DiscoveryMethod.PDC_SCAN);
+        registry.register(testItem2, DiscoveryMethod.PLUGIN_API_ORAXEN);
+        assertEquals(2, registry.getDiscoveryMethods("test:sword").size());
+        assertEquals(1, registry.getDiscoveryMethods("test:pickaxe").size());
     }
 }
