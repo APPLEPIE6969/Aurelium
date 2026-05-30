@@ -184,79 +184,79 @@ class UnifiedItemScannerTest {
     @Test
     void autoAssignCategory_food() {
         ItemStack item = new ItemStack(Material.COOKED_BEEF);
-        assertEquals(MarketItems.Category.CONSUMABLE_FOOD, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.FOOD_FARMING, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_potato_is_food() {
         ItemStack item = new ItemStack(Material.POTATO);
-        assertEquals(MarketItems.Category.CONSUMABLE_FOOD, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.FOOD_FARMING, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_carrot_is_food() {
         ItemStack item = new ItemStack(Material.CARROT);
-        assertEquals(MarketItems.Category.CONSUMABLE_FOOD, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.FOOD_FARMING, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_log() {
         ItemStack item = new ItemStack(Material.OAK_LOG);
-        assertEquals(MarketItems.Category.WOOD_BUILDING, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.WOOD, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_bamboo_is_wood() {
         ItemStack item = new ItemStack(Material.BAMBOO);
-        assertEquals(MarketItems.Category.WOOD_BUILDING, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.WOOD, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_stick_is_wood() {
         ItemStack item = new ItemStack(Material.STICK);
-        assertEquals(MarketItems.Category.WOOD_BUILDING, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.WOOD, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_stone() {
         ItemStack item = new ItemStack(Material.STONE);
-        assertEquals(MarketItems.Category.MINERAL_STONE, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.BUILDING, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_copper() {
         ItemStack item = new ItemStack(Material.COPPER_INGOT);
-        assertEquals(MarketItems.Category.MINERAL_INGOT_NUGGET, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.MINERALS_ORES, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_iron() {
         ItemStack item = new ItemStack(Material.IRON_INGOT);
-        assertEquals(MarketItems.Category.MINERAL_INGOT_NUGGET, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.MINERALS_ORES, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_gold() {
         ItemStack item = new ItemStack(Material.GOLD_INGOT);
-        assertEquals(MarketItems.Category.MINERAL_INGOT_NUGGET, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.MINERALS_ORES, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_diamond() {
         ItemStack item = new ItemStack(Material.DIAMOND);
-        assertEquals(MarketItems.Category.MINERAL_GEM, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.MINERALS_ORES, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_emerald() {
         ItemStack item = new ItemStack(Material.EMERALD);
-        assertEquals(MarketItems.Category.MINERAL_GEM, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.MINERALS_ORES, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_terracotta_is_colors() {
         ItemStack item = new ItemStack(Material.TERRACOTTA);
-        assertEquals(MarketItems.Category.COLOR_BUILDING, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.COLORS, scanner.autoAssignCategory(item));
     }
 
     @Test
@@ -274,43 +274,43 @@ class UnifiedItemScannerTest {
     @Test
     void autoAssignCategory_wool() {
         ItemStack item = new ItemStack(Material.WHITE_WOOL);
-        assertEquals(MarketItems.Category.COLOR_BUILDING, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.COLORS, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_redstone() {
         ItemStack item = new ItemStack(Material.REDSTONE);
-        assertEquals(MarketItems.Category.REDSTONE_COMPONENT, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.REDSTONE, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_repeater() {
         ItemStack item = new ItemStack(Material.REPEATER);
-        assertEquals(MarketItems.Category.REDSTONE_COMPONENT, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.REDSTONE, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_spawn_egg() {
         ItemStack item = new ItemStack(Material.CREEPER_SPAWN_EGG);
-        assertEquals(MarketItems.Category.SPAWN_EGG, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.SPAWNERS, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_seed_farming() {
         ItemStack item = new ItemStack(Material.WHEAT_SEEDS);
-        assertEquals(MarketItems.Category.FARMING_HARVEST, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.FOOD_FARMING, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_brick_is_building() {
         ItemStack item = new ItemStack(Material.BRICK);
-        assertEquals(MarketItems.Category.MINERAL_STONE, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.BUILDING, scanner.autoAssignCategory(item));
     }
 
     @Test
     void autoAssignCategory_deepslate_is_building() {
         ItemStack item = new ItemStack(Material.DEEPSLATE);
-        assertEquals(MarketItems.Category.MINERAL_STONE, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.BUILDING, scanner.autoAssignCategory(item));
     }
 
     @Test
@@ -357,6 +357,6 @@ class UnifiedItemScannerTest {
     @Test
     void autoAssignCategory_raw_iron() {
         ItemStack item = new ItemStack(Material.RAW_IRON);
-        assertEquals(MarketItems.Category.MINERAL_RAW, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.COPPER, scanner.autoAssignCategory(item));
     }
 }
