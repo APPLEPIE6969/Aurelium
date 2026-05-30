@@ -108,7 +108,7 @@ public class DatabaseManager {
  String username = config.getString("database.mysql.username", "root");
  String password = config.getString("database.mysql.password", "");
 
- String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false";
+ String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true";
  connection = DriverManager.getConnection(url, username, password);
  }
 
