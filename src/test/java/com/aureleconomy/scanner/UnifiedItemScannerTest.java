@@ -11,6 +11,7 @@ import org.mockito.Mockito;
 
 import java.util.List;
 
+import com.aureleconomy.market.MarketItems;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
