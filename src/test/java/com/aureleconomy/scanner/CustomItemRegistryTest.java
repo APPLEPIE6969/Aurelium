@@ -48,7 +48,6 @@ class CustomItemRegistryTest {
     Mockito.when(item.isSimilar(Mockito.any())).thenReturn(false);
     Mockito.when(meta.hasLore()).thenReturn(lore != null && !lore.isEmpty());
     Mockito.when(meta.lore()).thenReturn(lore);
-    Mockito.when(meta.hashCode()).thenReturn(java.util.Objects.hash(material, customModelData));
     return item;
  }
 
