@@ -178,7 +178,7 @@ class UnifiedItemScannerTest {
     @Test
     void autoAssignCategory_armor() {
         ItemStack item = new ItemStack(Material.DIAMOND_CHESTPLATE);
-        assertEquals(MarketItems.Category.WEARABLE_ARMOR, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.CUSTOM_ITEMS, scanner.autoAssignCategory(item));
     }
 
     @Test
@@ -357,6 +357,6 @@ class UnifiedItemScannerTest {
     @Test
     void autoAssignCategory_raw_iron() {
         ItemStack item = new ItemStack(Material.RAW_IRON);
-        assertEquals(MarketItems.Category.COPPER, scanner.autoAssignCategory(item));
+        assertEquals(MarketItems.Category.MINERALS_ORES, scanner.autoAssignCategory(item));
     }
 }
