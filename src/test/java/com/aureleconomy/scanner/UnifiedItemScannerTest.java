@@ -138,7 +138,7 @@ class UnifiedItemScannerTest {
 
     @Test
     void autoAssignCategory_banner() {
-        assertEquals(Category.DECORATION, scanner.autoAssignCategory(new ItemStack(Material.CREEPER_BANNER)));
+        assertEquals(Category.DECORATION, scanner.autoAssignCategory(new ItemStack(Material.WHITE_BANNER)));
     }
 
     @Test
