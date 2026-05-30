@@ -20,6 +20,15 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class UnifiedItemScannerTest {
 
+    /** Create a mocked ItemStack with the given material type.
+     *  Uses Mockito to avoid Paper API's RegistryAccess static init which
+     *  fails outside a Bukkit server environment. */
+    private static ItemStack item(Material mat) {
+        ItemStack stack = Mockito.mock(ItemStack.class);
+        Mockito.when(stack.getType()).thenReturn(mat);
+        return stack;
+    }
+
     private AurelEconomy plugin;
     private FileConfiguration config;
     private CustomItemRegistry registry;
