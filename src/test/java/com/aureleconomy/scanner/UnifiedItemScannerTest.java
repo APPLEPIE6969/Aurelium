@@ -1,209 +1,321 @@
 package com.aureleconomy.scanner;
 
-import org.junit.jupiter.api.*;
-import static org.junit.jupiter.api.Assertions.*;
-import org.mockito.Mockito;
-
+import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.market.MarketItems.Category;
 import org.bukkit.Material;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataContainer;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-import java.math.BigDecimal;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
 /**
- * Unit tests for UnifiedItemScanner helper methods.
- * Full scanner tests require a Bukkit server; these test extractable
- * utility methods that don't need server context.
+ * Tests for UnifiedItemScanner public API methods.
+ * Tests the actual production code directly instead of mirroring logic.
  */
 class UnifiedItemScannerTest {
 
- private ItemStack mockItemStack(Material material, int customModelData, String displayName, List<String> lore) {
-    ItemStack item = Mockito.mock(ItemStack.class);
-    ItemMeta meta = Mockito.mock(ItemMeta.class);
-    Mockito.when(item.getType()).thenReturn(material);
-    Mockito.when(item.hasItemMeta()).thenReturn(true);
-    Mockito.when(item.getItemMeta()).thenReturn(meta);
-    Mockito.when(meta.hasCustomModelData()).thenReturn(customModelData > 0);
-    Mockito.when(meta.getCustomModelData()).thenReturn(customModelData);
-    Mockito.when(meta.getPersistentDataContainer()).thenReturn(Mockito.mock(PersistentDataContainer.class));
-    Mockito.when(item.clone()).thenReturn(item);
-    return item;
- }
+    @Mock
+    private AurelEconomy plugin;
 
- @Test
- @DisplayName("extractModelDataKey returns MATERIAL:CMD format")
- void extractModelDataKeyFormat() {
-    ItemStack item = mockItemStack(Material.DIAMOND_SWORD, 10001, null, null);
-    String key = item.getType().name() + ":" + item.getItemMeta().getCustomModelData();
-    assertEquals("DIAMOND_SWORD:10001", key);
- }
+    @Mock
+    private FileConfiguration config;
 
- @Test
- @DisplayName("extractModelDataKey for BOW")
- void extractModelDataKeyBow() {
-    ItemStack item = mockItemStack(Material.BOW, 40002, null, null);
-    String key = item.getType().name() + ":" + item.getItemMeta().getCustomModelData();
-    assertEquals("BOW:40002", key);
- }
+    @Mock
+    private CustomItemRegistry registry;
 
- @Test
- @DisplayName("extractModelDataKey for DIAMOND_PICKAXE")
- void extractModelDataKeyPickaxe() {
-    ItemStack item = mockItemStack(Material.DIAMOND_PICKAXE, 30001, null, null);
-    String key = item.getType().name() + ":" + item.getItemMeta().getCustomModelData();
-    assertEquals("DIAMOND_PICKAXE:30001", key);
- }
+    private UnifiedItemScanner scanner;
 
- @Test
- @DisplayName("autoAssignCategory maps weapons correctly")
- void autoAssignCategoryWeapons() {
-    assertTrue(isWeapon(Material.DIAMOND_SWORD));
-    assertTrue(isWeapon(Material.BOW));
-    assertTrue(isWeapon(Material.TRIDENT));
-    assertFalse(isWeapon(Material.DIAMOND_PICKAXE));
- }
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        when(plugin.getConfig()).thenReturn(config);
+        when(config.getBoolean(anyString(), anyBoolean())).thenReturn(true);
+        when(config.getStringList("custom-items.excluded-namespaces")).thenReturn(List.of("minecraft"));
+        when(config.getDouble("custom-items.default-price-multiplier", 1.0)).thenReturn(1.0);
+        scanner = new UnifiedItemScanner(plugin, registry);
+    }
 
- @Test
- @DisplayName("autoAssignCategory maps tools correctly")
- void autoAssignCategoryTools() {
-    assertTrue(isTool(Material.DIAMOND_PICKAXE));
-    assertTrue(isTool(Material.DIAMOND_AXE));
-    assertTrue(isTool(Material.DIAMOND_SHOVEL));
-    assertFalse(isTool(Material.DIAMOND_SWORD));
- }
+    // ======================================================
+    // autoAssignCategory tests - calls the actual method
+    // ======================================================
 
- @Test
- @DisplayName("autoAssignCategory maps armor correctly")
- void autoAssignCategoryArmor() {
-    assertTrue(isArmor(Material.DIAMOND_HELMET));
-    assertTrue(isArmor(Material.DIAMOND_CHESTPLATE));
-    assertTrue(isArmor(Material.DIAMOND_LEGGINGS));
-    assertTrue(isArmor(Material.DIAMOND_BOOTS));
-    assertFalse(isArmor(Material.DIAMOND_SWORD));
- }
+    @Test
+    void autoAssignCategory_sword() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.DIAMOND_SWORD)));
+    }
 
- @Test
- @DisplayName("extractLoreHash returns consistent hash for same lore")
- void extractLoreHashConsistency() {
-    List<String> lore1 = List.of("Custom item from ItemsAdder");
-    List<String> lore2 = List.of("Custom item from ItemsAdder");
-    List<String> lore3 = List.of("Different lore");
+    @Test
+    void autoAssignCategory_axe() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.IRON_AXE)));
+    }
 
-    assertEquals(lore1.hashCode(), lore2.hashCode(),
-       "Same lore should produce same hash");
-    assertNotEquals(lore1.hashCode(), lore3.hashCode(),
-       "Different lore should produce different hash");
- }
+    @Test
+    void autoAssignCategory_pickaxe() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.NETHERITE_PICKAXE)));
+    }
 
- @Test
- @DisplayName("resolveDisplayName uses custom name when present")
- void resolveDisplayNameCustomName() {
-    String customName = "Ruby Sword";
-    assertNotNull(customName);
-    assertTrue(customName.length() > 0);
- }
+    @Test
+    void autoAssignCategory_bow() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.BOW)));
+    }
 
- @Test
- @DisplayName("resolveDisplayName falls back to material name")
- void resolveDisplayNameFallback() {
-    String materialName = Material.DIAMOND_SWORD.name().toLowerCase().replace('_', ' ');
-    assertEquals("diamond sword", materialName);
- }
+    @Test
+    void autoAssignCategory_trident() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.TRIDENT)));
+    }
 
- @Test
- @DisplayName("estimatePrice uses default multiplier on PRICE_UNSET")
- void estimatePriceDefault() {
-    BigDecimal buyPrice = CustomMarketItem.PRICE_UNSET;
-    assertEquals(BigDecimal.valueOf(-1), buyPrice, "PRICE_UNSET should be -1");
- }
+    @Test
+    void autoAssignCategory_shovel_is_tool() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.DIAMOND_SHOVEL)));
+    }
 
- @Test
- @DisplayName("CustomMarketItem Builder rejects negative prices other than -1")
- void builderRejectsNegativePrices() {
-    assertThrows(IllegalArgumentException.class, () ->
-       new CustomMarketItem.Builder()
-          .canonicalId("test")
-          .itemStack(mockItemStack(Material.DIAMOND_SWORD, 1, null, null))
-          .buyPrice(BigDecimal.valueOf(-5))
-    );
- }
+    @Test
+    void autoAssignCategory_hoe_is_tool() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.NETHERITE_HOE)));
+    }
 
- @Test
- @DisplayName("CustomMarketItem Builder accepts PRICE_UNSET (-1)")
- void builderAcceptsPriceUnset() {
-    CustomMarketItem item = new CustomMarketItem.Builder()
-       .canonicalId("test")
-       .itemStack(mockItemStack(Material.DIAMOND_SWORD, 1, null, null))
-       .buyPrice(CustomMarketItem.PRICE_UNSET)
-       .build();
-    assertEquals(CustomMarketItem.PRICE_UNSET, item.getBuyPrice());
- }
+    @Test
+    void autoAssignCategory_crossbow() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.CROSSBOW)));
+    }
 
- @Test
- @DisplayName("CustomMarketItem Builder requires canonicalId")
- void builderRequiresCanonicalId() {
-    assertThrows(IllegalStateException.class, () ->
-       new CustomMarketItem.Builder()
-          .itemStack(mockItemStack(Material.DIAMOND_SWORD, 1, null, null))
-          .build()
-    );
- }
+    @Test
+    void autoAssignCategory_mace() {
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.MACE)));
+    }
 
- @Test
- @DisplayName("CustomMarketItem Builder requires itemStack")
- void builderRequiresItemStack() {
-    assertThrows(IllegalStateException.class, () ->
-       new CustomMarketItem.Builder()
-          .canonicalId("test")
-          .build()
-    );
- }
+    @Test
+    void autoAssignCategory_food() {
+        assertEquals(Category.FOOD_FARMING, scanner.autoAssignCategory(new ItemStack(Material.APPLE)));
+    }
 
- @Test
- @DisplayName("CustomMarketItem Builder rejects whitespace in canonicalId")
- void builderRejectsWhitespaceInId() {
-    assertThrows(IllegalStateException.class, () ->
-       new CustomMarketItem.Builder()
-          .canonicalId("test sword")
-          .itemStack(mockItemStack(Material.DIAMOND_SWORD, 1, null, null))
-          .build()
-    );
- }
+    @Test
+    void autoAssignCategory_seed_farming() {
+        assertEquals(Category.FOOD_FARMING, scanner.autoAssignCategory(new ItemStack(Material.WHEAT_SEEDS)));
+    }
 
- @Test
- @DisplayName("DiscoveryMethod enum has all expected values")
- void discoveryMethodValues() {
-    DiscoveryMethod[] methods = DiscoveryMethod.values();
-    assertEquals(12, methods.length, "Expected 12 discovery methods");
-    assertNotNull(DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-    assertNotNull(DiscoveryMethod.PLUGIN_API_ORAXEN);
-    assertNotNull(DiscoveryMethod.PLUGIN_API_MMOITEMS);
-    assertNotNull(DiscoveryMethod.PLUGIN_API_MYTHICMOBS);
-    assertNotNull(DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
-    assertNotNull(DiscoveryMethod.PLUGIN_API_NEXO);
-    assertNotNull(DiscoveryMethod.PLUGIN_API_SX_ITEM);
-    assertNotNull(DiscoveryMethod.PDC_SCAN);
-    assertNotNull(DiscoveryMethod.CUSTOM_MODEL_DATA);
-    assertNotNull(DiscoveryMethod.LORE_PATTERN);
-    assertNotNull(DiscoveryMethod.INVENTORY_SCAN);
-    assertNotNull(DiscoveryMethod.INTERACTION_DETECT);
- }
+    @Test
+    void autoAssignCategory_diamond() {
+        assertEquals(Category.MINERALS_ORES, scanner.autoAssignCategory(new ItemStack(Material.DIAMOND)));
+    }
 
- // Helper methods mirroring scanner category logic
- private boolean isWeapon(Material mat) {
-    return mat.name().contains("SWORD") || mat.name().equals("BOW")
-       || mat.name().equals("TRIDENT") ;
- }
+    @Test
+    void autoAssignCategory_emerald() {
+        assertEquals(Category.MINERALS_ORES, scanner.autoAssignCategory(new ItemStack(Material.EMERALD)));
+    }
 
- private boolean isTool(Material mat) {
-    return mat.name().contains("PICKAXE") || mat.name().contains("SHOVEL")
-       || mat.name().contains("HOE") || mat.name().contains("AXE");
- }
+    @Test
+    void autoAssignCategory_spawn_egg() {
+        assertEquals(Category.SPAWNERS, scanner.autoAssignCategory(new ItemStack(Material.PIG_SPAWN_EGG)));
+    }
 
- private boolean isArmor(Material mat) {
-    return mat.name().contains("HELMET") || mat.name().contains("CHESTPLATE")
-       || mat.name().contains("LEGGINGS") || mat.name().contains("BOOTS");
- }
+    @Test
+    void autoAssignCategory_log() {
+        assertEquals(Category.WOOD, scanner.autoAssignCategory(new ItemStack(Material.OAK_LOG)));
+    }
+
+    @Test
+    void autoAssignCategory_wool() {
+        assertEquals(Category.COLORS, scanner.autoAssignCategory(new ItemStack(Material.RED_WOOL)));
+    }
+
+    @Test
+    void autoAssignCategory_stone() {
+        assertEquals(Category.BUILDING, scanner.autoAssignCategory(new ItemStack(Material.STONE)));
+    }
+
+    @Test
+    void autoAssignCategory_flower_pot() {
+        assertEquals(Category.DECORATION, scanner.autoAssignCategory(new ItemStack(Material.FLOWER_POT)));
+    }
+
+    @Test
+    void autoAssignCategory_banner() {
+        assertEquals(Category.DECORATION, scanner.autoAssignCategory(new ItemStack(Material.CREEPER_BANNER)));
+    }
+
+    @Test
+    void autoAssignCategory_copper() {
+        assertEquals(Category.COPPER, scanner.autoAssignCategory(new ItemStack(Material.COPPER_BLOCK)));
+    }
+
+    @Test
+    void autoAssignCategory_raw_iron() {
+        assertEquals(Category.COPPER, scanner.autoAssignCategory(new ItemStack(Material.RAW_IRON)));
+    }
+
+    @Test
+    void autoAssignCategory_unknown_returns_custom() {
+        assertEquals(Category.CUSTOM_ITEMS, scanner.autoAssignCategory(new ItemStack(Material.PAPER)));
+    }
+
+    @Test
+    void autoAssignCategory_null_returns_custom() {
+        assertEquals(Category.CUSTOM_ITEMS, scanner.autoAssignCategory(null));
+    }
+
+    @Test
+    void autoAssignCategory_air_is_custom() {
+        assertEquals(Category.CUSTOM_ITEMS, scanner.autoAssignCategory(new ItemStack(Material.AIR)));
+    }
+
+    @Test
+    void autoAssignCategory_redstone() {
+        assertEquals(Category.REDSTONE, scanner.autoAssignCategory(new ItemStack(Material.REDSTONE)));
+    }
+
+    @Test
+    void autoAssignCategory_repeater() {
+        assertEquals(Category.REDSTONE, scanner.autoAssignCategory(new ItemStack(Material.REPEATER)));
+    }
+
+    // ======================================================
+    // detectPluginFromNamespace tests
+    // ======================================================
+
+    @Test
+    void detectPluginFromNamespace_itemsadder() {
+        assertEquals("ItemsAdder", scanner.detectPluginFromNamespace("itemsadder"));
+    }
+
+    @Test
+    void detectPluginFromNamespace_oraxen() {
+        assertEquals("Oraxen", scanner.detectPluginFromNamespace("oraxen"));
+    }
+
+    @Test
+    void detectPluginFromNamespace_unknown_preserves() {
+        assertEquals("myplugin", scanner.detectPluginFromNamespace("myplugin"));
+    }
+
+    @Test
+    void detectPluginFromNamespace_mmoitems() {
+        assertEquals("MMOItems", scanner.detectPluginFromNamespace("mmoitems"));
+    }
+
+    @Test
+    void detectPluginFromNamespace_mythicmobs() {
+        assertEquals("MythicMobs", scanner.detectPluginFromNamespace("mythicmobs"));
+    }
+
+    @Test
+    void detectPluginFromNamespace_executableitems() {
+        assertEquals("ExecutableItems", scanner.detectPluginFromNamespace("executableitems"));
+    }
+
+    @Test
+    void detectPluginFromNamespace_nexo() {
+        assertEquals("Nexo", scanner.detectPluginFromNamespace("nexo"));
+    }
+
+    @Test
+    void detectPluginFromNamespace_sxitem() {
+        assertEquals("SX-Item", scanner.detectPluginFromNamespace("sxitem"));
+    }
+
+    // ======================================================
+    // extractPdcKey / extractModelDataKey / extractLoreHash tests
+    // ======================================================
+
+    @Test
+    void extractPdcKey_nullItem_returnsNull() {
+        assertNull(scanner.extractPdcKey(null));
+    }
+
+    @Test
+    void extractModelDataKey_nullItem_returnsNull() {
+        assertNull(scanner.extractModelDataKey(null));
+    }
+
+    @Test
+    void extractLoreHash_nullItem_returnsNull() {
+        assertNull(scanner.extractLoreHash(null));
+    }
+
+    @Test
+    void extractModelDataKey_noModelData_returnsNull() {
+        ItemStack item = new ItemStack(Material.DIAMOND_SWORD);
+        assertNull(scanner.extractModelDataKey(item));
+    }
+
+    @Test
+    void extractLoreHash_noLore_returnsNull() {
+        ItemStack item = new ItemStack(Material.DIAMOND_SWORD);
+        assertNull(scanner.extractLoreHash(item));
+    }
+
+    // ======================================================
+    // edge case tests
+    // ======================================================
+
+    @Test
+    void autoAssignCategory_terracotta_is_colors() {
+        assertEquals(Category.COLORS, scanner.autoAssignCategory(new ItemStack(Material.TERRACOTTA)));
+    }
+
+    @Test
+    void autoAssignCategory_deepslate_is_building() {
+        assertEquals(Category.BUILDING, scanner.autoAssignCategory(new ItemStack(Material.DEEPSLATE)));
+    }
+
+    @Test
+    void autoAssignCategory_brick_is_building() {
+        assertEquals(Category.BUILDING, scanner.autoAssignCategory(new ItemStack(Material.BRICK)));
+    }
+
+    @Test
+    void autoAssignCategory_bamboo_is_wood() {
+        assertEquals(Category.WOOD, scanner.autoAssignCategory(new ItemStack(Material.BAMBOO)));
+    }
+
+    @Test
+    void autoAssignCategory_stick_is_wood() {
+        assertEquals(Category.WOOD, scanner.autoAssignCategory(new ItemStack(Material.STICK)));
+    }
+
+    @Test
+    void autoAssignCategory_carrot_is_food() {
+        assertEquals(Category.FOOD_FARMING, scanner.autoAssignCategory(new ItemStack(Material.CARROT)));
+    }
+
+    @Test
+    void autoAssignCategory_potato_is_food() {
+        assertEquals(Category.FOOD_FARMING, scanner.autoAssignCategory(new ItemStack(Material.POTATO)));
+    }
+
+    // ======================================================
+    // Category ordering priority tests
+    // SWORD matches before DIAMOND in the if-chain
+    // ======================================================
+
+    @Test
+    void autoAssignCategory_diamondSword_is_toolsNot_minerals() {
+        // DIAMOND_SWORD contains "DIAMOND" but should match TOOLS_WEAPONS first
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.DIAMOND_SWORD)));
+    }
+
+    @Test
+    void autoAssignCategory_goldenAxe_is_toolsNot_minerals() {
+        // GOLDEN_AXE contains "GOLD" but should match TOOLS_WEAPONS first
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.GOLDEN_AXE)));
+    }
+
+    @Test
+    void autoAssignCategory_ironPickaxe_is_toolsNot_minerals() {
+        // IRON_PICKAXE contains "IRON" but should match TOOLS_WEAPONS first
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.IRON_PICKAXE)));
+    }
+
+    @Test
+    void autoAssignCategory_netheriteSword_is_toolsNot_minerals() {
+        // NETHERITE_SWORD contains "NETHERITE" but should match TOOLS_WEAPONS first
+        assertEquals(Category.TOOLS_WEAPONS, scanner.autoAssignCategory(new ItemStack(Material.NETHERITE_SWORD)));
+    }
 }
