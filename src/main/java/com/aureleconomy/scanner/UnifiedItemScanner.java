@@ -645,7 +645,7 @@ public class UnifiedItemScanner {
     /**
      * Map common PDC namespaces to plugin names.
      */
-    public String detectPluginFromNamespace(String namespace) {
+    public static String detectPluginFromNamespace(String namespace) {
         return switch (namespace) {
             case "itemsadder" -> "ItemsAdder";
             case "oraxen" -> "Oraxen";
