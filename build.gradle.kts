@@ -26,10 +26,12 @@ dependencies {
  // Test dependencies
  testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
  testImplementation("org.mockito:mockito-core:5.23.0")
- testImplementation("net.bytebuddy:byte-buddy-agent:1.18.8")
  testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
  testImplementation("io.papermc.paper:paper-api:26.1.2.build.64-stable")
  testImplementation("net.kyori:adventure-api:4.17.0")
+ testImplementation("com.github.MilkBowl:VaultAPI:1.7") {
+  exclude(group = "org.bukkit", module = "bukkit")
+ }
  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
  testRuntimeOnly("org.xerial:sqlite-jdbc:3.45.1.0")
 }
