@@ -86,4 +86,10 @@ tasks.test {
   "--add-opens", "java.base/java.lang.reflect=ALL-UNNAMED",
   "--add-opens", "java.base/sun.reflect=ALL-UNNAMED"
  )
+ doFirst {
+  val agent = configurations.testRuntimeClasspath.get().find { it.name.contains("byte-buddy-agent") }
+  if (agent != null) {
+   jvmArgs("-javaagent:${agent.absolutePath}")
+  }
+ }
 }
