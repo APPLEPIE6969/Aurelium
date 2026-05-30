@@ -194,7 +194,7 @@ class UnifiedItemScannerTest {
  // Helper methods mirroring scanner category logic
  private boolean isWeapon(Material mat) {
     return mat.name().contains("SWORD") || mat.name().equals("BOW")
-       || mat.name().equals("TRIDENT") || mat.name().contains("AXE");
+       || mat.name().equals("TRIDENT") ;
  }
 
  private boolean isTool(Material mat) {
