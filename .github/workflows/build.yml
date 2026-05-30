@@ -255,11 +255,12 @@ jobs:
           cat > plugins/Aurelium/config.yml << 'CFG'
           database:
             type: mysql
-            host: 127.0.0.1
-            port: 3306
-            name: aurelium_test
-            username: root
-            password: test
+            mysql:
+              host: 127.0.0.1
+              port: 3306
+              database: aurelium_test
+              username: root
+              password: test
           CFG
           echo "eula=true" > eula.txt
           echo "online-mode=false" > server.properties
