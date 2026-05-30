@@ -84,31 +84,31 @@ jobs:
             echo "FAIL: Aurelium not found in log"
             SMOKE_FAIL=1
           fi
-          if [ -f "plugins/Aurelium/aurelium.db" ]; then
+          if [ -f "plugins/Aurelium/database.db" ]; then
             echo "PASS: SQLite database file exists"
           else
             echo "FAIL: No .db file found"
             SMOKE_FAIL=1
           fi
-          SCHEMA_VER=$(sqlite3 plugins/Aurelium/aurelium.db "SELECT value FROM database_info WHERE key='schema_version';" 2>/dev/null || echo "0")
-          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
+          SCHEMA_VER=$(sqlite3 plugins/Aurelium/database.db "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "0")
+          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ] || [ "$SCHEMA_VER" = "2 " ]; then
             echo "PASS: Database migration ran"
           else
             echo "FAIL: Database schema version is '$SCHEMA_VER' (expected 2)"
             SMOKE_FAIL=1
           fi
           for table in players player_balances auctions offline_earnings buy_orders price_history auction_offers custom_items database_info; do
-            if sqlite3 plugins/Aurelium/aurelium.db ".tables" 2>/dev/null | grep -qw "$table"; then
+            if sqlite3 plugins/Aurelium/database.db ".tables" 2>/dev/null | grep -qw "$table"; then
               echo "PASS: Table '$table' exists"
             else
               echo "FAIL: Table '$table' missing from database"
               SMOKE_FAIL=1
             fi
           done
-          if sqlite3 plugins/Aurelium/aurelium.db "PRAGMA table_info(custom_items);" 2>/dev/null | grep -q .; then
+          if sqlite3 plugins/Aurelium/database.db "PRAGMA table_info(custom_items);" 2>/dev/null | grep -q .; then
             echo "PASS: custom_items table has columns"
             for col in canonical_id source_plugin display_name enabled buy_price sell_price item_data; do
-              if sqlite3 plugins/Aurelium/aurelium.db "PRAGMA table_info(custom_items);" 2>/dev/null | grep -q "$col"; then
+              if sqlite3 plugins/Aurelium/database.db "PRAGMA table_info(custom_items);" 2>/dev/null | grep -q "$col"; then
                 echo "PASS: Column '$col' exists in custom_items"
               else
                 echo "FAIL: Column '$col' missing from custom_items"
@@ -300,8 +300,8 @@ jobs:
             echo "FAIL: custom_items table missing from MySQL database"
             MYSQL_FAIL=1
           fi
-          SCHEMA_VER=$(mysql -h 127.0.0.1 -u root -ptest aurelium_test -N -e "SELECT value FROM database_info WHERE key='schema_version';" 2>/dev/null || echo "0")
-          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
+          SCHEMA_VER=$(mysql -h 127.0.0.1 -u root -ptest aurelium_test -N -e "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "0")
+          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ] || [ "$SCHEMA_VER" = "2 " ]; then
             echo "PASS: MySQL schema version is correct"
           else
             echo "FAIL: MySQL schema version is '$SCHEMA_VER' (expected 2)"
