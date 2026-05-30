@@ -42,7 +42,6 @@ public class ScannerErrorRecoveryTest {
  Mockito.when(pdc.getKeys()).thenReturn(java.util.Collections.emptySet());
  Mockito.when(item.clone()).thenReturn(item);
  Mockito.when(meta.hasLore()).thenReturn(false);
- Mockito.when(meta.hashCode()).thenReturn(Material.DIAMOND.hashCode());
 
  return item;
  }
