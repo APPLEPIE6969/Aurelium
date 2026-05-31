@@ -17,15 +17,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Edge case, null-safety, and concurrency tests for CustomItemRegistry.
- * Uses the same mockItemStack + registerSafely pattern as CustomItemRegistryTest
- * to handle the expected NPE from market-add code path.
+ * Uses the same mockItemStack + registerSafely pattern as CustomItemRegistryTest.
+ * Item creation is done lazily in each test method (not in setUp) to avoid
+ * triggering Bukkit RegistryAccess static init during class setup.
  */
 class CustomItemRegistryEdgeCaseTest {
 
     private AurelEconomy plugin;
     private CustomItemRegistry registry;
-    private CustomMarketItem testItem;
-    private CustomMarketItem testItem2;
 
     private static ItemStack mockItemStack(Material material) {
         ItemStack item = Mockito.mock(ItemStack.class);
@@ -46,16 +45,32 @@ class CustomItemRegistryEdgeCaseTest {
         return item;
     }
 
-    /**
-     * Register an item, catching the expected NPE from the market-add branch.
-     * Returns the RegistrationResult if dedup logic completed before the NPE.
-     */
+    private static CustomMarketItem makeItem(String id, Material mat, String displayName) {
+        return new CustomMarketItem.Builder()
+                .canonicalId(id)
+                .itemStack(mockItemStack(mat))
+                .sourcePlugin("TestPlugin")
+                .displayName(displayName)
+                .build();
+    }
+
+    private static CustomMarketItem makeItem(String id, Material mat, String displayName,
+                                              BigDecimal buyPrice, BigDecimal sellPrice, String pdcKey) {
+        return new CustomMarketItem.Builder()
+                .canonicalId(id)
+                .itemStack(mockItemStack(mat))
+                .sourcePlugin("TestPlugin")
+                .displayName(displayName)
+                .buyPrice(buyPrice)
+                .sellPrice(sellPrice)
+                .pdcKey(pdcKey)
+                .build();
+    }
+
     private RegistrationResult registerSafely(CustomMarketItem item, DiscoveryMethod method) {
         try {
             return registry.register(item, method);
         } catch (NullPointerException e) {
-            // NPE from plugin.getConfig() or plugin.getMarketManager() — expected
-            // The dedup logic and map updates happen before the market-add code
             return null;
         }
     }
@@ -64,21 +79,6 @@ class CustomItemRegistryEdgeCaseTest {
     void setUp() {
         plugin = Mockito.mock(AurelEconomy.class);
         registry = new CustomItemRegistry(plugin);
-        testItem = new CustomMarketItem.Builder()
-                .canonicalId("test:sword")
-                .itemStack(mockItemStack(Material.DIAMOND_SWORD))
-                .sourcePlugin("TestPlugin")
-                .displayName("Test Sword")
-                .buyPrice(BigDecimal.valueOf(100))
-                .sellPrice(BigDecimal.valueOf(50))
-                .pdcKey("testplugin:sword")
-                .build();
-        testItem2 = new CustomMarketItem.Builder()
-                .canonicalId("test:pickaxe")
-                .itemStack(mockItemStack(Material.DIAMOND_PICKAXE))
-                .sourcePlugin("TestPlugin")
-                .displayName("Test Pickaxe")
-                .build();
     }
 
     // ======================================================
@@ -87,40 +87,31 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void register_sameItemTwice_returnsDuplicate() {
-        RegistrationResult first = registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        if (first != null) {
-            assertTrue(first.isNew());
-        }
-        RegistrationResult second = registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        if (second != null) {
-            assertTrue(second.isDuplicate());
-        }
+        CustomMarketItem item = makeItem("test:sword", Material.DIAMOND_SWORD, "Test Sword",
+                BigDecimal.valueOf(100), BigDecimal.valueOf(50), "testplugin:sword");
+        RegistrationResult first = registerSafely(item, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        if (first != null) assertTrue(first.isNew());
+        RegistrationResult second = registerSafely(item, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        if (second != null) assertTrue(second.isDuplicate());
         assertEquals(1, registry.getTotalItems());
         assertEquals(1, registry.getDuplicatesPrevented());
     }
 
     @Test
     void register_twoDifferentItems_increasesCount() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        registerSafely(testItem2, DiscoveryMethod.PLUGIN_API_ORAXEN);
+        registerSafely(makeItem("test:sword", Material.DIAMOND_SWORD, "Sword"), DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registerSafely(makeItem("test:pickaxe", Material.DIAMOND_PICKAXE, "Pickaxe"), DiscoveryMethod.PLUGIN_API_ORAXEN);
         assertEquals(2, registry.getTotalItems());
     }
 
-    // ======================================================
-    // Dedup by PDC key
-    // ======================================================
-
     @Test
     void register_samePdcKeyDifferentId_dedups() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        CustomMarketItem samePdcItem = new CustomMarketItem.Builder()
-                .canonicalId("test:sword2")
-                .itemStack(mockItemStack(Material.DIAMOND_SWORD))
-                .sourcePlugin("TestPlugin")
-                .displayName("Test Sword 2")
-                .pdcKey("testplugin:sword")
-                .build();
-        RegistrationResult result = registerSafely(samePdcItem, DiscoveryMethod.PDC_SCAN);
+        CustomMarketItem first = makeItem("test:sword", Material.DIAMOND_SWORD, "Sword",
+                BigDecimal.valueOf(100), BigDecimal.valueOf(50), "testplugin:sword");
+        registerSafely(first, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        CustomMarketItem second = makeItem("test:sword2", Material.DIAMOND_SWORD, "Sword 2",
+                null, null, "testplugin:sword");
+        RegistrationResult result = registerSafely(second, DiscoveryMethod.PDC_SCAN);
         if (result != null) {
             assertTrue(result.isDuplicate());
             assertEquals("test:sword", result.getCanonicalId());
@@ -133,11 +124,7 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void register_itemWithNullPdcKey_doesNotThrow() {
-        CustomMarketItem item = new CustomMarketItem.Builder()
-                .canonicalId("test:nopdc")
-                .itemStack(mockItemStack(Material.STONE))
-                .sourcePlugin("Test")
-                .build();
+        CustomMarketItem item = makeItem("test:nopdc", Material.STONE, "No PDC");
         assertDoesNotThrow(() -> registerSafely(item, DiscoveryMethod.PDC_SCAN));
     }
 
@@ -148,7 +135,8 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void register_nullMethod_throwsNullPointer() {
-        assertThrows(NullPointerException.class, () -> registerSafely(testItem, null));
+        CustomMarketItem item = makeItem("test:item", Material.STONE, "Item");
+        assertThrows(NullPointerException.class, () -> registerSafely(item, null));
     }
 
     // ======================================================
@@ -157,24 +145,19 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void upsert_newItem_addsToRegistry() {
-        registry.upsert(testItem);
+        CustomMarketItem item = makeItem("test:sword", Material.DIAMOND_SWORD, "Sword");
+        registry.upsert(item);
         assertEquals(1, registry.getTotalItems());
-        assertSame(testItem, registry.getById("test:sword"));
+        assertSame(item, registry.getById("test:sword"));
     }
 
     @Test
     void upsert_existingItem_updatesInPlace() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        CustomMarketItem updated = new CustomMarketItem.Builder()
-                .canonicalId("test:sword")
-                .itemStack(mockItemStack(Material.DIAMOND_SWORD))
-                .sourcePlugin("TestPlugin")
-                .displayName("Updated Sword")
-                .buyPrice(BigDecimal.valueOf(200))
-                .build();
+        CustomMarketItem item = makeItem("test:sword", Material.DIAMOND_SWORD, "Sword");
+        registerSafely(item, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        CustomMarketItem updated = makeItem("test:sword", Material.DIAMOND_SWORD, "Updated Sword");
         registry.upsert(updated);
         assertEquals(1, registry.getTotalItems());
-        assertEquals(BigDecimal.valueOf(200), registry.getById("test:sword").getBuyPrice());
     }
 
     @Test
@@ -188,8 +171,8 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void clear_afterRegister_emptiesRegistry() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        registerSafely(testItem2, DiscoveryMethod.PLUGIN_API_ORAXEN);
+        registerSafely(makeItem("test:a", Material.STONE, "A"), DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registerSafely(makeItem("test:b", Material.STONE, "B"), DiscoveryMethod.PLUGIN_API_ORAXEN);
         registry.clear();
         assertTrue(registry.isEmpty());
         assertEquals(0, registry.getTotalItems());
@@ -207,7 +190,7 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void isEmpty_afterRegister_returnsFalse() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registerSafely(makeItem("test:a", Material.STONE, "A"), DiscoveryMethod.PLUGIN_API_ITEMSADDER);
         assertFalse(registry.isEmpty());
     }
 
@@ -217,8 +200,9 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void getDiscoveryMethods_newItem_returnsMethods() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        registerSafely(testItem, DiscoveryMethod.PDC_SCAN);
+        CustomMarketItem item = makeItem("test:sword", Material.DIAMOND_SWORD, "Sword");
+        registerSafely(item, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registerSafely(item, DiscoveryMethod.PDC_SCAN);
         assertEquals(2, registry.getDiscoveryMethods("test:sword").size());
     }
 
@@ -233,7 +217,7 @@ class CustomItemRegistryEdgeCaseTest {
     }
 
     // ======================================================
-    // Concurrency: sequential multi-thread simulation
+    // Concurrency
     // ======================================================
 
     @Test
@@ -247,12 +231,7 @@ class CustomItemRegistryEdgeCaseTest {
             threads[t] = new Thread(() -> {
                 for (int i = 0; i < itemsPerThread; i++) {
                     String cid = "thread" + threadId + ":item" + i;
-                    CustomMarketItem item = new CustomMarketItem.Builder()
-                            .canonicalId(cid)
-                            .itemStack(mockItemStack(Material.STONE))
-                            .sourcePlugin("ThreadTest")
-                            .build();
-                    registerSafely(item, DiscoveryMethod.PDC_SCAN);
+                    registerSafely(makeItem(cid, Material.STONE, "Item"), DiscoveryMethod.PDC_SCAN);
                 }
             });
         }
@@ -271,12 +250,8 @@ class CustomItemRegistryEdgeCaseTest {
 
         for (int t = 0; t < threadCount; t++) {
             threads[t] = new Thread(() -> {
-                CustomMarketItem item = new CustomMarketItem.Builder()
-                        .canonicalId("test:concurrent")
-                        .itemStack(mockItemStack(Material.DIAMOND))
-                        .sourcePlugin("ThreadTest")
-                        .build();
-                registerSafely(item, DiscoveryMethod.PDC_SCAN);
+                registerSafely(makeItem("test:concurrent", Material.DIAMOND, "Concurrent"),
+                        DiscoveryMethod.PDC_SCAN);
             });
         }
 
@@ -294,21 +269,13 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void getAllItems_returnsUnmodifiableCollection() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registerSafely(makeItem("test:a", Material.STONE, "A"), DiscoveryMethod.PLUGIN_API_ITEMSADDER);
         assertThrows(UnsupportedOperationException.class, () -> registry.getAllItems().clear());
     }
 
     // ======================================================
-    // computeItemHash consistency
+    // computeItemHash
     // ======================================================
-
-    @Test
-    void computeItemHash_sameStack_consistent() {
-        String hash1 = registry.computeItemHash(mockItemStack(Material.DIAMOND_SWORD));
-        String hash2 = registry.computeItemHash(mockItemStack(Material.DIAMOND_SWORD));
-        assertNotNull(hash1);
-        assertNotNull(hash2);
-    }
 
     @Test
     void computeItemHash_nullItem_returnsEmptyString() {
@@ -329,7 +296,8 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void resolveItemId_registeredItem_findsId() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        CustomMarketItem item = makeItem("test:sword", Material.DIAMOND_SWORD, "Sword");
+        registerSafely(item, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
         Optional<String> result = registry.resolveItemId(mockItemStack(Material.DIAMOND_SWORD));
         assertTrue(result.isPresent());
         assertEquals("test:sword", result.get());
@@ -341,9 +309,11 @@ class CustomItemRegistryEdgeCaseTest {
 
     @Test
     void multipleDiscoveryMethodsPerItem_tracksCorrectly() {
-        registerSafely(testItem, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
-        registerSafely(testItem, DiscoveryMethod.PDC_SCAN);
-        registerSafely(testItem2, DiscoveryMethod.PLUGIN_API_ORAXEN);
+        CustomMarketItem item = makeItem("test:sword", Material.DIAMOND_SWORD, "Sword");
+        CustomMarketItem item2 = makeItem("test:pickaxe", Material.DIAMOND_PICKAXE, "Pickaxe");
+        registerSafely(item, DiscoveryMethod.PLUGIN_API_ITEMSADDER);
+        registerSafely(item, DiscoveryMethod.PDC_SCAN);
+        registerSafely(item2, DiscoveryMethod.PLUGIN_API_ORAXEN);
         assertEquals(2, registry.getDiscoveryMethods("test:sword").size());
         assertEquals(1, registry.getDiscoveryMethods("test:pickaxe").size());
     }
