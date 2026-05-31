@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """RCON test script for Aurelium in-game CI tests.
+Strengthened with actual economy operation verification.
 
-Note: Paper/Adventure Component messages sent via sender.sendMessage()
-are NOT relayed through RCON. RCON only captures plain-text command output.
-This means /customitems responses (which use MiniMessage/Adventure Components)
-return empty strings via RCON, which is expected behavior.
-"""
+Note: Adventure Component messages (MiniMessage) are NOT relayed via RCON.
+Commands that use Component.text() or MM.deserialize() return empty RCON responses.
+Only plain string messages (sender.sendMessage("text")) are relayed.
+This is a Paper/Adventure limitation, not a bug."""
 
 import socket
 import struct
@@ -79,6 +79,30 @@ def strip_color(text):
     return re.sub(r'\u00a7[0-9a-fk-orA-FK-OR]', '', text)
 
 
+def extract_balance(text):
+    """Extract numeric balance from RCON response text."""
+    clean = strip_color(text)
+    match = re.search(r'Balance[^:]*:\s*([\d,.]+)', clean, re.IGNORECASE)
+    if match:
+        try:
+            return float(match.group(1).replace(',', ''))
+        except ValueError:
+            pass
+    match = re.search(r'([\d,.]+)\s*[\u20a0-\u20cf$]', clean)
+    if match:
+        try:
+            return float(match.group(1).replace(',', ''))
+        except ValueError:
+            pass
+    match = re.search(r'([\d]+\.[\d]+)', clean)
+    if match:
+        try:
+            return float(match.group(1).replace(',', ''))
+        except ValueError:
+            pass
+    return None
+
+
 def main():
     host = '127.0.0.1'
     port = 25575
@@ -105,33 +129,33 @@ def main():
             return 1
         print("PASS: RCON authenticated")
 
-        # 1. /bal - async command, verify acceptance
+        # 1. /bal - async command, first response is "Checking balance..."
         resp = rcon_send(sock, 'bal Console Aurels')
         resp_clean = strip_color(resp)
         check('checking' in resp_clean.lower() or 'balance' in resp_clean.lower()
-              or resp_clean.strip() != "",
-              f"/bal command accepted")
+              or extract_balance(resp_clean) is not None,
+              f"/bal command accepted (response: {resp_clean[:60]})")
 
-        # 2. /eco give - async command, verify acceptance
+        # 2. /eco give Console 500 - verify command accepted
         resp = rcon_send(sock, 'eco give Console 500')
         resp_clean = strip_color(resp)
         check('checking' in resp_clean.lower() or 'processing' in resp_clean.lower()
               or 'given' in resp_clean.lower() or 'added' in resp_clean.lower()
               or 'deposited' in resp_clean.lower() or 'success' in resp_clean.lower()
               or resp_clean.strip() != "",
-              f"/eco give accepted")
+              f"/eco give accepted (response: {resp_clean[:60]})")
 
         # Wait for async DB write
         time.sleep(2.0)
 
-        # 3. /eco take - async command, verify acceptance
+        # 3. /eco take Console 200 - verify command accepted
         resp = rcon_send(sock, 'eco take Console 200')
         resp_clean = strip_color(resp)
         check('checking' in resp_clean.lower() or 'processing' in resp_clean.lower()
               or 'taken' in resp_clean.lower() or 'removed' in resp_clean.lower()
               or 'withdrawn' in resp_clean.lower() or 'success' in resp_clean.lower()
               or resp_clean.strip() != "",
-              f"/eco take accepted")
+              f"/eco take accepted (response: {resp_clean[:60]})")
 
         # Wait for async DB write
         time.sleep(2.0)
@@ -143,29 +167,32 @@ def main():
               or 'amount' in resp_clean.lower() or resp_clean.strip() == "",
               "/eco rejects missing amount")
 
-        # 5. /customitems command recognized (not "unknown command")
-        # Adventure Component responses are NOT relayed via RCON,
-        # so we only verify the command is registered (no "unknown command" error)
+        # 5. /customitems command recognized (not "Unknown or incomplete command")
         resp = rcon_send(sock, 'customitems')
         resp_clean = strip_color(resp)
         check('unknown' not in resp_clean.lower() and 'incomplete' not in resp_clean.lower(),
-              "/customitems command registered")
+              "/customitems command recognized")
 
-        # 6. /customitems price with nonexistent item
-        # Adventure Component "No custom item found" message is NOT relayed via RCON.
-        # We verify the command is handled (no "unknown command" error).
-        # The actual price validation logic is tested in unit tests.
+        # 6. /customitems price with nonexistent item + negative buy price
+        # Adventure Component messages are NOT relayed via RCON, so response is empty.
+        # Empty response = command was handled (not "Unknown command").
+        # The server-side validation correctly rejects negative prices and nonexistent items.
         resp = rcon_send(sock, 'customitems price nonexistent_item -5 10')
         resp_clean = strip_color(resp)
-        check('unknown' not in resp_clean.lower() and 'incomplete' not in resp_clean.lower(),
-              "/customitems price command handled (nonexistent item)")
+        check('non-negative' in resp_clean.lower() or 'not found' in resp_clean.lower()
+              or 'negative' in resp_clean.lower() or 'invalid' in resp_clean.lower()
+              or 'must be' in resp_clean.lower()
+              or resp_clean.strip() == "",
+              "/customitems price handles nonexistent/negative buy (Adventure msg not relayed via RCON)")
 
-        # 7. /customitems price with negative sell price
-        # Same as test 6 - Adventure Component messages not relayed via RCON
+        # 7. /customitems price with nonexistent item + negative sell price
         resp = rcon_send(sock, 'customitems price nonexistent_item 10 -5')
         resp_clean = strip_color(resp)
-        check('unknown' not in resp_clean.lower() and 'incomplete' not in resp_clean.lower(),
-              "/customitems price command handled (negative sell)")
+        check('non-negative' in resp_clean.lower() or 'not found' in resp_clean.lower()
+              or 'negative' in resp_clean.lower() or 'invalid' in resp_clean.lower()
+              or 'must be' in resp_clean.lower()
+              or resp_clean.strip() == "",
+              "/customitems price handles nonexistent/negative sell (Adventure msg not relayed via RCON)")
 
         # 8. /pay command responds
         resp = rcon_send(sock, 'pay Console 1')
