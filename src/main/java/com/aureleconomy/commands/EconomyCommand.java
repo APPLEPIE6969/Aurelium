@@ -30,7 +30,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  private boolean isValidCurrency(String currency) {
  org.bukkit.configuration.ConfigurationSection section = plugin.getConfig().getConfigurationSection("economy.currencies");
  if (section == null) {
- plugin.getComponentLogger().warn("economy.currencies section missing from config!");
+ // currencies section missing from config - fallback to default currency
  return currency.equals(plugin.getEconomyManager().getDefaultCurrency());
  }
  return section.contains(currency);
@@ -323,7 +323,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
  @NotNull String label, @NotNull String[] args) {
  List<String> currencies = new ArrayList<>(
- plugin.getConfig().getConfigurationSection("economy.currencies").getKeys(false));
+ currencySection != null ? currencySection.getKeys(false) : java.util.Set.of());
 
  if (label.equalsIgnoreCase("bal") || label.equalsIgnoreCase("balance") || label.equalsIgnoreCase("money")) {
  if (args.length == 1) {
