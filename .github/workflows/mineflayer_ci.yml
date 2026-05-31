@@ -77,16 +77,7 @@ jobs:
           node-version: 20
       - run: |
           npm install mineflayer@4.20.1
-          node ../../mineflayer_test.js >TestBot-log.txt 2>&1
-          node - <<'NODE'
-          const fs=require('fs');
-          const log=fs.readFileSync('TestBot-log.txt','utf8');
-          const lines=log.split(/\r?\n/);
-          let fail=0;
-          for (const line of lines) {
-            if (line.startsWith('FAIL:') || line.includes('Tests complete') || line.includes('failedTests')) console.log(line);
-          }
-          NODE
+          node ../../mineflayer_test.js
         working-directory: server-data
 
       - name: Dump server logs if tests failed
@@ -94,8 +85,6 @@ jobs:
         run: |
           echo '===== latest.log ====='
           tail -n 200 server-data/logs/latest.log || true
-          echo '===== TestBot-log.txt ====='
-          cat server-data/TestBot-log.txt || true
 
       - name: Stop server
         if: always()
