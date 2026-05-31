@@ -19,8 +19,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests for UnifiedItemScanner public API methods.
  * Tests the actual production code directly.
- * Uses the same mockItemStack pattern as CustomItemRegistryTest
- * to avoid triggering Bukkit RegistryAccess static init.
+ * Uses the same mockItemStack pattern as CustomItemRegistryTest.
+ * ItemStack mocks are created lazily in each test method (not in setUp)
+ * to avoid triggering Bukkit RegistryAccess static init during class setup.
  */
 class UnifiedItemScannerTest {
 
@@ -29,11 +30,7 @@ class UnifiedItemScannerTest {
     private CustomItemRegistry registry;
     private UnifiedItemScanner scanner;
 
-    private ItemStack mockItemStack(Material material) {
-        return mockItemStack(material, 0, null, null);
-    }
-
-    private ItemStack mockItemStack(Material material, int customModelData, String displayName, List<net.kyori.adventure.text.Component> lore) {
+    private static ItemStack mockItemStack(Material material) {
         ItemStack item = Mockito.mock(ItemStack.class);
         ItemMeta meta = Mockito.mock(ItemMeta.class);
         PersistentDataContainer pdc = Mockito.mock(PersistentDataContainer.class);
@@ -42,13 +39,13 @@ class UnifiedItemScannerTest {
         Mockito.when(item.hasItemMeta()).thenReturn(true);
         Mockito.when(item.getItemMeta()).thenReturn(meta);
         Mockito.when(meta.getPersistentDataContainer()).thenReturn(pdc);
-        Mockito.when(meta.hasCustomModelData()).thenReturn(customModelData > 0);
-        Mockito.when(meta.getCustomModelData()).thenReturn(customModelData);
+        Mockito.when(meta.hasCustomModelData()).thenReturn(false);
+        Mockito.when(meta.getCustomModelData()).thenReturn(0);
         Mockito.when(pdc.getKeys()).thenReturn(Collections.emptySet());
         Mockito.when(item.clone()).thenReturn(item);
         Mockito.when(item.isSimilar(Mockito.any())).thenReturn(false);
-        Mockito.when(meta.hasLore()).thenReturn(lore != null && !lore.isEmpty());
-        Mockito.when(meta.lore()).thenReturn(lore);
+        Mockito.when(meta.hasLore()).thenReturn(false);
+        Mockito.when(meta.lore()).thenReturn(null);
         return item;
     }
 
