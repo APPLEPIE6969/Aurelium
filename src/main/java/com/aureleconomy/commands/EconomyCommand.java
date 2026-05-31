@@ -322,6 +322,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  @Override
  public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
  @NotNull String label, @NotNull String[] args) {
+        org.bukkit.configuration.ConfigurationSection currencySection = plugin.getConfig().getConfigurationSection("economy.currencies");
  List<String> currencies = new ArrayList<>(
  currencySection != null ? currencySection.getKeys(false) : java.util.Set.of());
 
