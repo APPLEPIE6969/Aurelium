@@ -168,19 +168,19 @@ public class CloudSyncManager {
                 }
         } catch (Exception e) {
             String msg = e.getMessage();
-            // 4xx/5xx errors are permanent (endpoint missing, auth failure, etc.)
+            // 4xx/5xx errors are permanent — stop retrying immediately
             if (msg != null && msg.matches("(?i).*HTTP [45]\\d\\d.*")) {
                 plugin.getComponentLogger().warn("Cloud dashboard registration failed: " + msg);
-                plugin.getComponentLogger().info("Cloud dashboard disabled. Set web.cloud.url in config if you have a dashboard server.");
-                // Stop retrying — permanent error (no return in lambda, just skip retry scheduling)
+                plugin.getComponentLogger().info("Cloud dashboard disabled. Set web.cloud.url in config if you have a dashboard.");
+                // No retry scheduling — permanent error
             } else {
-                // Transient errors (network timeout, DNS) — retry with backoff
+                // Transient errors — retry with backoff (max 3 attempts)
                 plugin.getComponentLogger().warn("Registration attempt " + attempt + " failed (transient): " + msg);
                 if (attempt < 3) {
-                    long delay = 300L * attempt; // Backoff: 15s, 30s, 45s
+                    long delay = 300L * attempt;
                     Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> attemptRegistration(attempt + 1), delay);
                 } else {
-                    plugin.getComponentLogger().warn("Cloud dashboard registration gave up after " + attempt + " attempts at " + baseUrl);
+                    plugin.getComponentLogger().warn("Cloud dashboard registration gave up after " + attempt + " attempts");
                 }
             }
         }
@@ -943,3 +943,4 @@ public class CloudSyncManager {
         }
         return result;
     }
+}
