@@ -26,9 +26,22 @@
  - `/customitems toggle <id>` — Enable or disable a discovered item in the market
  - `/customitems price <id> <buy> [sell]` — Set buy/sell prices for a discovered item
 
-### Fixes
+### New - /customitems Command
 
-- **DatabaseManager DDL Propagation**: `createTables()` now re-throws `SQLException` if `custom_items` table creation fails, preventing schema version mismatch on fresh MySQL installs
+- **Full management commands** for discovered custom items:
+ - `/customitems scan` — Force rescan of all supported plugins
+ - `/customitems list` — View all discovered custom items
+ - `/customitems info <id>` — Show details for a specific item
+ - `/customitems reload` — Reload config overrides from disk
+ - `/customitems toggle <id>` — Enable or disable a discovered item in the market
+ - `/customitems price <id> <buy> [sell]` — Set buy/sell prices for a discovered item
+- **Config Override Sync**: Discovered items are written to `config.yml` under `discovered-items:` with source plugin, display name, material type, and default buy/sell prices
+ - Server owners can edit prices/flags in config, and changes persist across restarts
+- **Database schema v2**: Added `custom_items` table for persistent custom item tracking with automatic v1-to-v2 migration
+- **Thread-Safe Scanning**: All scan operations run async with proper locking to avoid race conditions during startup
+- Custom items appear in the market with proper display names and configurable pricing
+
+### Fixes `createTables()` now re-throws `SQLException` if `custom_items` table creation fails, preventing schema version mismatch on fresh MySQL installs
 - **Cloud Dashboard Retry Logic**: HTTP 4xx/5xx errors stop retrying immediately (permanent errors); only transient errors (network, DNS) retry with backoff
 - **CustomItemRegistry Concurrency**: Fixed race conditions in `register()`, `upsert()`, and `clear()` — all write operations now use proper read-write locking
 - **MarketItems Price Clamping**: Fixed inverted floor/ceiling clamping when `buyPrice` was unset (-1 sentinel), preventing price recovery drift toward -1
@@ -49,22 +62,15 @@
 
 ---
 
-## v1.4.5 - MySQL Compatibility, Auction Display Names & Custom Item Detection
+## v1.4.5 - MySQL & Auction House Fixes
 
-**Critical MySQL fix, auction improvements, and initial custom item scanner release.**
-
-### New - Initial Scanner Release
-
-- **CustomItemScanner v1**: Basic automated detection of custom items from ItemsAdder, Oraxen, MMOItems, MythicMobs, ExecutableItems, Nexo, SX-Item
- - Discovered items saved to `config.yml` under `discovered-items:`
-- **`/customitems` command** for managing discovered custom items
-- **Database schema v2**: Added `custom_items` table with automatic v1-to-v2 migration
-- Custom items appear in the market with proper display names and configurable pricing
+**MySQL 8.0.20+ compatibility and auction display name improvements.**
 
 ### Fixes
 
 - **MySQL 8.0.20+ Compatibility**: Replaced deprecated `VALUES(col)` syntax with modern `AS new` alias syntax in all upsert queries
-- **Auction Custom Display Names**: Auction messages now show custom item display names instead of raw material types
+- **Auction Custom Display Names**: Auction messages now show custom item display names instead of raw material types (uses `PlainTextComponentSerializer` for safe Component handling)
+- **PreparedStatement Param Mismatch**: MySQL upserts now only set the parameters they actually use (4th param was SQLite-only)
 
 ### Testing
 
