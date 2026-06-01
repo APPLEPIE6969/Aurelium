@@ -180,12 +180,12 @@ public class DatabaseManager {
  ")");
 
  createOffersTable(autoIncrement);
+ createCustomItemsTable();
 
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Could not create tables for " + databaseType + "!", e);
  }
 
- createCustomItemsTable();
  }
 
  private void runMigrations() {
@@ -344,7 +344,7 @@ public class DatabaseManager {
  * Used during initial createTables() where failure is non-fatal
  * (table may already exist or be created later via migration).
  */
- private void createCustomItemsTable() {
+ private void createCustomItemsTable() throws SQLException {
  try (Statement statement = connection.createStatement()) {
  if ("mysql".equals(databaseType)) {
  statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
@@ -383,16 +383,12 @@ public class DatabaseManager {
  "last_seen INTEGER NOT NULL" +
  ")");
  }
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Could not create custom_items table for " + databaseType + "!", e);
- }
  }
 
- /**
- * Creates the custom_items table and throws on failure.
- * Used during migration case 2 so that DDL failures prevent
- * the schema version from being bumped to v2.
- */
+    /**
+     * Alias for createCustomItemsTable(); kept for backward compat
+     * in migration case 2 where the throws clause matters.
+     */
  private void createCustomItemsTableOrThrow() throws SQLException {
  try (Statement statement = connection.createStatement()) {
  if ("mysql".equals(databaseType)) {
