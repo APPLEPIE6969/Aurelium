@@ -343,7 +343,6 @@ public class DatabaseManager {
      * Creates the custom_items table for both MySQL and SQLite.
      * Propagates SQLException so callers (createTables, migration v2) can handle failure.
      */
- */
  private void createCustomItemsTable() throws SQLException {
  try (Statement statement = connection.createStatement()) {
  if ("mysql".equals(databaseType)) {
@@ -387,7 +386,6 @@ public class DatabaseManager {
 
     /**
      * @deprecated Use {@link #createCustomItemsTable()} directly — both now propagate SQLException.
-     * in migration case 2 where the throws clause matters.
      */
  private void createCustomItemsTableOrThrow() throws SQLException {
  try (Statement statement = connection.createStatement()) {
