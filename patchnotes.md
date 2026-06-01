@@ -9,22 +9,12 @@
 - **UnifiedItemScanner**: Automatically detects custom items from installed third-party plugins on server startup and via `/customitems scan`
  - Supported plugins (via reflection, zero hard dependencies): ItemsAdder, Oraxen, MMOItems, MythicMobs, ExecutableItems, Nexo, SX-Item
  - Each plugin API is accessed via reflection only—no compile-time dependencies required
-- **Cross-Plugin Deduplication**: If the same item is registered by multiple plugins (e.g., ItemsAdder ruby_sword and MMOItems SWORD:RUBY_BLADE), it is deduplicated by canonical ID namespace and stored as a single entry in `custom_items`
+- **Cross-Plugin Deduplication**: If the same item is registered by multiple plugins (e.g., ItemsAdder ruby_sword and MMOItems SWORD:RUBY_BLADE), it is deduplicated by canonical ID and stored as a single entry in `custom_items`
 - **Config Override Sync**: Discovered items are written to `config.yml` under `discovered-items:` with source plugin, display name, material type, and default buy/sell prices
  - Server owners can edit prices/flags in config, and changes persist across restarts
 - **Database schema v2**: Added `custom_items` table for persistent custom item tracking with automatic v1-to-v2 migration
 - **Thread-Safe Scanning**: All scan operations run async with proper locking to avoid race conditions during startup
 - Custom items appear in the market with proper display names and configurable pricing
-
-### New - /customitems Command
-
-- **Management commands** for discovered custom items:
- - `/customitems scan` — Force rescan of all supported plugins
- - `/customitems list` — List all discovered custom items
- - `/customitems info <id>` — Show details for a specific item
- - `/customitems reload` — Reload config overrides from disk
- - `/customitems toggle <id>` — Enable or disable a discovered item in the market
- - `/customitems price <id> <buy> [sell]` — Set buy/sell prices for a discovered item
 
 ### New - /customitems Command
 
@@ -35,13 +25,10 @@
  - `/customitems reload` — Reload config overrides from disk
  - `/customitems toggle <id>` — Enable or disable a discovered item in the market
  - `/customitems price <id> <buy> [sell]` — Set buy/sell prices for a discovered item
-- **Config Override Sync**: Discovered items are written to `config.yml` under `discovered-items:` with source plugin, display name, material type, and default buy/sell prices
- - Server owners can edit prices/flags in config, and changes persist across restarts
-- **Database schema v2**: Added `custom_items` table for persistent custom item tracking with automatic v1-to-v2 migration
-- **Thread-Safe Scanning**: All scan operations run async with proper locking to avoid race conditions during startup
-- Custom items appear in the market with proper display names and configurable pricing
 
-### Fixes `createTables()` now re-throws `SQLException` if `custom_items` table creation fails, preventing schema version mismatch on fresh MySQL installs
+### Fixes
+
+- **DatabaseManager DDL Propagation**: `createTables()` now re-throws `SQLException` if `custom_items` table creation fails, preventing schema version mismatch on fresh MySQL installs
 - **Cloud Dashboard Retry Logic**: HTTP 4xx/5xx errors stop retrying immediately (permanent errors); only transient errors (network, DNS) retry with backoff
 - **CustomItemRegistry Concurrency**: Fixed race conditions in `register()`, `upsert()`, and `clear()` — all write operations now use proper read-write locking
 - **MarketItems Price Clamping**: Fixed inverted floor/ceiling clamping when `buyPrice` was unset (-1 sentinel), preventing price recovery drift toward -1
