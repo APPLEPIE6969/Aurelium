@@ -2,6 +2,8 @@ package com.aureleconomy.web;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.market.MarketItems;
+import com.aureleconomy.scanner.CustomItemRegistry;
+import com.aureleconomy.scanner.CustomMarketItem;
 import com.aureleconomy.market.MarketItems.Category;
 import com.aureleconomy.market.MarketItems.MarketEntry;
 import com.sun.net.httpserver.HttpExchange;
@@ -297,7 +299,40 @@ public class ApiHandler implements HttpHandler {
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────
+    // ── GET /api/custom-items ─────────────────────────────────────────
+
+ private void handleCustomItems(HttpExchange exchange) throws IOException {
+ CustomItemRegistry registry = plugin.getCustomItemRegistry();
+ if (registry == null || registry.isEmpty()) {
+ sendJson(exchange, 200, "[]");
+ return;
+ }
+
+ StringBuilder json = new StringBuilder("[");
+ int i = 0;
+ for (CustomMarketItem item : registry.getAllItems()) {
+ if (i++ > 0) json.append(",");
+ String name = item.getDisplayName() != null ? item.getDisplayName() : item.getCanonicalId();
+ String material = item.getItemStack().getType().name().toLowerCase();
+ BigDecimal buy = item.getBuyPrice();
+ BigDecimal sell = item.getSellPrice();
+ String currency = plugin.getEconomyManager().getDefaultCurrency();
+ String symbol = plugin.getEconomyManager().getCurrencySymbol(currency);
+
+ json.append("{\"id\":").append(jsonStr(item.getCanonicalId()));
+ json.append(",\"name\":").append(jsonStr(name));
+ json.append(",\"material\":").append(jsonStr(material));
+ json.append(",\"buyPrice\":").append(buy.doubleValue());
+ json.append(",\"sellPrice\":").append(sell.doubleValue());
+ json.append(",\"currency\":").append(jsonStr(currency));
+ json.append(",\"currencySymbol\":").append(jsonStr(symbol));
+ json.append("}");
+ }
+ json.append("]");
+ sendJson(exchange, 200, json.toString());
+ }
+
+ // ── Helpers ───────────────────────────────────────────────────────
 
     private String buildItemsJson(List<MarketEntry> items, int page, int totalPages, int totalItems) {
         StringBuilder json = new StringBuilder();

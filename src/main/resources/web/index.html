@@ -86,7 +86,29 @@
         </main>
     </div>
 
-    <!-- Buy modal -->
+    <!-- Custom Items page -->
+ <div class="page-content hidden" id="page-custom">
+ <div class="page-header-bar">
+ <h2>
+ <svg class="icon" style="width:24px;height:24px;margin-bottom:-4px;margin-right:8px;color:var(--accent)"
+ viewBox="0 0 24 24">
+ <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+ <path d="m3.3 7 8.7 5 8.7-5"/>
+ <path d="M12 22V12"/>
+ </svg>
+ Custom Items
+ </h2>
+ <p class="page-subtitle">Server-specific custom items</p>
+ </div>
+ <div class="items-grid" id="custom-items-grid"></div>
+ <div class="empty-state" id="custom-items-empty" style="display:none;">
+ <div class="empty-icon">✨</div>
+ <h3>No custom items</h3>
+ <p>Coming soon.</p>
+ </div>
+ </div>
+
+ <!-- Buy modal -->
     <div class="modal-overlay" id="buy-modal" style="display:none;">
         <div class="modal">
             <div class="modal-header">

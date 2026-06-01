@@ -14,6 +14,7 @@
         currentPage: 0,
         totalPages: 1,
         searchQuery: '',
+ hasCustomItems: false,
         searchTimeout: null,
         selectedItem: null,
     };
@@ -238,7 +239,48 @@
 
     // ── Search ───────────────────────────────────────────────────────
 
-    function handleSearch(query) {
+    function renderCustomItems(items) {
+ dom.grid.innerHTML = '';
+ if (!items || items.length === 0) {
+ dom.grid.style.display = 'none';
+ dom.emptyState.style.display = 'block';
+ return;
+ }
+ dom.grid.style.display = '';
+ dom.emptyState.style.display = 'none';
+ items.forEach(item => {
+ const card = document.createElement('div');
+ card.className = 'item-card';
+ card.innerHTML = `
+ <div class="item-card-header">
+ <div class="item-icon">
+ <img src="https://mc.nerothe.com/img/1.21.11/${item.material}"
+ onerror="this.parentElement.textContent='📦'" alt="">
+ </div>
+ <div class="item-name">${escHtml(item.name)}</div>
+ </div>
+ <div class="item-card-footer">
+ <span class="item-price">${escHtml(item.priceFormatted || (item.currencySymbol || '') + item.buyPrice.toLocaleString())}</span>
+ </div>
+ `;
+ card.addEventListener('click', () => openCustomBuyModal(item));
+ dom.grid.appendChild(card);
+ });
+}
+
+function openCustomBuyModal(item) {
+ state.selectedItem = {
+ key: item.id,
+ name: item.name,
+ material: item.material,
+ price: item.buyPrice,
+ priceFormatted: item.priceFormatted || (item.currencySymbol || '') + item.buyPrice.toLocaleString('en-US', { minimumFractionDigits: 2 }),
+ currency: item.currency
+ };
+ openBuyModal(state.selectedItem);
+}
+
+function handleSearch(query) {
         state.searchQuery = query;
         state.currentPage = 0;
 
