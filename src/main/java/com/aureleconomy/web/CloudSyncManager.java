@@ -157,7 +157,7 @@ public class CloudSyncManager {
     private void attemptRegistration(int attempt) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                plugin.getComponentLogger().info("Cloud dashboard: registering (attempt " + attempt + "/5)...");
+            plugin.getComponentLogger().info("Cloud dashboard: registering (attempt " + attempt + "/3)...");
                 register();
                 registered = true;
                 plugin.getComponentLogger().info("Cloud dashboard registered — server ID: " + serverId);
@@ -167,14 +167,23 @@ public class CloudSyncManager {
                 } catch (Exception ignored) {
                 }
             } catch (Exception e) {
-                plugin.getComponentLogger().warn("Registration attempt " + attempt + " failed: " + e.getMessage());
-                if (attempt < 5) {
-                    Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> attemptRegistration(attempt + 1), 300L);
-                } else {
-                    plugin.getComponentLogger().error("Failed to register with cloud dashboard after 5 attempts at " + baseUrl);
-                }
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            // 4xx/5xx errors are permanent (endpoint missing, auth failure, etc.)
+            if (msg != null && msg.matches("(?i).*HTTP [45]\\d\\d.*")) {
+                plugin.getComponentLogger().warn("Cloud dashboard registration failed: " + msg);
+                plugin.getComponentLogger().info("Cloud dashboard disabled. Set web.cloud.url in config if you have a dashboard server.");
+                return; // Stop retrying — permanent error
             }
-        });
+            // Transient errors (network timeout, DNS) — retry with backoff
+            plugin.getComponentLogger().warn("Registration attempt " + attempt + " failed (transient): " + msg);
+            if (attempt < 3) {
+                long delay = 300L * attempt; // Backoff: 15s, 30s, 45s
+                Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> attemptRegistration(attempt + 1), delay);
+            } else {
+                plugin.getComponentLogger().warn("Cloud dashboard registration gave up after " + attempt + " attempts at " + baseUrl);
+            }
+        }
     }
 
     public void stop() {
