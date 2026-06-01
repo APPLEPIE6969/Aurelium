@@ -112,7 +112,7 @@ public class DatabaseManager {
  connection = DriverManager.getConnection(url, username, password);
  }
 
- private void createTables() {
+ private void createTables() throws SQLException {
  String autoIncrement = "mysql".equals(databaseType) ? "INT AUTO_INCREMENT PRIMARY KEY"
  : "INTEGER PRIMARY KEY AUTOINCREMENT";
 
