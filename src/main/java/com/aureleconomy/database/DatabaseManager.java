@@ -184,7 +184,7 @@ public class DatabaseManager {
 
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Could not create tables for " + databaseType + "!", e);
- }
+            throw e;  // Propagate so initialize() returns false instead of silently succeeding
 
  }
 
@@ -340,9 +340,9 @@ public class DatabaseManager {
  }
 
  /**
- * Creates the custom_items table. Logs errors but does NOT throw.
- * Used during initial createTables() where failure is non-fatal
- * (table may already exist or be created later via migration).
+     * Creates the custom_items table for both MySQL and SQLite.
+     * Propagates SQLException so callers (createTables, migration v2) can handle failure.
+     */
  */
  private void createCustomItemsTable() throws SQLException {
  try (Statement statement = connection.createStatement()) {
@@ -386,7 +386,7 @@ public class DatabaseManager {
  }
 
     /**
-     * Alias for createCustomItemsTable(); kept for backward compat
+     * @deprecated Use {@link #createCustomItemsTable()} directly — both now propagate SQLException.
      * in migration case 2 where the throws clause matters.
      */
  private void createCustomItemsTableOrThrow() throws SQLException {
