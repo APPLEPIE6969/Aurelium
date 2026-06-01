@@ -169,7 +169,7 @@ public class CloudSyncManager {
         } catch (Exception e) {
             String msg = e.getMessage();
             // 4xx/5xx errors are permanent — stop retrying immediately
-            if (msg != null && msg.matches("(?i).*HTTP [45]\\d\\d.*")) {
+            if (msg != null && (msg.contains("HTTP 4") || msg.contains("HTTP 5") || msg.contains("http 4") || msg.contains("http 5"))) {
                 plugin.getComponentLogger().warn("Cloud dashboard registration failed: " + msg);
                 plugin.getComponentLogger().info("Cloud dashboard disabled. Set web.cloud.url in config if you have a dashboard.");
                 // No retry scheduling — permanent error
