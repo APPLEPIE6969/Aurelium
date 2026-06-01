@@ -4,6 +4,8 @@ import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.market.MarketItems;
 import com.aureleconomy.market.MarketItems.Category;
 import com.aureleconomy.market.MarketItems.MarketEntry;
+import com.aureleconomy.scanner.CustomItemRegistry;
+import com.aureleconomy.scanner.CustomMarketItem;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -469,7 +471,34 @@ public class CloudSyncManager {
         }
         json.append("]");
 
-        // ── Price History (for charts) ──────────────────────────────
+ // ── Custom Items (scanner) ─────────────────────────────────
+ CustomItemRegistry registry = plugin.getCustomItemRegistry();
+ boolean hasCustomItems = registry != null && !registry.isEmpty();
+ json.append(",\"hasCustomItems\":").append(hasCustomItems);
+ if (hasCustomItems) {
+ json.append(",\"customItems\":[");
+ int ci = 0;
+ for (CustomMarketItem cmi : registry.getAllItems()) {
+ if (ci++ > 0) json.append(",");
+ String cName = cmi.getDisplayName() != null ? cmi.getDisplayName() : cmi.getCanonicalId();
+ String material = cmi.getItemStack().getType().name().toLowerCase();
+ BigDecimal buy = cmi.getBuyPrice();
+ BigDecimal sell = cmi.getSellPrice();
+ String currency = plugin.getEconomyManager().getDefaultCurrency();
+ String symbol = plugin.getEconomyManager().getCurrencySymbol(currency);
+ json.append("{\"id\":\"").append(escJson(cmi.getCanonicalId())).append("\"");
+ json.append(",\"name\":\"").append(escJson(cName)).append("\"");
+ json.append(",\"material\":\"").append(escJson(material)).append("\"");
+ json.append(",\"buyPrice\":").append(buy.doubleValue());
+ json.append(",\"sellPrice\":").append(sell.doubleValue());
+ json.append(",\"currency\":\"").append(escJson(currency)).append("\"");
+ json.append(",\"currencySymbol\":\"").append(escJson(symbol)).append("\"");
+ json.append("}");
+ }
+ json.append("]");
+ }
+
+ // ── Price History (for charts) ──────────────────────────────
         json.append(",\"priceHistory\":");
         json.append(loadPriceHistoryJson());
 
