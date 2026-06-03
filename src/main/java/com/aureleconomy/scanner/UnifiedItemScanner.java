@@ -53,6 +53,22 @@ public class UnifiedItemScanner {
         this.defaultPriceMultiplier = plugin.getConfig().getDouble("custom-items.default-price-multiplier", 1.5);
     }
 
+    /**
+     * Validate that a reflected object is actually a safe Bukkit ItemStack.
+     * Prevents RCE from malicious plugins returning gadget chains via reflection.
+     */
+    private static boolean isValidItemStack(Object obj) {
+        if (obj == null) return false;
+        if (!(obj instanceof org.bukkit.inventory.ItemStack)) return false;
+        try {
+            org.bukkit.inventory.ItemStack stack = (org.bukkit.inventory.ItemStack) obj;
+            stack.getType();
+            return true;
+        } catch (ClassCastException | NullPointerException e) {
+            return false;
+        }
+    }
+
     // ===== METHOD 1: Plugin-Specific API Scanning =====
 
     public void scanAllPluginAPIs() {
@@ -86,7 +102,9 @@ public class UnifiedItemScanner {
             for (Map.Entry<String, ?> entry : items.entrySet()) {
                 try {
                     Object customStack = entry.getValue();
-                    ItemStack itemStack = (ItemStack) getItemStackMethod.invoke(customStack);
+                    Object rawStack = getItemStackMethod.invoke(customStack);
+                    if (!isValidItemStack(rawStack)) { plugin.getLogger().fine("[Scanner] ItemsAdder returned invalid ItemStack, skipping"); continue; }
+                    ItemStack itemStack = (ItemStack) rawStack;
                     String nativeId = (String) getNamespacedIDMethod.invoke(customStack);
                     if (itemStack == null || nativeId == null) continue;
 
@@ -120,7 +138,9 @@ public class UnifiedItemScanner {
                 try {
                     Object itemBuilder = getItemByIdMethod.invoke(null, id);
                     if (itemBuilder == null) continue;
-                    ItemStack itemStack = (ItemStack) buildMethod.invoke(itemBuilder);
+                    Object rawStack = buildMethod.invoke(itemBuilder);
+                    if (!isValidItemStack(rawStack)) { plugin.getLogger().fine("[Scanner] Oraxen returned invalid ItemStack, skipping"); continue; }
+                    ItemStack itemStack = (ItemStack) rawStack;
                     if (itemStack == null) continue;
 
                     CustomMarketItem item = buildCustomItem(itemStack, "oraxen:" + id, "Oraxen",
@@ -148,7 +168,6 @@ public class UnifiedItemScanner {
             Class<?> typeClass = Class.forName("net.Indyuce.mmoitems.api.Type");
             Method getTypesMethod = itemManagerClass.getMethod("getAll");
 
-            // Access MMOItems.getPlugin().getTypes().getAll()
             Method getItemManagerMethod = mmoItemsPlugin.getMethod("getItems");
             Object itemManager = getItemManagerMethod.invoke(mmoPlugin);
 
@@ -170,16 +189,18 @@ public class UnifiedItemScanner {
                         try {
                             Object mmoItem = entry.getValue();
                             Method newItemStackMethod = mmoItem.getClass().getMethod("newItemStack");
-                            ItemStack itemStack = (ItemStack) newItemStackMethod.invoke(mmoItem);
+                            Object rawStack = newItemStackMethod.invoke(mmoItem);
+                            if (!isValidItemStack(rawStack)) { plugin.getLogger().fine("[Scanner] MMOItems returned invalid ItemStack, skipping"); continue; }
+                            ItemStack itemStack = (ItemStack) rawStack;
                             if (itemStack == null) continue;
 
                             String nativeId = typeId.toLowerCase() + ":" + entry.getKey().toLowerCase();
                             CustomMarketItem item = buildCustomItem(itemStack, nativeId, "MMOItems",
                                     DiscoveryMethod.PLUGIN_API_MMOITEMS);
                             registry.register(item, DiscoveryMethod.PLUGIN_API_MMOITEMS);
-                        } catch (Exception ignored) {}
+                        } catch (Exception e) { plugin.getLogger().fine("[Scanner] MMOItems item scan skipped: " + e.getClass().getSimpleName() + " - " + e.getMessage()); }
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception e) { plugin.getLogger().fine("[Scanner] MMOItems type scan skipped: " + e.getClass().getSimpleName() + " - " + e.getMessage()); }
             }
         } catch (ClassNotFoundException | NoClassDefFoundError e) {
             // Skip
@@ -210,15 +231,16 @@ public class UnifiedItemScanner {
                 try {
                     Object optItem = getItemStackMethod.invoke(itemManager, name);
                     if (optItem == null) continue;
-                    // MythicMobs returns Optional<ItemStack>
                     Method orElseMethod = optItem.getClass().getMethod("orElse", Object.class);
-                    ItemStack itemStack = (ItemStack) orElseMethod.invoke(optItem, (Object) null);
+                    Object rawStack = orElseMethod.invoke(optItem, (Object) null);
+                    if (!isValidItemStack(rawStack)) { plugin.getLogger().fine("[Scanner] MythicMobs returned invalid ItemStack, skipping"); continue; }
+                    ItemStack itemStack = (ItemStack) rawStack;
                     if (itemStack == null) continue;
 
                     CustomMarketItem item = buildCustomItem(itemStack, "mythicmobs:" + name, "MythicMobs",
                             DiscoveryMethod.PLUGIN_API_MYTHICMOBS);
                     registry.register(item, DiscoveryMethod.PLUGIN_API_MYTHICMOBS);
-                } catch (Exception ignored) {}
+                } catch (Exception e) { plugin.getLogger().fine("[Scanner] MythicMobs item scan skipped: " + e.getClass().getSimpleName() + " - " + e.getMessage()); }
             }
         } catch (ClassNotFoundException | NoClassDefFoundError e) {
             // Skip
@@ -230,14 +252,12 @@ public class UnifiedItemScanner {
     private void scanExecutableItems() {
         if (Bukkit.getPluginManager().getPlugin("ExecutableItems") == null) { plugin.getLogger().fine("[CustomItems] ExecutableItems not found, skipping"); return; }
         try {
-            // Use the official SCore API: ExecutableItemsAPI
             Class<?> apiClass = Class.forName("com.ssomar.score.api.executableitems.ExecutableItemsAPI");
             Method getInstanceMethod = apiClass.getMethod("getInstance");
             Object apiInstance = getInstanceMethod.invoke(null);
             Method getManagerMethod = apiClass.getMethod("getExecutableItemsManager");
             Object manager = getManagerMethod.invoke(apiInstance);
 
-            // ExecutableItemsManagerInterface.getAllExecutableItems()
             Method getAllMethod = manager.getClass().getMethod("getAllExecutableItems");
             @SuppressWarnings("unchecked")
             Collection<?> items = (Collection<?>) getAllMethod.invoke(manager);
@@ -245,11 +265,12 @@ public class UnifiedItemScanner {
 
             for (Object eiItemObj : items) {
                 try {
-                    // ExecutableItemInterface extends SObject -> getId(), buildItem()
                     Method getIdMethod = eiItemObj.getClass().getMethod("getId");
                     Method buildItemMethod = eiItemObj.getClass().getMethod("buildItem");
                     String id = (String) getIdMethod.invoke(eiItemObj);
-                    ItemStack itemStack = (ItemStack) buildItemMethod.invoke(eiItemObj);
+                    Object rawStack = buildItemMethod.invoke(eiItemObj);
+                    if (!isValidItemStack(rawStack)) { plugin.getLogger().fine("[Scanner] ExecutableItems returned invalid ItemStack, skipping"); continue; }
+                    ItemStack itemStack = (ItemStack) rawStack;
                     if (itemStack == null || id == null) continue;
 
                     CustomMarketItem item = buildCustomItem(itemStack, "executableitems:" + id, "ExecutableItems", DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
@@ -260,17 +281,12 @@ public class UnifiedItemScanner {
             }
             plugin.getComponentLogger().info("[Scanner] ExecutableItems scan complete: " + items.size() + " items found");
         } catch (ClassNotFoundException | NoClassDefFoundError e) {
-            // Plugin not present or API changed — try legacy fallback
             scanExecutableItemsLegacy();
         } catch (Exception e) {
             plugin.getComponentLogger().warn("[Scanner] ExecutableItems scan failed: " + e.getMessage());
         }
     }
 
-    /**
-     * Legacy fallback for older EI versions that don't expose the SCore API.
-     * Uses the internal ExecutableItems plugin class directly.
-     */
     private void scanExecutableItemsLegacy() {
         try {
             Class<?> eiPluginClass = Class.forName("com.ssomar.executableitems.ExecutableItems");
@@ -287,11 +303,13 @@ public class UnifiedItemScanner {
                     Method getIdMethod = eiItem.getClass().getMethod("getId");
                     Method buildItemMethod = eiItem.getClass().getMethod("buildItem", int.class);
                     String id = (String) getIdMethod.invoke(eiItem);
-                    ItemStack itemStack = (ItemStack) buildItemMethod.invoke(eiItem, 1);
+                    Object rawStack = buildItemMethod.invoke(eiItem, 1);
+                    if (!isValidItemStack(rawStack)) { plugin.getLogger().fine("[Scanner] ExecutableItems (legacy) returned invalid ItemStack, skipping"); continue; }
+                    ItemStack itemStack = (ItemStack) rawStack;
                     if (itemStack == null || id == null) continue;
                     CustomMarketItem item = buildCustomItem(itemStack, "executableitems:" + id, "ExecutableItems", DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
                     registry.register(item, DiscoveryMethod.PLUGIN_API_EXECUTABLE_ITEMS);
-                } catch (Exception ignored) {}
+                } catch (Exception e) { plugin.getLogger().fine("[Scanner] ExecutableItems legacy item scan skipped: " + e.getClass().getSimpleName() + " - " + e.getMessage()); }
             }
             plugin.getComponentLogger().info("[Scanner] ExecutableItems (legacy) scan complete");
         } catch (ClassNotFoundException | NoClassDefFoundError e) {
@@ -315,14 +333,16 @@ public class UnifiedItemScanner {
             Method getIdMethod = nexoItemsClass.getMethod("getId");
             for (Object nexoItem : items) {
                 try {
-                    ItemStack itemStack = (ItemStack) getItemStackMethod.invoke(nexoItem);
+                    Object rawStack = getItemStackMethod.invoke(nexoItem);
+                    if (!isValidItemStack(rawStack)) { plugin.getLogger().fine("[Scanner] Nexo returned invalid ItemStack, skipping"); continue; }
+                    ItemStack itemStack = (ItemStack) rawStack;
                     String id = (String) getIdMethod.invoke(nexoItem);
                     if (itemStack == null || id == null) continue;
 
                     CustomMarketItem item = buildCustomItem(itemStack, "nexo:" + id, "Nexo",
                             DiscoveryMethod.PLUGIN_API_NEXO);
                     registry.register(item, DiscoveryMethod.PLUGIN_API_NEXO);
-                } catch (Exception ignored) {}
+                } catch (Exception e) { plugin.getLogger().fine("[Scanner] Nexo item scan skipped: " + e.getClass().getSimpleName() + " - " + e.getMessage()); }
             }
         } catch (ClassNotFoundException | NoClassDefFoundError e) {
             // Skip
@@ -349,13 +369,15 @@ public class UnifiedItemScanner {
             for (Map.Entry<String, ?> entry : items.entrySet()) {
                 try {
                     Method createItemMethod = entry.getValue().getClass().getMethod("createItem");
-                    ItemStack itemStack = (ItemStack) createItemMethod.invoke(entry.getValue());
+                    Object rawStack = createItemMethod.invoke(entry.getValue());
+                    if (!isValidItemStack(rawStack)) { plugin.getLogger().fine("[Scanner] SX-Item returned invalid ItemStack, skipping"); continue; }
+                    ItemStack itemStack = (ItemStack) rawStack;
                     if (itemStack == null) continue;
 
                     CustomMarketItem item = buildCustomItem(itemStack, "sxitem:" + entry.getKey(), "SX-Item",
                             DiscoveryMethod.PLUGIN_API_SX_ITEM);
                     registry.register(item, DiscoveryMethod.PLUGIN_API_SX_ITEM);
-                } catch (Exception ignored) {}
+                } catch (Exception e) { plugin.getLogger().fine("[Scanner] SX-Item item scan skipped: " + e.getClass().getSimpleName() + " - " + e.getMessage()); }
             }
         } catch (ClassNotFoundException | NoClassDefFoundError e) {
             // Skip
@@ -445,20 +467,17 @@ public class UnifiedItemScanner {
         List<net.kyori.adventure.text.Component> lore = meta.lore();
         boolean isCustom = false;
 
-        // Check for hex color patterns, common custom item identifiers
         for (net.kyori.adventure.text.Component line : lore) {
             String plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
                     .serialize(line);
-            // Hex color indicator
             if (plain.contains("\u00a7x")) { isCustom = true; break; }
-            // Common custom item markers
             if (plain.contains("CustomItem:") || plain.contains("ItemsAdder") || plain.contains("Oraxen")
                     || plain.contains("MMOItems") || plain.contains("ExecutableItems")) {
-                isCustom = true; break;
+                isCustom = true;
+                break;
             }
         }
 
-        // Also flag items with PDC keys from non-minecraft namespaces as custom via lore
         if (!isCustom) {
             PersistentDataContainer pdc = meta.getPersistentDataContainer();
             for (NamespacedKey key : pdc.getKeys()) {
@@ -509,25 +528,20 @@ public class UnifiedItemScanner {
         }
     }
 
-    // ===== METHOD 6: Scan single item (used by interaction detection + inventory scan) =====
+    // ===== METHOD 6: Scan single item =====
 
     public void scanSingleItem(ItemStack item, DiscoveryMethod method) {
         if (item == null || item.getType().isAir()) return;
 
-        // Apply all 3 passive scan methods
         scanViaPDC(item);
         scanViaModelData(item);
         scanViaLore(item);
 
-        // Also try to match against plugin APIs by item
         if (methodPluginApi) {
             scanItemAgainstPluginAPIs(item);
         }
     }
 
-    /**
-     * Try to identify an item against each plugin's byItemStack-style API.
-     */
     private void scanItemAgainstPluginAPIs(ItemStack item) {
         // ItemsAdder
         try {
@@ -544,7 +558,7 @@ public class UnifiedItemScanner {
                 }
             }
         } catch (ClassNotFoundException | NoClassDefFoundError ignored) {
-        } catch (Exception ignored) {}
+        } catch (Exception e) { plugin.getLogger().fine("[Scanner] ItemsAdder byItemStack scan skipped: " + e.getClass().getSimpleName()); }
 
         // Oraxen
         try {
@@ -557,7 +571,7 @@ public class UnifiedItemScanner {
                 registry.register(customItem, DiscoveryMethod.PLUGIN_API_ORAXEN);
             }
         } catch (ClassNotFoundException | NoClassDefFoundError ignored) {
-        } catch (Exception ignored) {}
+        } catch (Exception e) { plugin.getLogger().fine("[Scanner] Oraxen byItem scan skipped: " + e.getClass().getSimpleName()); }
 
         // Nexo
         try {
@@ -574,17 +588,13 @@ public class UnifiedItemScanner {
                 }
             }
         } catch (ClassNotFoundException | NoClassDefFoundError ignored) {
-        } catch (Exception ignored) {}
+        } catch (Exception e) { plugin.getLogger().fine("[Scanner] Nexo byItem scan skipped: " + e.getClass().getSimpleName()); }
     }
 
     // ===== Utility Methods =====
 
-    /**
-     * Build a CustomMarketItem from an ItemStack and its plugin metadata.
-     * Populates ALL dedup keys for maximum dedup efficiency.
-     */
     private CustomMarketItem buildCustomItem(ItemStack item, String nativeId, String sourcePlugin,
-                                               DiscoveryMethod method) {
+            DiscoveryMethod method) {
         String displayName = resolveDisplayName(item);
         BigDecimal basePrice = estimatePrice(item);
         BigDecimal buyPrice = basePrice.multiply(BigDecimal.valueOf(defaultPriceMultiplier));
@@ -604,9 +614,6 @@ public class UnifiedItemScanner {
                 .build();
     }
 
-    /**
-     * Extract the first non-excluded PDC key as "namespace:key", or null.
-     */
     public String extractPdcKey(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return null;
         PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
@@ -618,9 +625,6 @@ public class UnifiedItemScanner {
         return null;
     }
 
-    /**
-     * Extract "MATERIAL:12345" from custom model data, or null.
-     */
     public String extractModelDataKey(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return null;
         ItemMeta meta = item.getItemMeta();
@@ -630,9 +634,6 @@ public class UnifiedItemScanner {
         return null;
     }
 
-    /**
-     * Extract lore hash as string, or null.
-     */
     public String extractLoreHash(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return null;
         ItemMeta meta = item.getItemMeta();
@@ -642,9 +643,6 @@ public class UnifiedItemScanner {
         return null;
     }
 
-    /**
-     * Map common PDC namespaces to plugin names.
-     */
     public static String detectPluginFromNamespace(String namespace) {
         return switch (namespace) {
             case "itemsadder" -> "ItemsAdder";
@@ -658,9 +656,6 @@ public class UnifiedItemScanner {
         };
     }
 
-    /**
-     * Auto-assign a market category based on item material.
-     */
     public Category autoAssignCategory(ItemStack item) {
         if (item == null) return Category.CUSTOM_ITEMS;
         Material mat = item.getType();
@@ -701,6 +696,8 @@ public class UnifiedItemScanner {
 
     /**
      * Resolve display name from Component displayName -> plain text, or fallback to formatted material name.
+     * Includes Adventure Component hashCode to distinguish items with same plain text
+     * but different color codes, preventing false dedup collisions.
      */
     private String resolveDisplayName(ItemStack item) {
         if (item.hasItemMeta()) {
@@ -708,8 +705,9 @@ public class UnifiedItemScanner {
             if (meta.hasDisplayName() || meta.displayName() != null) {
                 net.kyori.adventure.text.Component display = meta.displayName();
                 if (display != null) {
-                    return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                    String plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
                             .serialize(display);
+                    return plain + "|" + Integer.toHexString(display.hashCode());
                 }
             }
         }
@@ -725,10 +723,6 @@ public class UnifiedItemScanner {
         return sb.toString().trim();
     }
 
-    /**
-     * Estimate a base price for a custom item based on its material.
-     * Uses a simple heuristic: diamond/netherite = 500, iron/gold = 100, other = 50.
-     */
     private BigDecimal estimatePrice(ItemStack item) {
         Material mat = item.getType();
         if (mat.name().contains("NETHERITE")) return BigDecimal.valueOf(500);
