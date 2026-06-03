@@ -7,6 +7,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
@@ -25,12 +26,12 @@ public class JoinListener implements Listener {
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
-        
+
         plugin.getEconomyManager().invalidateCache(uuid);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
-                    .prepareStatement("SELECT * FROM offline_earnings WHERE uuid = ?")) {
+                    .prepareStatement("SELECT uuid, amount, item_display, timestamp FROM offline_earnings WHERE uuid = ?")) {
                 ps.setString(1, uuid.toString());
                 ResultSet rs = ps.executeQuery();
 
@@ -59,6 +60,14 @@ public class JoinListener implements Listener {
                 plugin.getComponentLogger().error("Database error in JoinListener", e);
             }
         });
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        // Invalidate web session on disconnect for security
+        if (plugin.getWebServer() != null && plugin.getWebServer().getSessionManager() != null) {
+            plugin.getWebServer().getSessionManager().invalidate(event.getPlayer().getUniqueId());
+        }
     }
 
     private void deleteAllRecordsForUUID(UUID uuid) {
