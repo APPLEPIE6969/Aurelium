@@ -14,326 +14,313 @@ import org.bukkit.OfflinePlayer;
 
 public class EconomyManager {
 
- private static final int SCALE = 2;
- private static final RoundingMode ROUNDING_MODE = RoundingMode.HALF_EVEN;
- private static final double DEFAULT_STARTING_BALANCE = 100.0;
+    private static final int SCALE = 2;
+    private static final RoundingMode ROUNDING_MODE = RoundingMode.HALF_EVEN;
+    private static final double DEFAULT_STARTING_BALANCE = 100.0;
 
- private final AurelEconomy plugin;
- private final Map<UUID, Map<String, BigDecimal>> balanceCache = new ConcurrentHashMap<>();
- private String defaultCurrency;
+    private final AurelEconomy plugin;
+    private final Map<UUID, ConcurrentHashMap<String, BigDecimal>> balanceCache = new ConcurrentHashMap<>();
+    private String defaultCurrency;
 
- public EconomyManager(AurelEconomy plugin) {
- this.plugin = plugin;
- }
+    public EconomyManager(AurelEconomy plugin) {
+        this.plugin = plugin;
+    }
 
- public String getDefaultCurrency() {
- if (this.defaultCurrency == null) {
- this.defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
- }
- return this.defaultCurrency;
- }
+    public String getDefaultCurrency() {
+        if (this.defaultCurrency == null) {
+            this.defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
+        }
+        return this.defaultCurrency;
+    }
 
- public BigDecimal getBalance(OfflinePlayer player) {
- return getBalance(player, getDefaultCurrency());
- }
+    public BigDecimal getBalance(OfflinePlayer player) {
+        return getBalance(player, getDefaultCurrency());
+    }
 
- public BigDecimal getBalance(OfflinePlayer player, String currency) {
- UUID uuid = player.getUniqueId();
- Map<String, BigDecimal> userBalances = balanceCache.get(uuid);
- if (userBalances != null && userBalances.containsKey(currency)) {
- return userBalances.get(currency);
- }
+    public BigDecimal getBalance(OfflinePlayer player, String currency) {
+        UUID uuid = player.getUniqueId();
+        // Thread-safe: use ConcurrentHashMap atomic operations to avoid race
+        // between cache read and DB fallback
+        ConcurrentHashMap<String, BigDecimal> userBalances = balanceCache.get(uuid);
+        if (userBalances != null) {
+            BigDecimal cached = userBalances.get(currency);
+            if (cached != null) {
+                return cached;
+            }
+        }
 
- return loadBalance(uuid, currency);
- }
+        return loadBalance(uuid, currency);
+    }
 
- public void setBalance(OfflinePlayer player, BigDecimal amount) {
- setBalance(player, amount, getDefaultCurrency());
- }
+    public void setBalance(OfflinePlayer player, BigDecimal amount) {
+        setBalance(player, amount, getDefaultCurrency());
+    }
 
- public void deposit(OfflinePlayer player, BigDecimal amount) {
- deposit(player, amount, getDefaultCurrency());
- }
+    public void deposit(OfflinePlayer player, BigDecimal amount) {
+        deposit(player, amount, getDefaultCurrency());
+    }
 
- public void deposit(OfflinePlayer player, BigDecimal amount, String currency) {
- if (amount.compareTo(BigDecimal.ZERO) <= 0)
- return;
+    public void deposit(OfflinePlayer player, BigDecimal amount, String currency) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0)
+            return;
 
- UUID uuid = player.getUniqueId();
- BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+        UUID uuid = player.getUniqueId();
+        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
- // Update cache immediately for responsiveness
- BigDecimal current = getBalanceFromCache(uuid, currency);
- BigDecimal newBalance = current.add(normalizedAmount);
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
+        BigDecimal current = getBalanceFromCache(uuid, currency);
+        BigDecimal newBalance = current.add(normalizedAmount);
+        balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
 
- // Persist to DB async (if called from async context, this is fine;
- // if called from main thread, the DB call must still be async)
- scheduleAsyncWrite(() -> {
- synchronized (plugin.getDatabaseManager().getWriteLock()) {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- plugin.getDatabaseManager().isMySQL()
- ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = player_balances.balance + new.balance"
- : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
+        scheduleAsyncWrite(() -> {
+            synchronized (plugin.getDatabaseManager().getWriteLock()) {
+                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+                        plugin.getDatabaseManager().isMySQL()
+                                ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = player_balances.balance + new.balance"
+                                : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
 
- ps.setString(1, uuid.toString());
- ps.setString(2, currency);
- ps.setBigDecimal(3, normalizedAmount);
- if (!plugin.getDatabaseManager().isMySQL()) {
- ps.setBigDecimal(4, normalizedAmount);
- }
- ps.executeUpdate();
+                    ps.setString(1, uuid.toString());
+                    ps.setString(2, currency);
+                    ps.setBigDecimal(3, normalizedAmount);
+                    if (!plugin.getDatabaseManager().isMySQL()) {
+                        ps.setBigDecimal(4, normalizedAmount);
+                    }
+                    ps.executeUpdate();
 
- loadBalance(uuid, currency);
- updatePlayerMetadata(player);
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error in EconomyManager while depositing", e);
- }
- }
- });
- }
+                    loadBalance(uuid, currency);
+                    updatePlayerMetadata(player);
+                } catch (SQLException e) {
+                    plugin.getComponentLogger().error("Database error in EconomyManager while depositing", e);
+                }
+            }
+        });
+    }
 
- public void withdraw(OfflinePlayer player, BigDecimal amount) {
- withdraw(player, amount, getDefaultCurrency());
- }
+    public void withdraw(OfflinePlayer player, BigDecimal amount) {
+        withdraw(player, amount, getDefaultCurrency());
+    }
 
- public void withdraw(OfflinePlayer player, BigDecimal amount, String currency) {
- if (amount.compareTo(BigDecimal.ZERO) <= 0)
- return;
+    public void withdraw(OfflinePlayer player, BigDecimal amount, String currency) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0)
+            return;
 
- UUID uuid = player.getUniqueId();
- BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+        UUID uuid = player.getUniqueId();
+        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
- BigDecimal currentBalance = getBalanceFromCache(uuid, currency);
- if (currentBalance.compareTo(normalizedAmount) < 0) {
- plugin.getComponentLogger().warn("Insufficient funds for withdraw: " + player.getName() +
- " tried to withdraw " + normalizedAmount + " but only has " + currentBalance);
- return;
- }
+        BigDecimal currentBalance = getBalanceFromCache(uuid, currency);
+        if (currentBalance.compareTo(normalizedAmount) < 0) {
+            plugin.getComponentLogger().warn("Insufficient funds for withdraw: " + player.getName() +
+                    " tried to withdraw " + normalizedAmount + " but only has " + currentBalance);
+            return;
+        }
 
- // Update cache immediately
- BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
+        BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
+        balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
 
- // Persist to DB async
- scheduleAsyncWrite(() -> {
- synchronized (plugin.getDatabaseManager().getWriteLock()) {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
- ps.setBigDecimal(1, normalizedAmount);
- ps.setString(2, uuid.toString());
- ps.setString(3, currency);
- ps.setBigDecimal(4, normalizedAmount);
+        scheduleAsyncWrite(() -> {
+            synchronized (plugin.getDatabaseManager().getWriteLock()) {
+                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+                        "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
+                    ps.setBigDecimal(1, normalizedAmount);
+                    ps.setString(2, uuid.toString());
+                    ps.setString(3, currency);
+                    ps.setBigDecimal(4, normalizedAmount);
 
- int affectedRows = ps.executeUpdate();
- if (affectedRows == 0) {
- loadBalance(uuid, currency);
- } else {
- updatePlayerMetadata(player);
- }
+                    int affectedRows = ps.executeUpdate();
+                    if (affectedRows == 0) {
+                        loadBalance(uuid, currency);
+                    } else {
+                        updatePlayerMetadata(player);
+                    }
 
- loadBalance(uuid, currency);
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error in EconomyManager while withdrawing", e);
- }
- }
- });
- }
+                    loadBalance(uuid, currency);
+                } catch (SQLException e) {
+                    plugin.getComponentLogger().error("Database error in EconomyManager while withdrawing", e);
+                }
+            }
+        });
+    }
 
- /**
- * Withdraw if the player has sufficient funds.
- * Now runs the DB update asynchronously with write lock to prevent
- * JDBC Connection contention with other async DB operations.
- * The cache is updated optimistically on the main thread for responsiveness;
- * if the async DB update fails (race condition), the cache is reloaded from DB.
- */
- public boolean withdrawIfSufficient(OfflinePlayer player, BigDecimal amount, String currency) {
- if (amount.compareTo(BigDecimal.ZERO) <= 0)
- return false;
+    public boolean withdrawIfSufficient(OfflinePlayer player, BigDecimal amount, String currency) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0)
+            return false;
 
- UUID uuid = player.getUniqueId();
- BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+        UUID uuid = player.getUniqueId();
+        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
- BigDecimal currentBalance = getBalance(player, currency);
+        BigDecimal currentBalance = getBalance(player, currency);
 
- if (currentBalance.compareTo(normalizedAmount) < 0) {
- return false;
- }
+        if (currentBalance.compareTo(normalizedAmount) < 0) {
+            return false;
+        }
 
- // Optimistically update cache on main thread for responsiveness
- BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
+        BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
+        balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
 
- // Persist to DB async with write lock (same pattern as deposit/withdraw)
- scheduleAsyncWrite(() -> {
- synchronized (plugin.getDatabaseManager().getWriteLock()) {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
- ps.setBigDecimal(1, normalizedAmount);
- ps.setString(2, uuid.toString());
- ps.setString(3, currency);
- ps.setBigDecimal(4, normalizedAmount);
+        scheduleAsyncWrite(() -> {
+            synchronized (plugin.getDatabaseManager().getWriteLock()) {
+                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+                        "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
+                    ps.setBigDecimal(1, normalizedAmount);
+                    ps.setString(2, uuid.toString());
+                    ps.setString(3, currency);
+                    ps.setBigDecimal(4, normalizedAmount);
 
- int affectedRows = ps.executeUpdate();
- if (affectedRows == 0) {
- // Race condition: balance changed between check and update.
- // Reload from DB to correct the optimistic cache update.
- loadBalance(uuid, currency);
- } else {
- updatePlayerMetadata(player);
- loadBalance(uuid, currency);
- }
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error in withdrawIfSufficient", e);
- // On error, reload balance from DB to fix cache
- loadBalance(uuid, currency);
- }
- }
- });
+                    int affectedRows = ps.executeUpdate();
+                    if (affectedRows == 0) {
+                        loadBalance(uuid, currency);
+                    } else {
+                        updatePlayerMetadata(player);
+                        loadBalance(uuid, currency);
+                    }
+                } catch (SQLException e) {
+                    plugin.getComponentLogger().error("Database error in withdrawIfSufficient", e);
+                    loadBalance(uuid, currency);
+                }
+            }
+        });
 
- return true;
- }
+        return true;
+    }
 
- private void updatePlayerMetadata(OfflinePlayer player) {
- String name = player.getName();
- if (name == null)
- return;
- UUID uuid = player.getUniqueId();
+    private void updatePlayerMetadata(OfflinePlayer player) {
+        String name = player.getName();
+        if (name == null)
+            return;
+        UUID uuid = player.getUniqueId();
 
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- plugin.getDatabaseManager().isMySQL()
- ? "INSERT INTO players (uuid, name) VALUES (?, ?) AS new ON DUPLICATE KEY UPDATE name = new.name"
- : "INSERT INTO players (uuid, name) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET name = ?")) {
- ps.setString(1, uuid.toString());
- ps.setString(2, name);
- if (!plugin.getDatabaseManager().isMySQL()) {
- ps.setString(3, name);
- }
- ps.executeUpdate();
- } catch (SQLException e) {
- }
- }
+        try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+                plugin.getDatabaseManager().isMySQL()
+                        ? "INSERT INTO players (uuid, name) VALUES (?, ?) AS new ON DUPLICATE KEY UPDATE name = new.name"
+                        : "INSERT INTO players (uuid, name) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET name = ?")) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, name);
+            if (!plugin.getDatabaseManager().isMySQL()) {
+                ps.setString(3, name);
+            }
+            ps.executeUpdate();
+        } catch (SQLException e) {
+        }
+    }
 
- public boolean has(OfflinePlayer player, BigDecimal amount) {
- return has(player, amount, getDefaultCurrency());
- }
+    public boolean has(OfflinePlayer player, BigDecimal amount) {
+        return has(player, amount, getDefaultCurrency());
+    }
 
- public boolean has(OfflinePlayer player, BigDecimal amount, String currency) {
- return getBalance(player, currency).compareTo(amount) >= 0;
- }
+    public boolean has(OfflinePlayer player, BigDecimal amount, String currency) {
+        return getBalance(player, currency).compareTo(amount) >= 0;
+    }
 
- public String format(BigDecimal amount) {
- return format(amount, getDefaultCurrency());
- }
+    public String format(BigDecimal amount) {
+        return format(amount, getDefaultCurrency());
+    }
 
- public String getCurrencySymbol(String currency) {
- String path = "economy.currencies." + currency + ".symbol";
- return plugin.getConfig().getString(path,
- plugin.getConfig().getString("economy.currency-symbol", "₳"));
- }
+    public String getCurrencySymbol(String currency) {
+        String path = "economy.currencies." + currency + ".symbol";
+        return plugin.getConfig().getString(path,
+                plugin.getConfig().getString("economy.currency-symbol", "₳"));
+    }
 
- public String format(BigDecimal amount, String currency) {
- return amount.setScale(SCALE, ROUNDING_MODE).toPlainString();
- }
+    public String format(BigDecimal amount, String currency) {
+        return amount.setScale(SCALE, ROUNDING_MODE).toPlainString();
+    }
 
- public String getFormattedWithSymbol(BigDecimal amount, String currency) {
- return getCurrencySymbol(currency) + format(amount, currency);
- }
+    public String getFormattedWithSymbol(BigDecimal amount, String currency) {
+        return getCurrencySymbol(currency) + format(amount, currency);
+    }
 
- /**
- * Get balance from cache only (no DB call). Returns ZERO if not cached.
- */
- private BigDecimal getBalanceFromCache(UUID uuid, String currency) {
- Map<String, BigDecimal> userBalances = balanceCache.get(uuid);
- if (userBalances != null && userBalances.containsKey(currency)) {
- return userBalances.get(currency);
- }
- return BigDecimal.ZERO;
- }
+    /**
+     * Get balance from cache only (no DB call). Returns ZERO if not cached.
+     * Thread-safe: uses ConcurrentHashMap atomic operations.
+     */
+    private BigDecimal getBalanceFromCache(UUID uuid, String currency) {
+        ConcurrentHashMap<String, BigDecimal> userBalances = balanceCache.get(uuid);
+        if (userBalances != null) {
+            BigDecimal cached = userBalances.get(currency);
+            if (cached != null) {
+                return cached;
+            }
+        }
+        return BigDecimal.ZERO;
+    }
 
- /**
- * Schedule a write task asynchronously.
- * If already on an async thread, run directly (synchronized on dbWriteLock);
- * otherwise schedule via Bukkit's async scheduler.
- */
- private void scheduleAsyncWrite(Runnable task) {
- if (Bukkit.isPrimaryThread()) {
- Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
- } else {
- task.run();
- }
- }
+    private void scheduleAsyncWrite(Runnable task) {
+        if (Bukkit.isPrimaryThread()) {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
+        } else {
+            task.run();
+        }
+    }
 
- private BigDecimal loadBalance(UUID uuid, String currency) {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("SELECT balance FROM player_balances WHERE uuid = ? AND currency = ?")) {
- ps.setString(1, uuid.toString());
- ps.setString(2, currency);
- ResultSet rs = ps.executeQuery();
- if (rs.next()) {
- BigDecimal bal = rs.getBigDecimal("balance");
- if (bal == null)
- bal = BigDecimal.ZERO;
- bal = bal.setScale(SCALE, ROUNDING_MODE);
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, bal);
- return bal;
- }
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error while loading balance for " + uuid, e);
- }
+    private BigDecimal loadBalance(UUID uuid, String currency) {
+        try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
+                .prepareStatement("SELECT balance FROM player_balances WHERE uuid = ? AND currency = ?")) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, currency);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                BigDecimal bal = rs.getBigDecimal("balance");
+                if (bal == null)
+                    bal = BigDecimal.ZERO;
+                bal = bal.setScale(SCALE, ROUNDING_MODE);
+                balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, bal);
+                return bal;
+            }
+        } catch (SQLException e) {
+            plugin.getComponentLogger().error("Database error while loading balance for " + uuid, e);
+        }
 
- double startBalRaw = plugin.getConfig().getDouble("economy.currencies." + currency + ".starting-balance",
- plugin.getConfig().getDouble("economy.starting-balance", DEFAULT_STARTING_BALANCE));
- BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement(
- plugin.getDatabaseManager().isMySQL()
- ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
- : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
- ps.setString(1, uuid.toString());
- ps.setString(2, currency);
- ps.setBigDecimal(3, startBal);
- if (!plugin.getDatabaseManager().isMySQL()) {
- ps.setBigDecimal(4, startBal);
- }
- ps.executeUpdate();
- plugin.getComponentLogger().info("Created initial balance for " + uuid + ": " + startBal + " " + currency);
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error while creating initial balance for " + uuid, e);
- }
+        double startBalRaw = plugin.getConfig().getDouble("economy.currencies." + currency + ".starting-balance",
+                plugin.getConfig().getDouble("economy.starting-balance", DEFAULT_STARTING_BALANCE));
+        BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
+        try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
+                .prepareStatement(
+                        plugin.getDatabaseManager().isMySQL()
+                                ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
+                                : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, currency);
+            ps.setBigDecimal(3, startBal);
+            if (!plugin.getDatabaseManager().isMySQL()) {
+                ps.setBigDecimal(4, startBal);
+            }
+            ps.executeUpdate();
+            plugin.getComponentLogger().info("Created initial balance for " + uuid + ": " + startBal + " " + currency);
+        } catch (SQLException e) {
+            plugin.getComponentLogger().error("Database error while creating initial balance for " + uuid, e);
+        }
 
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, startBal);
- return startBal;
- }
+        balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, startBal);
+        return startBal;
+    }
 
- public void setBalance(OfflinePlayer player, BigDecimal amount, String currency) {
- UUID uuid = player.getUniqueId();
- BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+    public void setBalance(OfflinePlayer player, BigDecimal amount, String currency) {
+        UUID uuid = player.getUniqueId();
+        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
- balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, normalizedAmount);
+        balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, normalizedAmount);
 
- scheduleAsyncWrite(() -> {
- synchronized (plugin.getDatabaseManager().getWriteLock()) {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- plugin.getDatabaseManager().isMySQL()
- ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
- : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
- ps.setString(1, uuid.toString());
- ps.setString(2, currency);
- ps.setBigDecimal(3, normalizedAmount);
- if (!plugin.getDatabaseManager().isMySQL()) {
- ps.setBigDecimal(4, normalizedAmount);
- }
- ps.executeUpdate();
- updatePlayerMetadata(player);
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error in EconomyManager while saving balance", e);
- }
- }
- });
- }
+        scheduleAsyncWrite(() -> {
+            synchronized (plugin.getDatabaseManager().getWriteLock()) {
+                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+                        plugin.getDatabaseManager().isMySQL()
+                                ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
+                                : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
+                    ps.setString(1, uuid.toString());
+                    ps.setString(2, currency);
+                    ps.setBigDecimal(3, normalizedAmount);
+                    if (!plugin.getDatabaseManager().isMySQL()) {
+                        ps.setBigDecimal(4, normalizedAmount);
+                    }
+                    ps.executeUpdate();
+                    updatePlayerMetadata(player);
+                } catch (SQLException e) {
+                    plugin.getComponentLogger().error("Database error in EconomyManager while saving balance", e);
+                }
+            }
+        });
+    }
 
- public void invalidateCache(UUID uuid) {
- balanceCache.remove(uuid);
- }
+    public void invalidateCache(UUID uuid) {
+        balanceCache.remove(uuid);
+    }
 }
