@@ -1,5 +1,0 @@
-name: ItemsAdder
-version: '1.0'
-main: mock.MockStressItemsAdder
-api-version: '26.1'
-description: Mock ItemsAdder with 500 items for stress testing

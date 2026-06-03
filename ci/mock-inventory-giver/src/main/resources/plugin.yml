@@ -1,9 +1,0 @@
-name: InventoryGiver
-version: '1.0'
-main: mock.InventoryGiver
-api-version: '26.1'
-description: Gives custom items on join for inventory-scan CI testing
-commands:
-  givecustom:
-    description: Give a custom item to test inventory scanning
-    usage: /givecustom <item>

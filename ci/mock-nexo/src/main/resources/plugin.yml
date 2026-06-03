@@ -1,5 +1,0 @@
-name: Nexo
-version: '1.0'
-main: mock.MockNexo
-api-version: '26.1'
-description: Mock Nexo for CI testing

@@ -1,5 +1,0 @@
-name: PDC-Giver
-version: '1.0'
-main: mock.MockPDCGiver
-api-version: '26.1'
-description: Gives items with PDC data for CI testing
