@@ -42,7 +42,7 @@ public class ApiHandler implements HttpHandler {
         // CORS Security: Whitelist-based validation
         String origin = exchange.getRequestHeaders().getFirst("Origin");
         List<String> allowedOrigins = plugin.getConfig().getStringList("web.local.cors-allowed-origins");
-        
+
         if (origin != null && !allowedOrigins.isEmpty()) {
             if (allowedOrigins.contains(origin)) {
                 exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
@@ -90,15 +90,12 @@ public class ApiHandler implements HttpHandler {
         OfflinePlayer player = Bukkit.getOfflinePlayer(uuid);
         String name = player.getName() != null ? player.getName() : uuid.toString();
 
-        // Build balances JSON for all configured currencies
         String defaultCurrency = plugin.getEconomyManager().getDefaultCurrency();
         Map<String, Object> currencies = new LinkedHashMap<>();
 
-        // Default currency balance
         BigDecimal defaultBal = plugin.getEconomyManager().getBalance(player, defaultCurrency);
         currencies.put(defaultCurrency, defaultBal);
 
-        // Additional currencies from config
         if (plugin.getConfig().isConfigurationSection("economy.currencies")) {
             for (String currencyName : plugin.getConfig().getConfigurationSection("economy.currencies")
                     .getKeys(false)) {
@@ -215,6 +212,11 @@ public class ApiHandler implements HttpHandler {
         }
 
         String itemKey = params.getOrDefault("item", "");
+        // Security: validate itemKey format to prevent injection
+        if (!isValidItemKey(itemKey)) {
+            sendJson(exchange, 400, "{\"error\":\"Invalid item format. Expected lowercase namespace:key or material name.\"}");
+            return;
+        }
         int amount = parseIntParam(params, "amount", 1);
         if (amount < 1 || amount > 64)
             amount = 1;
@@ -229,10 +231,9 @@ public class ApiHandler implements HttpHandler {
             buyPrice = plugin.getMarketManager().getBuyPrice(material);
             currency = plugin.getMarketManager().getCurrency(material);
         } catch (IllegalArgumentException e) {
-            // Try as a custom name (e.g. spawner)
             buyPrice = plugin.getMarketManager().getBuyPrice(itemKey);
             currency = plugin.getMarketManager().getCurrency(itemKey);
-            material = Material.SPAWNER; // Custom named items are typically spawners
+            material = Material.SPAWNER;
         }
 
         if (buyPrice.compareTo(BigDecimal.ZERO) <= 0) {
@@ -249,7 +250,6 @@ public class ApiHandler implements HttpHandler {
             return;
         }
 
-        // Execute on main thread
         final BigDecimal finalCost = totalCost;
         final int finalAmount = amount;
         final String finalCurrency = currency;
@@ -265,7 +265,6 @@ public class ApiHandler implements HttpHandler {
                 return;
             }
 
-            // Check inventory space
             ItemStack toGive = new ItemStack(finalMaterial, finalAmount);
             if (!com.aureleconomy.utils.InventoryUtils.hasSpace(onlinePlayer.getInventory(), toGive, finalAmount)) {
                 future.complete("{\"error\":\"Your inventory is full\"}");
@@ -301,38 +300,38 @@ public class ApiHandler implements HttpHandler {
 
     // ── GET /api/custom-items ─────────────────────────────────────────
 
- private void handleCustomItems(HttpExchange exchange) throws IOException {
- CustomItemRegistry registry = plugin.getCustomItemRegistry();
- if (registry == null || registry.isEmpty()) {
- sendJson(exchange, 200, "[]");
- return;
- }
+    private void handleCustomItems(HttpExchange exchange) throws IOException {
+        CustomItemRegistry registry = plugin.getCustomItemRegistry();
+        if (registry == null || registry.isEmpty()) {
+            sendJson(exchange, 200, "[]");
+            return;
+        }
 
- StringBuilder json = new StringBuilder("[");
- int i = 0;
- for (CustomMarketItem item : registry.getAllItems()) {
- if (i++ > 0) json.append(",");
- String name = item.getDisplayName() != null ? item.getDisplayName() : item.getCanonicalId();
- String material = item.getItemStack().getType().name().toLowerCase();
- BigDecimal buy = item.getBuyPrice();
- BigDecimal sell = item.getSellPrice();
- String currency = plugin.getEconomyManager().getDefaultCurrency();
- String symbol = plugin.getEconomyManager().getCurrencySymbol(currency);
+        StringBuilder json = new StringBuilder("[");
+        int i = 0;
+        for (CustomMarketItem item : registry.getAllItems()) {
+            if (i++ > 0) json.append(",");
+            String name = item.getDisplayName() != null ? item.getDisplayName() : item.getCanonicalId();
+            String material = item.getItemStack().getType().name().toLowerCase();
+            BigDecimal buy = item.getBuyPrice();
+            BigDecimal sell = item.getSellPrice();
+            String currency = plugin.getEconomyManager().getDefaultCurrency();
+            String symbol = plugin.getEconomyManager().getCurrencySymbol(currency);
 
- json.append("{\"id\":").append(jsonStr(item.getCanonicalId()));
- json.append(",\"name\":").append(jsonStr(name));
- json.append(",\"material\":").append(jsonStr(material));
- json.append(",\"buyPrice\":").append(buy.doubleValue());
- json.append(",\"sellPrice\":").append(sell.doubleValue());
- json.append(",\"currency\":").append(jsonStr(currency));
- json.append(",\"currencySymbol\":").append(jsonStr(symbol));
- json.append("}");
- }
- json.append("]");
- sendJson(exchange, 200, json.toString());
- }
+            json.append("{\"id\":").append(jsonStr(item.getCanonicalId()));
+            json.append(",\"name\":").append(jsonStr(name));
+            json.append(",\"material\":").append(jsonStr(material));
+            json.append(",\"buyPrice\":").append(buy.doubleValue());
+            json.append(",\"sellPrice\":").append(sell.doubleValue());
+            json.append(",\"currency\":").append(jsonStr(currency));
+            json.append(",\"currencySymbol\":").append(jsonStr(symbol));
+            json.append("}");
+        }
+        json.append("]");
+        sendJson(exchange, 200, json.toString());
+    }
 
- // ── Helpers ───────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────
 
     private String buildItemsJson(List<MarketEntry> items, int page, int totalPages, int totalItems) {
         StringBuilder json = new StringBuilder();
@@ -406,7 +405,25 @@ public class ApiHandler implements HttpHandler {
         return "\"" + escapeJson(s) + "\"";
     }
 
+    /**
+     * Escape JSON string values. Covers all required control characters.
+     */
     private static String escapeJson(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f");
+    }
+
+    /**
+     * Validate itemKey format: must be namespace:key or plain material name.
+     * Prevents injection of special characters into SQL queries or item lookups.
+     */
+    private static boolean isValidItemKey(String itemKey) {
+        if (itemKey == null || itemKey.isEmpty()) return false;
+        return itemKey.matches("^[a-zA-Z0-9_.-]+(:[a-zA-Z0-9_./-]+)?$");
     }
 }
