@@ -1,194 +1,214 @@
 name: Mineflayer In-Game Tests
 
 on:
- push:
- branches: ["Latest", "feature/custom-item-scanner"]
- pull_request:
- branches: ["Latest", "feature/custom-item-scanner"]
+  push:
+    branches: ["Latest", "feature/custom-item-scanner"]
+  pull_request:
+    branches: ["Latest", "feature/custom-item-scanner"]
 
 permissions:
- contents: read
+  contents: read
 
 env:
- PAPER_BUILD: "65"
- PAPER_JAR_SHA: "cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2"
- VIAVERSION_URL: "https://cdn.modrinth.com/data/P1OZGk5p/versions/6LC4R0sP/ViaVersion-5.9.2-SNAPSHOT.jar"
- VIABACKWARDS_URL: "https://cdn.modrinth.com/data/NpvuJQoq/versions/Og77hOkC/ViaBackwards-5.9.2-SNAPSHOT.jar"
- VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
+  PAPER_BUILD: "65"
+  PAPER_JAR_SHA: "cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2"
+  VIAVERSION_URL: "https://cdn.modrinth.com/data/P1OZGk5p/versions/6LC4R0sP/ViaVersion-5.9.2-SNAPSHOT.jar"
+  VIABACKWARDS_URL: "https://cdn.modrinth.com/data/NpvuJQoq/versions/Og77hOkC/ViaBackwards-5.9.2-SNAPSHOT.jar"
+  VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
 
 jobs:
- build:
- runs-on: ubuntu-latest
- steps:
- - uses: actions/checkout@v4
- - name: Set up JDK 25
- uses: actions/setup-java@v4
- with:
- java-version: '25'
- distribution: 'temurin'
- - name: Setup Gradle
- uses: gradle/actions/setup-gradle@v4
- - name: Build with Gradle
- run: ./gradlew build
- - name: Upload JAR
- uses: actions/upload-artifact@v4
- with:
- name: Aurelium
- path: build/libs/*.jar
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Build with Gradle
+        run: ./gradlew build
+      - name: Upload JAR
+        uses: actions/upload-artifact@v6
+        with:
+          name: Aurelium
+          path: build/libs/*.jar
 
- mineflayer-test:
- runs-on: ubuntu-latest
- needs: build
- timeout-minutes: 20
- steps:
- - uses: actions/checkout@v4
- - name: Set up JDK 25
- uses: actions/setup-java@v4
- with:
- java-version: '25'
- distribution: 'temurin'
- - name: Set up Node.js 22
- uses: actions/setup-node@v4
- with:
- node-version: '22'
- - name: Download Aurelium
- uses: actions/download-artifact@v4
- with:
- name: Aurelium
- path: plugins
- - name: Download Paper
- run: |
- PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
- curl -sL "$PAPER_URL" -o paper.jar
- ls -lh paper.jar
- if [ ! -s paper.jar ]; then
- echo "FAIL: paper.jar is empty or missing"
- exit 1
- fi
- - name: Download ViaVersion + ViaBackwards + Vault
- run: |
- curl -sL "${{ env.VIAVERSION_URL }}" -o plugins/ViaVersion.jar
- curl -sL "${{ env.VIABACKWARDS_URL }}" -o plugins/ViaBackwards.jar
- curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
- ls -lh plugins/
- - name: Configure and start server
- run: |
- echo "eula=true" > eula.txt
- cat > server.properties << 'PROPS'
- online-mode=false
- server-port=25565
- max-players=10
- gamemode=survival
- difficulty=peaceful
- enable-rcon=true
- rcon.port=25575
- rcon.password=test
- PROPS
- java -Xmx2G -jar paper.jar --nogui &
- SERVER_PID=$!
- echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
- for i in $(seq 1 120); do
- if grep -q "Done (" logs/latest.log 2>/dev/null; then
- echo "Server started successfully!"
- break
- fi
- sleep 2
- done
- if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
- echo "FAIL: Server did not start within 4 minutes"
- cat logs/latest.log 2>/dev/null | tail -50 || true
- kill $SERVER_PID 2>/dev/null || true
- exit 1
- fi
- - name: Wait for ViaVersion + op bot
- run: |
- for i in $(seq 1 30); do
- if grep -qi "viaversion.*enable\|viaversion.*loaded\|protocol registry" logs/latest.log 2>/dev/null; then
- echo "ViaVersion loaded!"
- break
- fi
- sleep 2
- done
- sleep 3
- python3 -c "
- import socket, struct
- def rcon_read_packet(sock):
- try:
- raw = b''
- while len(raw) < 4:
- chunk = sock.recv(4 - len(raw))
- if not chunk: return None
- raw += chunk
- length = struct.unpack('<i', raw[:4])[0]
- if length < 8 or length > 4096: return None
- body_data = b''
- remaining = length
- while remaining > 0:
- chunk = sock.recv(min(remaining, 4096))
- if not chunk: return None
- body_data += chunk
- remaining -= len(chunk)
- if len(body_data) < 8: return None
- req_id = struct.unpack('<i', body_data[:4])[0]
- pkt_type = struct.unpack('<i', body_data[4:8])[0]
- payload = body_data[8:].rstrip(b'\x00').decode('utf-8', errors='replace')
- return (req_id, pkt_type, payload)
- except: return None
- def rcon_login(sock, password):
- body = password.encode('utf-8') + b'\x00'
- data = struct.pack('<ii', 1, 3) + body + b'\x00'
- packet = struct.pack('<i', len(data)) + data
- sock.sendall(packet)
- for _ in range(2):
- pkt = rcon_read_packet(sock)
- if pkt is None: break
- req_id, pkt_type, _ = pkt
- if pkt_type == 2: return req_id == 1
- return False
- def rcon_send(sock, cmd, req_id=2):
- body = cmd.encode('utf-8') + b'\x00'
- data = struct.pack('<ii', req_id, 2) + body + b'\x00'
- packet = struct.pack('<i', len(data)) + data
- sock.sendall(packet)
- pkt = rcon_read_packet(sock)
- if pkt is None: return ''
- _, _, payload = pkt
- return payload
- sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
- sock.settimeout(10)
- sock.connect(('127.0.0.1', 25575))
- if rcon_login(sock, 'test'):
- resp = rcon_send(sock, 'op TestBot')
- print(f'op TestBot: {repr(resp)}')
- else:
- print('WARNING: RCON login failed')
- sock.close()
- "
- - name: Install mineflayer and run tests
- run: |
- npm install mineflayer
- node mineflayer_test.js
- TEST_EXIT=$?
- echo "Mineflayer test exit code: $TEST_EXIT"
- exit $TEST_EXIT
- - name: Dump server exceptions
- if: always()
- run: |
- if [ -f logs/latest.log ]; then
- echo "=== Server exceptions ==="
- grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No relevant exceptions found"
- fi
- - name: Stop server
- if: always()
- run: |
- if [ -n "$SERVER_PID" ]; then
- kill $SERVER_PID 2>/dev/null || true
- wait $SERVER_PID 2>/dev/null || true
- fi
- - name: Upload server log on failure
- if: failure()
- uses: actions/upload-artifact@v4
- with:
- name: mineflayer-test-log
- path: logs/latest.log
- retention-days: 7
+  mineflayer-test:
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Download Aurelium
+        uses: actions/download-artifact@v7
+        with:
+          name: Aurelium
+          path: plugins
+
+      - name: Download Paper
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          ls -lh paper.jar
+          if [ ! -s paper.jar ]; then
+            echo "FAIL: paper.jar is empty or missing"
+            exit 1
+          fi
+
+      - name: Download ViaVersion + ViaBackwards + Vault
+        run: |
+          curl -sL "${{ env.VIAVERSION_URL }}" -o plugins/ViaVersion.jar
+          curl -sL "${{ env.VIABACKWARDS_URL }}" -o plugins/ViaBackwards.jar
+          curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
+          ls -lh plugins/
+
+      - name: Configure and start server
+        run: |
+          echo "eula=true" > eula.txt
+          cat > server.properties << 'PROPS'
+          online-mode=false
+          server-port=25565
+          max-players=10
+          gamemode=survival
+          difficulty=peaceful
+          enable-rcon=true
+          rcon.port=25575
+          rcon.password=test
+          PROPS
+
+          java -Xmx2G -jar paper.jar --nogui &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+          for i in $(seq 1 120); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then
+              echo "Server started successfully!"
+              break
+            fi
+            sleep 2
+          done
+
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "FAIL: Server did not start within 4 minutes"
+            cat logs/latest.log 2>/dev/null | tail -50 || true
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Wait for ViaVersion + op bot
+        run: |
+          # Wait for ViaVersion to load
+          for i in $(seq 1 30); do
+            if grep -qi "viaversion.*enable\|viaversion.*loaded\|protocol registry" logs/latest.log 2>/dev/null; then
+              echo "ViaVersion loaded!"
+              break
+            fi
+            sleep 2
+          done
+          sleep 3
+
+          # Op the test bot via RCON
+          python3 -c "
+          import socket, struct
+          def rcon_read_packet(sock):
+              try:
+                  raw = b''
+                  while len(raw) < 4:
+                      chunk = sock.recv(4 - len(raw))
+                      if not chunk: return None
+                      raw += chunk
+                  length = struct.unpack('<i', raw[:4])[0]
+                  if length < 8 or length > 4096: return None
+                  body_data = b''
+                  remaining = length
+                  while remaining > 0:
+                      chunk = sock.recv(min(remaining, 4096))
+                      if not chunk: return None
+                      body_data += chunk
+                      remaining -= len(chunk)
+                  if len(body_data) < 8: return None
+                  req_id = struct.unpack('<i', body_data[:4])[0]
+                  pkt_type = struct.unpack('<i', body_data[4:8])[0]
+                  payload = body_data[8:].rstrip(b'\x00').decode('utf-8', errors='replace')
+                  return (req_id, pkt_type, payload)
+              except: return None
+
+          def rcon_login(sock, password):
+              body = password.encode('utf-8') + b'\x00'
+              data = struct.pack('<ii', 1, 3) + body + b'\x00'
+              packet = struct.pack('<i', len(data)) + data
+              sock.sendall(packet)
+              for _ in range(2):
+                  pkt = rcon_read_packet(sock)
+                  if pkt is None: break
+                  req_id, pkt_type, _ = pkt
+                  if pkt_type == 2: return req_id == 1
+              return False
+
+          def rcon_send(sock, cmd, req_id=2):
+              body = cmd.encode('utf-8') + b'\x00'
+              data = struct.pack('<ii', req_id, 2) + body + b'\x00'
+              packet = struct.pack('<i', len(data)) + data
+              sock.sendall(packet)
+              pkt = rcon_read_packet(sock)
+              if pkt is None: return ''
+              _, _, payload = pkt
+              return payload
+
+          sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+          sock.settimeout(10)
+          sock.connect(('127.0.0.1', 25575))
+          if rcon_login(sock, 'test'):
+              resp = rcon_send(sock, 'op TestBot')
+              print(f'op TestBot: {repr(resp)}')
+          else:
+              print('WARNING: RCON login failed')
+          sock.close()
+          "
+
+      - name: Install mineflayer and run tests
+        run: |
+          npm install mineflayer
+          node mineflayer_test.js
+          TEST_EXIT=$?
+          echo "Mineflayer test exit code: $TEST_EXIT"
+          exit $TEST_EXIT
+
+      - name: Dump server exceptions
+        if: always()
+        run: |
+          if [ -f logs/latest.log ]; then
+            echo "=== Server exceptions ==="
+            grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No relevant exceptions found"
+          fi
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -n "$SERVER_PID" ]; then
+            kill $SERVER_PID 2>/dev/null || true
+            wait $SERVER_PID 2>/dev/null || true
+          fi
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mineflayer-test-log
+          path: logs/latest.log
+          retention-days: 7
