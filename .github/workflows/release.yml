@@ -4,10 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_run:
-    workflows: ["Build and Test", "Mineflayer In-Game Tests", "Scanner MySQL CI Tests"]
-    types: [completed]
-    branches: ["Latest"]
 
 permissions:
   contents: write
@@ -15,7 +11,6 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,31 +25,28 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=1.5.0" >> $GITHUB_OUTPUT
-          fi
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       - name: Extract changelog from patchnotes
         id: changelog
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           if [ -f patchnotes.md ]; then
-            # Extract the section for this version (from ## vVERSION to the next ## or ---)
-            CHANGELOG=$(awk "/^## v${VERSION}/,/^## v[^${VERSION:0:1}]/" patchnotes.md | head -n -1 | sed '/^---$/d')
-            if [ -z "$CHANGELOG" ]; then
-              # Fallback: grab everything from ## vVERSION to the next ---
-              CHANGELOG=$(sed -n "/^## v${VERSION}/,/^---$/p" patchnotes.md | sed '/^---$/d')
-            fi
+            # Extract only the section for this exact version:
+            # From the line starting with "## vVERSION" up to (but not including)
+            # the next line starting with "## v" or the "---" separator
+            CHANGELOG=$(awk -v ver="v${VERSION}" '
+              $0 ~ "^## " ver { found=1; next }
+              found && /^## v/ { found=0 }
+              found && /^---$/ { found=0 }
+              found { print }
+            ' patchnotes.md)
             if [ -z "$CHANGELOG" ]; then
               CHANGELOG="See patchnotes.md for details."
             fi
           else
             CHANGELOG="See commit history for details."
           fi
-          # Write to file for multiline output
           echo "$CHANGELOG" > /tmp/changelog.txt
           echo "Extracted changelog for v${VERSION}: $(wc -l < /tmp/changelog.txt) lines"
 
