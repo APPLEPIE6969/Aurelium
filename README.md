@@ -12,7 +12,7 @@ It features a multi-currency system, a flexible Server Market with three interfa
 ## Features
 
 ### Web Dashboard (Optional)
-Aurelium includes a modern, responsive web application that players can use to browse the Server Market, monitor stock trends, and engage with the Auction House from their browser.
+Aurelium includes a modern, responsive web application with [nearly 100% uptime](https://stats.uptimerobot.com/vzXzS8Op2J) that players can use to browse the Server Market, monitor stock trends, and engage with the Auction House from their browser.
 
 * **Server Market:** Fully functional directly from the web—purchase items and have them delivered instantly in-game!![Web Market](https://cdn.modrinth.com/data/cached_images/b28a02ddb620b4a6b5bc54be95508d4adaabba29.png)
 * **Auction House:** Fully interactive from the web—place bids and buyout items (BIN) securely. ![Web Auction House](https://cdn.modrinth.com/data/cached_images/d27ae421656ac26b76fbdc269d9ead39b93c471c.png)
