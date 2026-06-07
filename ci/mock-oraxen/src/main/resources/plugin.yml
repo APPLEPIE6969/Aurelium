@@ -1,0 +1,6 @@
+name: MockOraxen
+version: 1.0.0
+main: mock.MockOraxen
+author: TestAuthor
+description: Mock Oraxen plugin for CI testing
+api-version: "1.21"
