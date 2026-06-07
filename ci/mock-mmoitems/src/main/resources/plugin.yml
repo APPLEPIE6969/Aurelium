@@ -1,0 +1,6 @@
+name: MockMMOItems
+version: 1.0.0
+main: net.indyuce.mmoitems.MMOItems
+author: TestAuthor
+description: Mock MMOItems plugin for CI testing
+api-version: "1.21"
