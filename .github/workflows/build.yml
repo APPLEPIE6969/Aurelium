@@ -29,13 +29,13 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build 2>&1 | tee build.log
       - name: Upload JAR
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: Aurelium
           path: build/libs/*.jar
       - name: Upload build log on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: build-log
           path: build.log
@@ -52,7 +52,7 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
       - name: Download Aurelium
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: Aurelium
           path: plugins
@@ -157,7 +157,7 @@ jobs:
           fi
       - name: Upload server log on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: smoke-test-log
           path: logs/latest.log
@@ -174,7 +174,7 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
       - name: Download Aurelium
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: Aurelium
           path: plugins
@@ -220,7 +220,7 @@ jobs:
           fi
       - name: Upload server log on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: ingame-test-log
           path: logs/latest.log
@@ -250,7 +250,7 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
       - name: Download Aurelium
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v4
         with:
           name: Aurelium
           path: plugins
@@ -330,7 +330,7 @@ jobs:
           fi
       - name: Upload server log on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: mysql-test-log
           path: logs/latest.log
