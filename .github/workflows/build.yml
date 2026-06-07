@@ -28,13 +28,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Build with Gradle
         run: ./gradlew build 2>&1 | tee build.log
+      - name: List build/libs
+        run: ls -la build/libs/
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: Aurelium
           path: build/libs/*.jar
-      - name: Upload build log on failure
-        if: failure()
+      - name: Upload build log
         uses: actions/upload-artifact@v4
         with:
           name: build-log
