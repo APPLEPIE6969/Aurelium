@@ -27,12 +27,19 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew build 2>&1 | tee build.log
       - name: Upload JAR
         uses: actions/upload-artifact@v6
         with:
           name: Aurelium
           path: build/libs/*.jar
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
 
   smoke-test:
     runs-on: ubuntu-latest
