@@ -3,7 +3,6 @@ package com.aureleconomy.market;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.market.MarketItems.Category;
 import com.aureleconomy.scanner.CustomMarketItem;
-import com.aureleconomy.scanner.CustomMarketItem;
 import com.aureleconomy.market.MarketItems.MarketEntry;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -353,29 +352,6 @@ public class MarketManager {
                  ? customItem.getSellPrice() : getSellPrice(customItem.getItemStack().getType()));
      }
      
-     if (!itemCurrencies.containsKey(key)) {
-         itemCurrencies.put(key, plugin.getEconomyManager().getDefaultCurrency());
-     }
- }
-
- /**
-  * Add a custom item to the market system.
-  */
- public void addCustomMarketItem(String canonicalId, CustomMarketItem customItem) {
-     String key = canonicalId;
-     if (!entryCache.containsKey(key)) {
-         MarketEntry entry = new MarketEntry(customItem.getItemStack().getType(),
-                 customItem.getBuyPrice().doubleValue());
-         entryCache.put(key, entry);
-     }
-     if (!buyPrices.containsKey(key) || customItem.getBuyPrice().compareTo(BigDecimal.ZERO) >= 0) {
-         buyPrices.put(key, customItem.getBuyPrice().compareTo(BigDecimal.ZERO) >= 0
-                 ? customItem.getBuyPrice() : getBuyPrice(customItem.getItemStack().getType()));
-     }
-     if (!sellPrices.containsKey(key) || customItem.getSellPrice().compareTo(BigDecimal.ZERO) >= 0) {
-         sellPrices.put(key, customItem.getSellPrice().compareTo(BigDecimal.ZERO) >= 0
-                 ? customItem.getSellPrice() : getSellPrice(customItem.getItemStack().getType()));
-     }
      if (!itemCurrencies.containsKey(key)) {
          itemCurrencies.put(key, plugin.getEconomyManager().getDefaultCurrency());
      }
