@@ -7,7 +7,7 @@ on:
     branches: ["1.4.3", main, "Latest", "fix/mysql-compat-and-auction-displayname", "feature/custom-item-scanner"]
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   PAPER_BUILD: "65"
@@ -29,13 +29,13 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build 2>&1 | tee build.log
       - name: Upload JAR
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: Aurelium
           path: build/libs/*.jar
       - name: Upload build log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-log
           path: build.log
@@ -157,7 +157,7 @@ jobs:
           fi
       - name: Upload server log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-test-log
           path: logs/latest.log
@@ -220,7 +220,7 @@ jobs:
           fi
       - name: Upload server log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ingame-test-log
           path: logs/latest.log
@@ -330,7 +330,7 @@ jobs:
           fi
       - name: Upload server log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mysql-test-log
           path: logs/latest.log
