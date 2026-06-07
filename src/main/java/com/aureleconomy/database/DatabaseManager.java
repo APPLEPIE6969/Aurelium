@@ -162,7 +162,8 @@ public class DatabaseManager {
                     "buy_price DOUBLE, " +
                     "sell_price DOUBLE, " +
                     "timestamp LONG" +
-                    ")");<|image_sentinel|> createOffersTable(autoIncrement);
+                    ")"); 
+            createOffersTable(autoIncrement);
 
         } catch (SQLException e) {
             plugin.getComponentLogger().error("Could not create tables for " + databaseType + "!", e);
