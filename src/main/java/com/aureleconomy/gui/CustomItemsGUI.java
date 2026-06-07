@@ -41,7 +41,7 @@ public class CustomItemsGUI extends GUIHolder {
         setupItems();
     }
 
-    private void setupItems() {
+    public void setupItems() {
         itemSlots.clear();
         inventory.clear();
 
