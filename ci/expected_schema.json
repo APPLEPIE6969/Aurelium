@@ -1,0 +1,74 @@
+CREATE TABLE players (
+ uuid TEXT PRIMARY KEY,
+ username TEXT,
+ last_seen INTEGER
+);
+
+CREATE TABLE player_balances (
+ uuid TEXT PRIMARY KEY,
+ balance TEXT DEFAULT '0',
+ aurels TEXT DEFAULT '0'
+);
+
+CREATE TABLE auctions (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ seller TEXT NOT NULL,
+ item TEXT NOT NULL,
+ price REAL NOT NULL,
+ created INTEGER NOT NULL,
+ expires INTEGER NOT NULL,
+ cancelled INTEGER DEFAULT 0
+);
+
+CREATE TABLE offline_earnings (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ player TEXT NOT NULL,
+ currency TEXT NOT NULL,
+ amount REAL NOT NULL,
+ timestamp INTEGER NOT NULL
+);
+
+CREATE TABLE buy_orders (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ player TEXT NOT NULL,
+ material TEXT NOT NULL,
+ amount INTEGER NOT NULL,
+ price REAL NOT NULL,
+ created INTEGER NOT NULL,
+ filled INTEGER DEFAULT 0
+);
+
+CREATE TABLE price_history (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ material TEXT NOT NULL,
+ currency TEXT NOT NULL,
+ price REAL NOT NULL,
+ timestamp INTEGER NOT NULL
+);
+
+CREATE TABLE auction_offers (
+ auction_id INTEGER NOT NULL,
+ buyer TEXT NOT NULL,
+ price REAL NOT NULL,
+ timestamp INTEGER NOT NULL,
+ FOREIGN KEY (auction_id) REFERENCES auctions(id)
+);
+
+CREATE TABLE custom_items (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ canonical_id TEXT UNIQUE,
+ source TEXT NOT NULL,
+ display_name TEXT,
+ item_json TEXT NOT NULL,
+ pdc_key TEXT,
+ model_key TEXT,
+ lore_hash TEXT,
+ native_id TEXT,
+ category TEXT,
+ buy_price REAL DEFAULT -1,
+ sell_price REAL DEFAULT -1,
+ enabled INTEGER DEFAULT 1,
+ discovery TEXT,
+ first_seen INTEGER NOT NULL,
+ last_seen INTEGER NOT NULL
+);
