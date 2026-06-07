@@ -1,0 +1,6 @@
+name: MockItemsAdder
+version: 1.0.0
+main: dev.lone.itemsadder.MockItemsAdderPlugin
+author: TestAuthor
+description: Mock ItemsAdder plugin for CI testing
+api-version: "1.21"
