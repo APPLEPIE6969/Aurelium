@@ -1,4 +1,4 @@
-# Aurelium Configuration (v1.5.0)
+# Aurelium Configuration (v1.5.1)
 
 # Don't touch this, used for auto-migration
 config-version: 1
@@ -119,7 +119,7 @@ web:
 
   # Only used when mode is "cloud"
   cloud:
-    url: "https://aurelium-web.onrender.com"
+    url: "https://webaureliummc.onrender.com"
     # Auto-generated on first run, don't share these
     server-id: ""
     api-key: ""
