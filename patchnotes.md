@@ -1,5 +1,13 @@
 # Aurelium - Patch Notes
 
+## v1.5.1 - Cloud Dashboard URL Fix
+
+### Fixes
+
+- **Cloud Dashboard Registration**: Fixed cloud URL in default config from `https://webaureliummc.onrender.com` (non-existent domain) to `https://aurelium-web.onrender.com` — the actual dashboard endpoint. Servers using cloud mode will now successfully register and sync data.
+
+---
+
 ## v1.5.0 - Custom Item Scanner & Stability Improvements
 
 **Aurelium now automatically discovers custom items from popular third-party plugins and integrates them seamlessly into your server market—no manual configuration required.**
