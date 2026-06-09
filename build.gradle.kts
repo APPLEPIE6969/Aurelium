@@ -2,7 +2,7 @@ plugins {
     id("java")
     id("io.github.goooler.shadow") version "8.1.8" apply false
     id("com.github.spotbugs") version "6.1.7" apply false
-    id("jacoco") apply false
+    // jacoco is a core plugin — don't declare with apply false
 }
 
 group = "com.aureleconomy"
