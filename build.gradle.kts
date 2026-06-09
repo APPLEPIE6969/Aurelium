@@ -15,58 +15,62 @@ tasks.jar { enabled = false }
 tasks.compileTestJava { enabled = false }
 tasks.test { enabled = false }
 
+// Configure version-specific subprojects (apply shadow plugin, etc.)
 subprojects {
-    apply(plugin = "java")
-    apply(plugin = "io.github.goooler.shadow")
+    if (name.startsWith("v")) {
+        apply(plugin = "java")
+        apply(plugin = "io.github.goooler.shadow")
 
-    group = rootProject.group
-    version = rootProject.version
+        group = rootProject.group
+        version = rootProject.version
 
-    repositories {
-        mavenCentral()
-        maven("https://repo.papermc.io/repository/maven-public/")
-        maven("https://jitpack.io")
-    }
-
-    dependencies {
-        compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
-            exclude(group = "org.bukkit", module = "bukkit")
+        repositories {
+            mavenCentral()
+            maven("https://repo.papermc.io/repository/maven-public/")
+            maven("https://jitpack.io")
         }
 
-        // Shaded dependencies (bundled into the plugin JAR)
-        implementation("com.zaxxer:HikariCP:5.1.0")
-        implementation("com.mysql:mysql-connector-j:8.3.0")
-        implementation("com.google.code.gson:gson:2.10.1")
+        dependencies {
+            compileOnly("com.github.MilkBowl:VaultAPI:1.7") {
+                exclude(group = "org.bukkit", module = "bukkit")
+            }
 
-        // Test dependencies
-        testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-        testImplementation("org.mockito:mockito-core:5.23.0")
-        testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
-        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-        testRuntimeOnly("org.xerial:sqlite-jdbc:3.45.3.0")
-    }
+            // Shaded dependencies (bundled into the plugin JAR)
+            implementation("com.zaxxer:HikariCP:5.1.0")
+            implementation("com.mysql:mysql-connector-j:8.3.0")
+            implementation("com.google.code.gson:gson:2.10.1")
 
-    tasks.test {
-        useJUnitPlatform()
-    }
+            // Test dependencies
+            testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+            testImplementation("org.mockito:mockito-core:5.23.0")
+            testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
+            testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+            testRuntimeOnly("org.xerial:sqlite-jdbc:3.45.3.0")
+            testRuntimeOnly("net.bytebuddy:byte-buddy-agent:1.17.7")
+        }
 
-    tasks.withType<ProcessResources>().configureEach {
-        filteringCharset = Charsets.UTF_8.name()
-    }
+        tasks.test {
+            useJUnitPlatform()
+        }
 
-    tasks.build {
-        dependsOn(tasks.shadowJar)
-    }
+        tasks.withType<ProcessResources>().configureEach {
+            filteringCharset = Charsets.UTF_8.name()
+        }
 
-    shadowJar {
-        relocate("com.zaxxer.hikari", "com.aureleconomy.lib.hikari")
-        relocate("com.mysql", "com.aureleconomy.lib.mysql")
-        relocate("com.google.gson", "com.aureleconomy.lib.gson")
-        archiveClassifier.set("")
-    }
+        tasks.build {
+            dependsOn(tasks.shadowJar)
+        }
 
-    tasks.jar {
-        enabled = false
+        shadowJar {
+            relocate("com.zaxxer.hikari", "com.aureleconomy.lib.hikari")
+            relocate("com.mysql", "com.aureleconomy.lib.mysql")
+            relocate("com.google.gson", "com.aureleconomy.lib.gson")
+            archiveClassifier.set("")
+        }
+
+        tasks.jar {
+            enabled = false
+        }
     }
 }
 
