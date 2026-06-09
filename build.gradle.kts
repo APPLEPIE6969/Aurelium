@@ -2,7 +2,6 @@ plugins {
     id("java")
     id("io.github.goooler.shadow") version "8.1.8" apply false
     id("com.github.spotbugs") version "6.1.7" apply false
-    // jacoco is a core plugin — don't declare with apply false
 }
 
 group = "com.aureleconomy"
@@ -15,7 +14,7 @@ tasks.jar { enabled = false }
 tasks.compileTestJava { enabled = false }
 tasks.test { enabled = false }
 
-// Configure version-specific subprojects (apply java + shadow)
+// Configure version-specific subprojects
 subprojects {
     if (name.startsWith("v")) {
         apply(plugin = "java")
@@ -57,18 +56,18 @@ subprojects {
             filteringCharset = Charsets.UTF_8.name()
         }
 
-        tasks.build {
-            dependsOn(tasks.shadowJar)
+        tasks.named("build") {
+            dependsOn(tasks.named("shadowJar"))
         }
 
-        shadowJar {
+        tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
             relocate("com.zaxxer.hikari", "com.aureleconomy.lib.hikari")
             relocate("com.mysql", "com.aureleconomy.lib.mysql")
             relocate("com.google.gson", "com.aureleconomy.lib.gson")
             archiveClassifier.set("")
         }
 
-        tasks.jar {
+        tasks.named<Jar>("jar") {
             enabled = false
         }
     }
