@@ -44,24 +44,18 @@ dependencies {
 sourceSets {
     main {
         java {
-            srcDirs = [
-                "../../src/main/java",
-                "src/main/java"
-            ]
+            srcDirs("../../src/main/java", "src/main/java")
         }
         resources {
-            srcDirs = ["../../src/main/resources"]
+            srcDirs("../../src/main/resources")
         }
     }
     test {
         java {
-            srcDirs = [
-                "../../src/test/java",
-                "src/test/java"
-            ]
+            srcDirs("../../src/test/java", "src/test/java")
         }
         resources {
-            srcDirs = ["../../src/test/resources"]
+            srcDirs("../../src/test/resources")
         }
     }
 }
