@@ -17,15 +17,12 @@ repositories {
 }
 
 dependencies {
-    // Paper 1.21.11 API (compatible with all 1.21.x versions)
     compileOnly("io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT")
 
-    // Shaded dependencies
     implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("com.mysql:mysql-connector-j:8.3.0")
     implementation("com.google.code.gson:gson:2.10.1")
 
-    // Test dependencies
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation("org.mockito:mockito-core:5.23.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
@@ -63,13 +60,8 @@ spotbugs {
     reportLevel.set(com.github.spotbugs.snom.Confidence.HIGH)
 }
 
-tasks.spotbugsMain {
-    enabled = false
-}
-
-tasks.spotbugsTest {
-    enabled = false
-}
+tasks.spotbugsMain { enabled = false }
+tasks.spotbugsTest { enabled = false }
 
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
@@ -119,18 +111,16 @@ tasks.test {
     }
 }
 
-shadowJar {
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     archiveBaseName = "Aurelium-1.21.11"
     archiveVersion = "1.5.1"
 
-    // Relocate shaded dependencies
     relocate("com.zaxxer.hikari", "com.aureleconomy.lib.hikari")
     relocate("com.mysql", "com.aureleconomy.lib.mysql")
     relocate("com.google.gson", "com.aureleconomy.lib.gson")
-    // Don't minimize — causes issues with sqlite-jdbc native libs
 
     manifest {
-        attributes["Main-Class"] = "com.aureleconomy.AurelEconomy"
-        attributes["Implementation-Version"] = "1.5.1"
+        attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
+        attributes("Implementation-Version" to "1.5.1")
     }
 }
