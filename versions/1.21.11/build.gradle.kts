@@ -115,9 +115,8 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
     archiveBaseName = "Aurelium-1.21.11"
     archiveVersion = "1.5.1"
 
-    relocate("com.zaxxer.hikari", "com.aureleconomy.lib.hikari")
-    relocate("com.mysql", "com.aureleconomy.lib.mysql")
-    relocate("com.google.gson", "com.aureleconomy.lib.gson")
+    // No relocate — ASM compatibility issue with Java 21 + shadow 8.1.8
+    // Relocate only in 26.1.2 (Java 25)
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
