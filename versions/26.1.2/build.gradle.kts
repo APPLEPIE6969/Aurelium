@@ -1,10 +1,3 @@
-plugins {
-    id("java")
-    id("io.github.goooler.shadow")
-    id("com.github.spotbugs")
-    id("jacoco")
-}
-
 group = "com.aureleconomy"
 version = "1.5.1"
 
