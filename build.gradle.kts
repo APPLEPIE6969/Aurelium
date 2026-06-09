@@ -77,5 +77,5 @@ subprojects {
 tasks.register("buildAll") {
     group = "build"
     description = "Builds the plugin for all supported Minecraft versions"
-    dependsOn(subprojects.map { it.tasks.named("build") })
+    dependsOn(subprojects.filter { it.name.startsWith("v") }.map { it.tasks.named("build") })
 }
