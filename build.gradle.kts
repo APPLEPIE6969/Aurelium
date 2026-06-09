@@ -15,13 +15,11 @@ tasks.jar { enabled = false }
 tasks.compileTestJava { enabled = false }
 tasks.test { enabled = false }
 
-// Configure version-specific subprojects (apply shadow, spotbugs, jacoco)
+// Configure version-specific subprojects (apply java + shadow)
 subprojects {
     if (name.startsWith("v")) {
         apply(plugin = "java")
         apply(plugin = "io.github.goooler.shadow")
-        apply(plugin = "com.github.spotbugs")
-        apply(plugin = "jacoco")
 
         group = rootProject.group
         version = rootProject.version
@@ -49,35 +47,6 @@ subprojects {
             testRuntimeOnly("org.junit.platform:junit-platform-launcher")
             testRuntimeOnly("org.xerial:sqlite-jdbc:3.45.3.0")
             testRuntimeOnly("net.bytebuddy:byte-buddy-agent:1.17.7")
-        }
-
-        // Spotbugs config
-        extensions.configure<com.github.spotbugs.snom.SpotBugsExtension> {
-            effort.set(com.github.spotbugs.snom.Effort.MAX)
-            reportLevel.set(com.github.spotbugs.snom.Confidence.HIGH)
-        }
-        tasks.named("spotbugsMain") { enabled = false }
-        tasks.named("spotbugsTest") { enabled = false }
-
-        // Jacoco config
-        tasks.named<org.gradle.testing.jacoco.tasks.JacocoReport>("jacocoTestReport") {
-            dependsOn(tasks.test)
-            reports {
-                xml.required = true
-                html.required = true
-            }
-        }
-        tasks.named<org.gradle.testing.jacoco.tasks.JacocoCoverageVerification>("jacocoTestCoverageVerification") {
-            violationRules {
-                rule {
-                    limit {
-                        minimum = "0.0".toBigDecimal()
-                    }
-                }
-            }
-        }
-        tasks.check {
-            dependsOn(tasks.named("jacocoTestCoverageVerification"))
         }
 
         tasks.test {
