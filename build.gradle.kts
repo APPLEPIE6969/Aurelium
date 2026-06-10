@@ -1,6 +1,6 @@
 plugins {
     id("java")
-    id("io.github.goooler.shadow") version "8.1.8" apply false
+    id("io.github.goooler.shadow") version "8.2.0" apply false
     id("com.github.spotbugs") version "6.1.7" apply false
 }
 
@@ -59,9 +59,6 @@ subprojects {
         tasks.named("build") {
             dependsOn(tasks.named("shadowJar"))
         }
-
-        // Each version subproject configures its own shadowJar (including relocate for 26.1.2)
-        // Do NOT configure relocate here — causes ASM issues on Java 21
 
         tasks.named<Jar>("jar") {
             enabled = false
