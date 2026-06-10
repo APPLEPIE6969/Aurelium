@@ -1,6 +1,6 @@
 plugins {
     id("java")
-    id("io.github.goooler.shadow") version "8.2.0" apply false
+    id("com.github.jengelman.shadow") version "9.0.0" apply false
     id("com.github.spotbugs") version "6.1.7" apply false
 }
 
@@ -18,7 +18,7 @@ tasks.test { enabled = false }
 subprojects {
     if (name.startsWith("v")) {
         apply(plugin = "java")
-        apply(plugin = "io.github.goooler.shadow")
+        apply(plugin = "com.github.jengelman.shadow")
 
         group = rootProject.group
         version = rootProject.version
