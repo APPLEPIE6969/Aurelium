@@ -1,6 +1,6 @@
 plugins {
     id("java")
-    id("com.github.jengelman.shadow") version "9.0.0" apply false
+    id("com.github.jengelman.shadow") version "8.1.8" apply false
     id("com.github.spotbugs") version "6.1.7" apply false
 }
 
