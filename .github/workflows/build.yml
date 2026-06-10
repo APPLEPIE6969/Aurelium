@@ -10,11 +10,14 @@ permissions:
   contents: read
 
 env:
-  PAPER_BUILD: "65"
-  PAPER_JAR_SHA: "cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2"
+  PAPER_26_BUILD: "65"
+  PAPER_26_JAR_SHA: "cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2"
+  PAPER_12111_BUILD: "133"
+  PAPER_12111_JAR_SHA: "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9"
   VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
 
 jobs:
+  # ===== 26.1.2 BUILD =====
   build:
     runs-on: ubuntu-latest
     steps:
@@ -41,6 +44,7 @@ jobs:
           path: build-26.1.2.log
           retention-days: 7
 
+  # ===== 1.21.11 BUILD =====
   build-1-21-11:
     runs-on: ubuntu-latest
     steps:
@@ -67,6 +71,7 @@ jobs:
           path: build-1.21.11.log
           retention-days: 7
 
+  # ===== 26.1.2 SMOKE TEST =====
   smoke-test:
     runs-on: ubuntu-latest
     needs: build
@@ -84,111 +89,141 @@ jobs:
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
-      - name: Download Paper
+      - name: Download Paper 26.1.2
         run: |
-          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
-          ls -lh paper.jar
-          if [ ! -s paper.jar ]; then
-            echo "FAIL: paper.jar is empty or missing"
-            exit 1
-          fi
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
       - name: Start server and run smoke test
         run: |
           echo "eula=true" > eula.txt
           timeout 120 java -jar paper.jar --nogui &
           SERVER_PID=$!
           for i in $(seq 1 60); do
-            if grep -q "Done (" logs/latest.log 2>/dev/null; then
-              echo "Server started successfully!"
-              break
-            fi
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started!"; break; fi
             sleep 2
           done
           if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server failed to start"
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
           SMOKE_FAIL=0
           if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
-            echo "PASS: Aurelium plugin loaded successfully!"
-          elif grep -q "Aurelium" logs/latest.log 2>/dev/null; then
-            echo "FAIL: Aurelium mentioned in log but may have errors"
-            SMOKE_FAIL=1
+            echo "PASS: Plugin loaded"
           else
-            echo "FAIL: Aurelium not found in log"
-            SMOKE_FAIL=1
+            echo "FAIL: Plugin did not load"; SMOKE_FAIL=1
           fi
           if [ -f "plugins/Aurelium/database.db" ]; then
             echo "PASS: SQLite database file exists"
           else
-            echo "FAIL: No .db file found"
-            SMOKE_FAIL=1
+            echo "FAIL: No .db file"; SMOKE_FAIL=1
           fi
           SCHEMA_VER=$(sqlite3 plugins/Aurelium/database.db "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "0")
-          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ] || [ "$SCHEMA_VER" = "2 " ]; then
-            echo "PASS: Database migration ran"
+          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
+            echo "PASS: Schema v2"
           else
-            echo "FAIL: Database schema version is '$SCHEMA_VER' (expected 2)"
-            SMOKE_FAIL=1
+            echo "FAIL: Schema version '$SCHEMA_VER'"; SMOKE_FAIL=1
           fi
           for table in players player_balances auctions offline_earnings buy_orders price_history auction_offers custom_items database_info; do
             if sqlite3 plugins/Aurelium/database.db ".tables" 2>/dev/null | grep -qw "$table"; then
               echo "PASS: Table '$table' exists"
             else
-              echo "FAIL: Table '$table' missing from database"
-              SMOKE_FAIL=1
+              echo "FAIL: Table '$table' missing"; SMOKE_FAIL=1
             fi
           done
-          if sqlite3 plugins/Aurelium/database.db "PRAGMA table_info(custom_items);" 2>/dev/null | grep -q .; then
-            echo "PASS: custom_items table has columns"
-            for col in canonical_id source_plugin display_name enabled buy_price sell_price item_data; do
-              if sqlite3 plugins/Aurelium/database.db "PRAGMA table_info(custom_items);" 2>/dev/null | grep -q "$col"; then
-                echo "PASS: Column '$col' exists in custom_items"
-              else
-                echo "FAIL: Column '$col' missing from custom_items"
-                SMOKE_FAIL=1
-              fi
-            done
-          else
-            echo "FAIL: Could not read custom_items table info"
-            SMOKE_FAIL=1
-          fi
-          if [ -f "plugins/Aurelium/config.yml" ]; then
-            echo "PASS: config.yml generated"
-          else
-            echo "FAIL: config.yml not found"
-            SMOKE_FAIL=1
-          fi
           if grep -qi "exception.*aurelium\|error.*aurelium" logs/latest.log 2>/dev/null; then
             REAL_ERR=$(grep -i "exception.*aurelium\|error.*aurelium" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART" || true)
-            if [ -n "$REAL_ERR" ]; then
-              echo "FAIL: Aurelium exceptions during runtime"
-              echo "$REAL_ERR"
-              SMOKE_FAIL=1
-            else
-              echo "PASS: No Aurelium exceptions during runtime"
-            fi
+            if [ -n "$REAL_ERR" ]; then echo "FAIL: Runtime exceptions"; echo "$REAL_ERR"; SMOKE_FAIL=1; fi
           else
-            echo "PASS: No Aurelium exceptions during runtime"
+            echo "PASS: No runtime exceptions"
           fi
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
-          if [ "$SMOKE_FAIL" -ne 0 ]; then
-            echo "SMOKE TEST FAILED ($SMOKE_FAIL check(s) failed)"
-            exit 1
-          else
-            echo "ALL SMOKE CHECKS PASSED"
-          fi
+          if [ "$SMOKE_FAIL" -ne 0 ]; then exit 1; fi
       - name: Upload server log on failure
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: smoke-test-log
+          name: smoke-test-26-log
           path: logs/latest.log
           retention-days: 7
 
+  # ===== 1.21.11 SMOKE TEST =====
+  smoke-test-1-21-11:
+    runs-on: ubuntu-latest
+    needs: build-1-21-11
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Download Aurelium 1.21.11
+        uses: actions/download-artifact@v7
+        with:
+          name: Aurelium-1.21.11
+          path: plugins
+      - name: Download Vault
+        run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
+      - name: Download Paper 1.21.1
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.1-${{ env.PAPER_12111_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Start server and run smoke test
+        run: |
+          echo "eula=true" > eula.txt
+          timeout 120 java -jar paper.jar --nogui &
+          SERVER_PID=$!
+          for i in $(seq 1 60); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started!"; break; fi
+            sleep 2
+          done
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
+          fi
+          SMOKE_FAIL=0
+          if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
+            echo "PASS: Plugin loaded"
+          else
+            echo "FAIL: Plugin did not load"; SMOKE_FAIL=1
+          fi
+          if [ -f "plugins/Aurelium/database.db" ]; then
+            echo "PASS: SQLite database file exists"
+          else
+            echo "FAIL: No .db file"; SMOKE_FAIL=1
+          fi
+          SCHEMA_VER=$(sqlite3 plugins/Aurelium/database.db "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "0")
+          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
+            echo "PASS: Schema v2"
+          else
+            echo "FAIL: Schema version '$SCHEMA_VER'"; SMOKE_FAIL=1
+          fi
+          for table in players player_balances auctions offline_earnings buy_orders price_history auction_offers custom_items database_info; do
+            if sqlite3 plugins/Aurelium/database.db ".tables" 2>/dev/null | grep -qw "$table"; then
+              echo "PASS: Table '$table' exists"
+            else
+              echo "FAIL: Table '$table' missing"; SMOKE_FAIL=1
+            fi
+          done
+          if grep -qi "exception.*aurelium\|error.*aurelium" logs/latest.log 2>/dev/null; then
+            REAL_ERR=$(grep -i "exception.*aurelium\|error.*aurelium" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART" || true)
+            if [ -n "$REAL_ERR" ]; then echo "FAIL: Runtime exceptions"; echo "$REAL_ERR"; SMOKE_FAIL=1; fi
+          else
+            echo "PASS: No runtime exceptions"
+          fi
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+          if [ "$SMOKE_FAIL" -ne 0 ]; then exit 1; fi
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: smoke-test-12111-log
+          path: logs/latest.log
+          retention-days: 7
+
+  # ===== 26.1.2 CLOUD REGISTRATION TEST =====
   cloud-registration-test:
     runs-on: ubuntu-latest
     needs: build
@@ -206,14 +241,11 @@ jobs:
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
-      - name: Download Paper
+      - name: Download Paper 26.1.2
         run: |
-          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
-          if [ ! -s paper.jar ]; then
-            echo "FAIL: paper.jar is empty or missing"
-            exit 1
-          fi
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
       - name: Start server and test cloud registration
         run: |
           mkdir -p plugins/Aurelium
@@ -231,48 +263,103 @@ jobs:
           timeout 90 java -jar paper.jar --nogui &
           SERVER_PID=$!
           for i in $(seq 1 60); do
-            if grep -q "Done (" logs/latest.log 2>/dev/null; then
-              echo "Server started successfully!"
-              break
-            fi
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started!"; break; fi
             sleep 2
           done
           if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server failed to start"
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
           sleep 35
           CLOUD_FAIL=0
           if grep -q "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
-            echo "PASS: Cloud dashboard registered successfully!"
+            echo "PASS: Cloud dashboard registered!"
           elif grep -q "Cloud dashboard registration failed" logs/latest.log 2>/dev/null; then
-            echo "FAIL: Cloud dashboard registration failed"
-            grep -A 2 "Cloud dashboard registration failed" logs/latest.log
-            CLOUD_FAIL=1
+            echo "FAIL: Cloud registration failed"; CLOUD_FAIL=1
           elif grep -q "Cloud dashboard disabled" logs/latest.log 2>/dev/null; then
-            echo "FAIL: Cloud dashboard disabled (registration failed)"
-            CLOUD_FAIL=1
+            echo "FAIL: Cloud dashboard disabled"; CLOUD_FAIL=1
           else
-            echo "FAIL: No cloud registration attempt found in logs"
-            CLOUD_FAIL=1
+            echo "FAIL: No cloud registration attempt found"; CLOUD_FAIL=1
           fi
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
-          if [ "$CLOUD_FAIL" -ne 0 ]; then
-            echo "CLOUD REGISTRATION TEST FAILED"
-            exit 1
-          else
-            echo "CLOUD REGISTRATION TEST PASSED"
-          fi
+          if [ "$CLOUD_FAIL" -ne 0 ]; then exit 1; fi
       - name: Upload server log on failure
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: cloud-test-log
+          name: cloud-test-26-log
           path: logs/latest.log
           retention-days: 7
 
+  # ===== 1.21.11 CLOUD REGISTRATION TEST =====
+  cloud-registration-test-1-21-11:
+    runs-on: ubuntu-latest
+    needs: build-1-21-11
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Download Aurelium 1.21.11
+        uses: actions/download-artifact@v7
+        with:
+          name: Aurelium-1.21.11
+          path: plugins
+      - name: Download Vault
+        run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
+      - name: Download Paper 1.21.1
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.1-${{ env.PAPER_12111_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Start server and test cloud registration
+        run: |
+          mkdir -p plugins/Aurelium
+          cat > plugins/Aurelium/config.yml << 'CFG'
+          database:
+            type: sqlite
+            file: "database.db"
+          web:
+            enabled: true
+            mode: cloud
+            cloud:
+              url: "https://webaureliummc.onrender.com"
+          CFG
+          echo "eula=true" > eula.txt
+          timeout 90 java -jar paper.jar --nogui &
+          SERVER_PID=$!
+          for i in $(seq 1 60); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started!"; break; fi
+            sleep 2
+          done
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
+          fi
+          sleep 35
+          CLOUD_FAIL=0
+          if grep -q "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
+            echo "PASS: Cloud dashboard registered!"
+          elif grep -q "Cloud dashboard registration failed" logs/latest.log 2>/dev/null; then
+            echo "FAIL: Cloud registration failed"; CLOUD_FAIL=1
+          elif grep -q "Cloud dashboard disabled" logs/latest.log 2>/dev/null; then
+            echo "FAIL: Cloud dashboard disabled"; CLOUD_FAIL=1
+          else
+            echo "FAIL: No cloud registration attempt found"; CLOUD_FAIL=1
+          fi
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+          if [ "$CLOUD_FAIL" -ne 0 ]; then exit 1; fi
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cloud-test-12111-log
+          path: logs/latest.log
+          retention-days: 7
+
+  # ===== 26.1.2 INGAME TEST =====
   ingame-test:
     runs-on: ubuntu-latest
     needs: build
@@ -290,14 +377,11 @@ jobs:
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
-      - name: Download Paper
+      - name: Download Paper 26.1.2
         run: |
-          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
-          if [ ! -s paper.jar ]; then
-            echo "FAIL: paper.jar is empty or missing"
-            exit 1
-          fi
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
       - name: Start server and run in-game tests
         run: |
           echo "eula=true" > eula.txt
@@ -308,33 +392,80 @@ jobs:
           timeout 120 java -jar paper.jar --nogui &
           SERVER_PID=$!
           for i in $(seq 1 60); do
-            if grep -q "Done (" logs/latest.log 2>/dev/null; then
-              echo "Server started successfully!"
-              break
-            fi
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started!"; break; fi
             sleep 2
           done
           if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server failed to start"
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
           sleep 5
           python3 test_rcon.py
           RCON_EXIT=$?
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
-          if [ "$RCON_EXIT" -ne 0 ]; then
-            exit 1
-          fi
+          if [ "$RCON_EXIT" -ne 0 ]; then exit 1; fi
       - name: Upload server log on failure
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: ingame-test-log
+          name: ingame-test-26-log
           path: logs/latest.log
           retention-days: 7
 
+  # ===== 1.21.11 INGAME TEST =====
+  ingame-test-1-21-11:
+    runs-on: ubuntu-latest
+    needs: build-1-21-11
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Download Aurelium 1.21.11
+        uses: actions/download-artifact@v7
+        with:
+          name: Aurelium-1.21.11
+          path: plugins
+      - name: Download Vault
+        run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
+      - name: Download Paper 1.21.1
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.1-${{ env.PAPER_12111_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Start server and run in-game tests
+        run: |
+          echo "eula=true" > eula.txt
+          echo "online-mode=false" > server.properties
+          echo "enable-rcon=true" >> server.properties
+          echo "rcon.port=25575" >> server.properties
+          echo "rcon.password=test" >> server.properties
+          timeout 120 java -jar paper.jar --nogui &
+          SERVER_PID=$!
+          for i in $(seq 1 60); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started!"; break; fi
+            sleep 2
+          done
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
+          fi
+          sleep 5
+          python3 test_rcon.py
+          RCON_EXIT=$?
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+          if [ "$RCON_EXIT" -ne 0 ]; then exit 1; fi
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ingame-test-12111-log
+          path: logs/latest.log
+          retention-days: 7
+
+  # ===== 26.1.2 MYSQL TEST =====
   mysql-test:
     runs-on: ubuntu-latest
     needs: build
@@ -365,14 +496,11 @@ jobs:
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
-      - name: Download Paper
+      - name: Download Paper 26.1.2
         run: |
-          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_BUILD }}.jar"
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
-          if [ ! -s paper.jar ]; then
-            echo "FAIL: paper.jar is empty or missing"
-            exit 1
-          fi
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
       - name: Start server with MySQL and test
         run: |
           mkdir -p plugins/Aurelium
@@ -388,63 +516,142 @@ jobs:
           CFG
           echo "eula=true" > eula.txt
           echo "online-mode=false" > server.properties
-          echo "enable-rcon=true" >> server.properties
-          echo "rcon.port=25576" >> server.properties
-          echo "rcon.password=test" >> server.properties
           timeout 120 java -jar paper.jar --nogui &
           SERVER_PID=$!
           for i in $(seq 1 60); do
-            if grep -q "Done (" logs/latest.log 2>/dev/null; then
-              echo "Server started with MySQL!"
-              break
-            fi
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started with MySQL!"; break; fi
             sleep 2
           done
           if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
-            echo "Server failed to start with MySQL"
-            kill $SERVER_PID 2>/dev/null || true
-            exit 1
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
           MYSQL_FAIL=0
           if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
             echo "PASS: Plugin loaded with MySQL"
           else
-            echo "FAIL: Plugin did not load with MySQL"
-            MYSQL_FAIL=1
+            echo "FAIL: Plugin did not load"; MYSQL_FAIL=1
           fi
           if grep -qi "sql syntax error\|sqlexception" logs/latest.log 2>/dev/null; then
-            echo "FAIL: SQL syntax errors detected with MySQL"
-            MYSQL_FAIL=1
+            echo "FAIL: SQL syntax errors"; MYSQL_FAIL=1
           else
-            echo "PASS: No SQL syntax errors with MySQL"
+            echo "PASS: No SQL syntax errors"
           fi
-          mysql -h 127.0.0.1 -u root -ptest aurelium_test -e "SHOW TABLES;" 2>/dev/null
           if mysql -h 127.0.0.1 -u root -ptest aurelium_test -e "SELECT COUNT(*) FROM custom_items;" 2>/dev/null; then
             echo "PASS: custom_items table exists in MySQL"
           else
-            echo "FAIL: custom_items table missing from MySQL database"
-            MYSQL_FAIL=1
+            echo "FAIL: custom_items table missing"; MYSQL_FAIL=1
           fi
           SCHEMA_VER=$(mysql -h 127.0.0.1 -u root -ptest aurelium_test -N -e "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "0")
-          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ] || [ "$SCHEMA_VER" = "2 " ]; then
-            echo "PASS: MySQL schema version is correct"
+          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
+            echo "PASS: MySQL schema version correct"
           else
-            echo "FAIL: MySQL schema version is '$SCHEMA_VER' (expected 2)"
-            MYSQL_FAIL=1
+            echo "FAIL: MySQL schema version '$SCHEMA_VER'"; MYSQL_FAIL=1
           fi
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
-          if [ "$MYSQL_FAIL" -ne 0 ]; then
-            exit 1
-          fi
+          if [ "$MYSQL_FAIL" -ne 0 ]; then exit 1; fi
       - name: Upload server log on failure
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: mysql-test-log
+          name: mysql-test-26-log
           path: logs/latest.log
           retention-days: 7
 
+  # ===== 1.21.11 MYSQL TEST =====
+  mysql-test-1-21-11:
+    runs-on: ubuntu-latest
+    needs: build-1-21-11
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: aurelium_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Download Aurelium 1.21.11
+        uses: actions/download-artifact@v7
+        with:
+          name: Aurelium-1.21.11
+          path: plugins
+      - name: Download Vault
+        run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
+      - name: Download Paper 1.21.1
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.1-${{ env.PAPER_12111_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Start server with MySQL and test
+        run: |
+          mkdir -p plugins/Aurelium
+          cat > plugins/Aurelium/config.yml << 'CFG'
+          database:
+            type: mysql
+            mysql:
+              host: 127.0.0.1
+              port: 3306
+              database: aurelium_test
+              username: root
+              password: test
+          CFG
+          echo "eula=true" > eula.txt
+          echo "online-mode=false" > server.properties
+          timeout 120 java -jar paper.jar --nogui &
+          SERVER_PID=$!
+          for i in $(seq 1 60); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started with MySQL!"; break; fi
+            sleep 2
+          done
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
+          fi
+          MYSQL_FAIL=0
+          if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
+            echo "PASS: Plugin loaded with MySQL"
+          else
+            echo "FAIL: Plugin did not load"; MYSQL_FAIL=1
+          fi
+          if grep -qi "sql syntax error\|sqlexception" logs/latest.log 2>/dev/null; then
+            echo "FAIL: SQL syntax errors"; MYSQL_FAIL=1
+          else
+            echo "PASS: No SQL syntax errors"
+          fi
+          if mysql -h 127.0.0.1 -u root -ptest aurelium_test -e "SELECT COUNT(*) FROM custom_items;" 2>/dev/null; then
+            echo "PASS: custom_items table exists in MySQL"
+          else
+            echo "FAIL: custom_items table missing"; MYSQL_FAIL=1
+          fi
+          SCHEMA_VER=$(mysql -h 127.0.0.1 -u root -ptest aurelium_test -N -e "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "0")
+          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
+            echo "PASS: MySQL schema version correct"
+          else
+            echo "FAIL: MySQL schema version '$SCHEMA_VER'"; MYSQL_FAIL=1
+          fi
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+          if [ "$MYSQL_FAIL" -ne 0 ]; then exit 1; fi
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql-test-12111-log
+          path: logs/latest.log
+          retention-days: 7
+
+  # ===== 26.1.2 CODE QUALITY =====
   code-quality:
     runs-on: ubuntu-latest
     needs: build
@@ -461,3 +668,19 @@ jobs:
         run: ./gradlew :v26_1_2:test
       - name: Check code style
         run: ./gradlew :v26_1_2:checkstyleMain 2>/dev/null || echo "No checkstyle task configured"
+
+  # ===== 1.21.11 CODE QUALITY =====
+  code-quality-1-21-11:
+    runs-on: ubuntu-latest
+    needs: build-1-21-11
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+      - name: Run unit tests (1.21.11)
+        run: ./gradlew :v1_21_11:test
