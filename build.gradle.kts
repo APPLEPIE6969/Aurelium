@@ -14,7 +14,7 @@ tasks.jar { enabled = false }
 tasks.compileTestJava { enabled = false }
 tasks.test { enabled = false }
 
-// Configure version-specific subprojects
+// Configure version-specific subprojects (apply java + shadow)
 subprojects {
     if (name.startsWith("v")) {
         apply(plugin = "java")
@@ -60,12 +60,8 @@ subprojects {
             dependsOn(tasks.named("shadowJar"))
         }
 
-        tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
-            relocate("com.zaxxer.hikari", "com.aureleconomy.lib.hikari")
-            relocate("com.mysql", "com.aureleconomy.lib.mysql")
-            relocate("com.google.gson", "com.aureleconomy.lib.gson")
-            archiveClassifier.set("")
-        }
+        // Each version subproject configures its own shadowJar (including relocate for 26.1.2)
+        // Do NOT configure relocate here — causes ASM issues on Java 21
 
         tasks.named<Jar>("jar") {
             enabled = false
