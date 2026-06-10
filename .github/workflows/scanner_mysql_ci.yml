@@ -26,13 +26,13 @@ jobs:
           distribution: 'temurin'
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
-      - name: Build with Gradle
-        run: ./gradlew build
+      - name: Build 26.1.2 version
+        run: ./gradlew :v26_1_2:shadowJar
       - name: Upload JAR
         uses: actions/upload-artifact@v6
         with:
-          name: Aurelium
-          path: build/libs/*.jar
+          name: Aurelium-26.1.2
+          path: versions/26.1.2/build/libs/*.jar
 
   mysql-dedup-test:
     runs-on: ubuntu-latest
@@ -60,7 +60,7 @@ jobs:
       - name: Download Aurelium
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium
+          name: Aurelium-26.1.2
           path: plugins
       - name: Build mock plugins
         run: |
@@ -83,11 +83,12 @@ jobs:
           cat > plugins/Aurelium/config.yml << 'CFG'
           database:
             type: mysql
-            host: 127.0.0.1
-            port: 3306
-            name: aurelium_test
-            username: root
-            password: test
+            mysql:
+              host: 127.0.0.1
+              port: 3306
+              database: aurelium_test
+              username: root
+              password: test
           CFG
           echo "eula=true" > eula.txt
           echo "online-mode=false" > server.properties
@@ -116,3 +117,10 @@ jobs:
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
           if [ "$FAIL" -ne 0 ]; then exit 1; fi
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: scanner-mysql-test-log
+          path: logs/latest.log
+          retention-days: 7
