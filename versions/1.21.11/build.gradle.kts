@@ -42,8 +42,8 @@ sourceSets {
             srcDirs("../../src/main/java", "src/main/java")
         }
         resources {
-            // Version-specific resources only, not the shared root resources
-            srcDirs("src/main/resources")
+            // Version-specific resources only (exclude shared root resources)
+            setSrcDirs(listOf("src/main/resources"))
         }
     }
     test {
