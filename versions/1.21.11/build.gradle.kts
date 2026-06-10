@@ -17,7 +17,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
 
     implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("com.mysql:mysql-connector-j:8.3.0")
@@ -26,7 +26,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation("org.mockito:mockito-core:5.23.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
-    testImplementation("io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT")
+    testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation("net.kyori:adventure-api:4.17.0")
     testImplementation("com.github.MilkBowl:VaultAPI:1.7") {
         exclude(group = "org.bukkit", module = "bukkit")
@@ -42,7 +42,8 @@ sourceSets {
             srcDirs("../../src/main/java", "src/main/java")
         }
         resources {
-            srcDirs("../../src/main/resources")
+            // Version-specific resources only, not the shared root resources
+            srcDirs("src/main/resources")
         }
     }
     test {
@@ -116,7 +117,6 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
     archiveVersion = "1.5.1"
 
     // No relocate — ASM compatibility issue with Java 21 + shadow 8.1.8
-    // Relocate only in 26.1.2 (Java 25)
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
