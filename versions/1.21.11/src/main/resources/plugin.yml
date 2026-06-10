@@ -1,0 +1,5 @@
+name: Aurelium
+main: com.aureleconomy.AurelEconomy
+version: 1.5.1
+api-version: '1.21'
+loadbefore: [Vault]
