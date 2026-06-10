@@ -27,12 +27,19 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
       - name: Build 26.1.2 version
-        run: ./gradlew :v26_1_2:shadowJar
+        run: ./gradlew :v26_1_2:shadowJar 2>&1 | tee build-26.1.2.log
       - name: Upload 26.1.2 JAR
         uses: actions/upload-artifact@v6
         with:
           name: Aurelium-26.1.2
           path: versions/26.1.2/build/libs/*.jar
+      - name: Upload 26.1.2 build log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-26.1.2-log
+          path: build-26.1.2.log
+          retention-days: 7
 
   build-1-21-11:
     runs-on: ubuntu-latest
@@ -46,22 +53,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
       - name: Build 1.21.11 version
-        run: ./gradlew :v1_21_11:shadowJar 2>&1 | tee build-1.21.11.log || true
-      - name: Check 1.21.11 build result
-        run: |
-          if ./gradlew :v1_21_11:shadowJar 2>&1; then
-            echo "1.21.11 build succeeded"
-          else
-            echo "1.21.11 build failed (expected — API differences from 26.1.2)"
-            echo "See build-1.21.11.log for compilation errors"
-          fi
-      - name: Upload 1.21.11 JAR (if built)
-        if: success()
+        run: ./gradlew :v1_21_11:shadowJar 2>&1 | tee build-1.21.11.log
+      - name: Upload 1.21.11 JAR
         uses: actions/upload-artifact@v6
         with:
           name: Aurelium-1.21.11
           path: versions/1.21.11/build/libs/*.jar
-      - name: Upload build log
+      - name: Upload 1.21.11 build log
         if: always()
         uses: actions/upload-artifact@v6
         with:
