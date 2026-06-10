@@ -12,8 +12,8 @@ permissions:
 env:
   PAPER_26_BUILD: "65"
   PAPER_26_JAR_SHA: "cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2"
-  PAPER_12111_BUILD: "133"
-  PAPER_12111_JAR_SHA: "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9"
+  PAPER_12111_BUILD: "69"
+  PAPER_12111_JAR_SHA: "cf374f2af9d71dfcc75343f37b722a7abcb091c574131b95e3b13c6fc2cb8fae"
   VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
 
 jobs:
@@ -165,9 +165,9 @@ jobs:
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
-      - name: Download Paper 1.21.1
+      - name: Download Paper 1.21.11
         run: |
-          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.1-${{ env.PAPER_12111_BUILD }}.jar"
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.11-${{ env.PAPER_12111_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
           if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
       - name: Start server and run smoke test
@@ -309,9 +309,9 @@ jobs:
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
-      - name: Download Paper 1.21.1
+      - name: Download Paper 1.21.11
         run: |
-          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.1-${{ env.PAPER_12111_BUILD }}.jar"
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.11-${{ env.PAPER_12111_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
           if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
       - name: Start server and test cloud registration
@@ -430,9 +430,9 @@ jobs:
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
-      - name: Download Paper 1.21.1
+      - name: Download Paper 1.21.11
         run: |
-          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.1-${{ env.PAPER_12111_BUILD }}.jar"
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.11-${{ env.PAPER_12111_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
           if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
       - name: Start server and run in-game tests
@@ -589,9 +589,9 @@ jobs:
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
-      - name: Download Paper 1.21.1
+      - name: Download Paper 1.21.11
         run: |
-          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.1-${{ env.PAPER_12111_BUILD }}.jar"
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_12111_JAR_SHA }}/paper-1.21.11-${{ env.PAPER_12111_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
           if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
       - name: Start server with MySQL and test
