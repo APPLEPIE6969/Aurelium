@@ -42,9 +42,6 @@ sourceSets {
             srcDirs("../../src/main/java", "src/main/java")
         }
         resources {
-            srcDirs("../../src/main/java", "src/main/java")
-        }
-        resources {
             // Version-specific dir first (plugin.yml with api-version 1.21)
             // then shared resources (config.yml, messages.yml, web/)
             setSrcDirs(listOf("src/main/resources", "../../src/main/resources"))
@@ -128,25 +125,23 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
         attributes("Implementation-Version" to "1.5.1")
     }
 
-    // Deduplicate JAR entries using a Python script (Kotlin DSL ant.zip
-    // is too awkward). Paper's PluginRemapper rejects duplicate entries.
+    // Post-process: rewrite the JAR to deduplicate all entries.
+    // Paper's PluginRemapper rejects JARs with duplicate entries.
     doLast {
         val jarFile = archiveFile.get().asFile
         val tmpJar = File(jarFile.parentFile, jarFile.name + ".tmp")
         val pluginYml = File(project.projectDir, "src/main/resources/plugin.yml")
 
-        exec {
+        project.exec {
             commandLine("python3", "-c", """
-                import zipfile, shutil, os, sys
+                import zipfile, os, sys
                 src = sys.argv[1]
                 dst = sys.argv[2]
                 plugin = sys.argv[3]
                 seen = set()
                 with zipfile.ZipFile(src, 'r') as zin, zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
-                    # Write version-specific plugin.yml first
                     zout.write(plugin, 'plugin.yml')
                     seen.add('plugin.yml')
-                    # Copy all other entries, skipping duplicates
                     for entry in zin.infolist():
                         if entry.filename not in seen:
                             zout.writestr(entry, zin.read(entry.filename))
