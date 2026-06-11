@@ -44,7 +44,6 @@ sourceSets {
         resources {
             // Version-specific dir first (plugin.yml with api-version 1.21)
             // then shared resources (config.yml, messages.yml, web/)
-            // duplicatesStrategy=EXCLUDE keeps first plugin.yml on conflict
             setSrcDirs(listOf("src/main/resources", "../../src/main/resources"))
         }
     }
@@ -115,20 +114,23 @@ tasks.test {
     }
 }
 
-// Build shadow JAR without plugin.yml, then create final JAR
-// with only the version-specific plugin.yml injected
-val shadowJarNoPlugin by tasks.registering(com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar::class) {
-    archiveBaseName = "Aurelium-1.21.11-no-plugin"
-    archiveVersion = "1.5.1"
-    destinationDirectory = layout.buildDirectory.dir("tmp")
-    from(sourceSets.main.get().output)
-    configurations = listOf(project.configurations.getByName("runtimeClasspath"))
-    // Exclude ALL plugin.yml copies to avoid duplicates
-    exclude("plugin.yml")
-    manifest {
-        attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
-        attributes("Implementation-Version" to "1.5.1")
+// Build a clean shadow JAR using a separate source set that only
+// includes the version-specific plugin.yml (avoids Paper Remapper
+// "Duplicate entries detected: plugin.yml" error)
+val mainWithoutRootPlugin by the<SourceSetContainer>().registering {
+    java {
+        srcDirs("../../src/main/java", "src/main/java")
     }
+    resources {
+        // Only version-specific resources (plugin.yml with api-version 1.21)
+        // plus shared resources minus plugin.yml (config.yml, messages.yml, web/)
+        srcDirs("src/main/resources")
+        srcDirs("../../src/main/resources") {
+            exclude("plugin.yml")
+        }
+    }
+    compileClasspath = sourceSets.main.get().compileClasspath
+    runtimeClasspath = sourceSets.main.get().runtimeClasspath
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
@@ -137,17 +139,15 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
 
     // No relocate — ASM compatibility issue with Java 21 + shadow 8.1.8
 
-    dependsOn(shadowJarNoPlugin)
-
-    from(zipTree(shadowJarNoPlugin.flatMap { it.archiveFile })) {
-        // All classes and resources from shadow JAR
-    }
-    from("src/main/resources/plugin.yml") {
-        // Only the version-specific plugin.yml
-    }
-
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
         attributes("Implementation-Version" to "1.5.1")
+    }
+}
+
+// Override the default shadowJar to use the clean source set
+afterEvaluate {
+    tasks.shadowJar {
+        from(mainWithoutRootPlugin.get().output)
     }
 }
