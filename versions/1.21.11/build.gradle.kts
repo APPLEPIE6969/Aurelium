@@ -42,8 +42,9 @@ sourceSets {
             srcDirs("../../src/main/java", "src/main/java")
         }
         resources {
-            // Version-specific plugin.yml (first) overrides root plugin.yml (second)
-            // duplicatesStrategy=EXCLUDE picks first occurrence on conflict
+            // Version-specific dir first (plugin.yml with api-version 1.21)
+            // then shared resources (config.yml, messages.yml, web/)
+            // duplicatesStrategy=EXCLUDE keeps first plugin.yml on conflict
             setSrcDirs(listOf("src/main/resources", "../../src/main/resources"))
         }
     }
@@ -119,9 +120,6 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
     archiveVersion = "1.5.1"
 
     // No relocate — ASM compatibility issue with Java 21 + shadow 8.1.8
-
-    // Exclude root plugin.yml since version-specific one is already included
-    exclude("plugin.yml")
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
