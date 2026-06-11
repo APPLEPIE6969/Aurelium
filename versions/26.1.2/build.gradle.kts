@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.aureleconomy"
-version = "1.5.1"
+version = "1.5.1-26.1.x"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(25))
@@ -13,7 +13,7 @@ java {
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
-    maven("https://jitpack.io")
+    maven("https://https://jitpack.io")
 }
 
 dependencies {
@@ -114,14 +114,11 @@ tasks.test {
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
-    archiveBaseName = "Aurelium-26.1.2"
-    archiveVersion = "1.5.1"
-
-    // No relocate — shadow 8.1.8 ASM doesn't support Java 25 class files (major version 69)
-    // Relocate removed to allow build to succeed
+    archiveBaseName = "Aurelium-1.5.1-26.1.x"
+    archiveVersion = ""  // Version already in base name
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
-        attributes("Implementation-Version" to "1.5.1")
+        attributes("Implementation-Version" to "1.5.1-26.1.x")
     }
 }
