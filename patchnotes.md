@@ -1,5 +1,13 @@
 # Aurelium - Patch Notes
 
+## v1.5.2 - Custom Item Display Name Fix
+
+### Fixes
+
+- **Market Custom Item Display Names**: Discovered custom items now show their configured display name in the market (alerts, GUI, price lookups) instead of falling back to raw material name. Previously, `MarketManager.addCustomMarketItem()` created `MarketEntry` with only material and price, discarding the display name — auction messages already worked correctly, but market-side name resolution did not.
+
+---
+
 ## v1.5.1 - Cloud Dashboard URL Fix
 
 ### Fixes
