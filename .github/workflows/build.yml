@@ -34,7 +34,7 @@ jobs:
       - name: Upload 26.1.2 JAR
         uses: actions/upload-artifact@v6
         with:
-          name: Aurelium-26.1.2
+          name: Aurelium-1.5.1-26.1.x
           path: versions/26.1.2/build/libs/*.jar
       - name: Upload 26.1.2 build log
         if: always()
@@ -61,7 +61,7 @@ jobs:
       - name: Upload 1.21.11 JAR
         uses: actions/upload-artifact@v6
         with:
-          name: Aurelium-1.21.11
+          name: Aurelium-1.5.1-1.21.x
           path: versions/1.21.11/build/libs/*.jar
       - name: Upload 1.21.11 build log
         if: always()
@@ -85,7 +85,7 @@ jobs:
       - name: Download Aurelium 26.1.2
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium-26.1.2
+          name: Aurelium-1.5.1-26.1.x
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
@@ -161,7 +161,7 @@ jobs:
       - name: Download Aurelium 1.21.11
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium-1.21.11
+          name: Aurelium-1.5.1-1.21.x
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
@@ -237,7 +237,7 @@ jobs:
       - name: Download Aurelium 26.1.2
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium-26.1.2
+          name: Aurelium-1.5.1-26.1.x
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
@@ -305,7 +305,7 @@ jobs:
       - name: Download Aurelium 1.21.11
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium-1.21.11
+          name: Aurelium-1.5.1-1.21.x
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
@@ -373,7 +373,7 @@ jobs:
       - name: Download Aurelium 26.1.2
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium-26.1.2
+          name: Aurelium-1.5.1-26.1.x
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
@@ -426,7 +426,7 @@ jobs:
       - name: Download Aurelium 1.21.11
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium-1.21.11
+          name: Aurelium-1.5.1-1.21.x
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
@@ -492,7 +492,7 @@ jobs:
       - name: Download Aurelium 26.1.2
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium-26.1.2
+          name: Aurelium-1.5.1-26.1.x
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
@@ -585,7 +585,7 @@ jobs:
       - name: Download Aurelium 1.21.11
         uses: actions/download-artifact@v7
         with:
-          name: Aurelium-1.21.11
+          name: Aurelium-1.5.1-1.21.x
           path: plugins
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
