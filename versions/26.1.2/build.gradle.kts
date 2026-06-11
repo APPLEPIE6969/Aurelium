@@ -115,7 +115,8 @@ tasks.test {
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     archiveBaseName = "Aurelium-1.5.2-26.1.x"
-    archiveVersion = ""  // Version already in base name
+    archiveVersion = ""
+    archiveClassifier = ""
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
