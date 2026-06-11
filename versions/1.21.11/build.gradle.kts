@@ -132,22 +132,29 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
         val tmpJar = File(jarFile.parentFile, jarFile.name + ".tmp")
         val pluginYml = File(project.projectDir, "src/main/resources/plugin.yml")
 
-        project.exec {
-            commandLine("python3", "-c", """
-                import zipfile, os, sys
-                src = sys.argv[1]
-                dst = sys.argv[2]
-                plugin = sys.argv[3]
-                seen = set()
-                with zipfile.ZipFile(src, 'r') as zin, zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
-                    zout.write(plugin, 'plugin.yml')
-                    seen.add('plugin.yml')
-                    for entry in zin.infolist():
-                        if entry.filename not in seen:
-                            zout.writestr(entry, zin.read(entry.filename))
-                            seen.add(entry.filename)
-                os.replace(dst, src)
-            """.trimIndent(), jarFile.absolutePath, tmpJar.absolutePath, pluginYml.absolutePath)
+        val dedupScript = """
+            import zipfile, os, sys
+            src = sys.argv[1]
+            dst = sys.argv[2]
+            plugin = sys.argv[3]
+            seen = set()
+            with zipfile.ZipFile(src, 'r') as zin, zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zout:
+                zout.write(plugin, 'plugin.yml')
+                seen.add('plugin.yml')
+                for entry in zin.infolist():
+                    if entry.filename not in seen:
+                        zout.writestr(entry, zin.read(entry.filename))
+                        seen.add(entry.filename)
+            os.replace(dst, src)
+        """.trimIndent()
+
+        val proc = ProcessBuilder("python3", "-c", dedupScript, jarFile.absolutePath, tmpJar.absolutePath, pluginYml.absolutePath)
+            .redirectErrorStream(true)
+            .start()
+        proc.inputStream.bufferedReader().forEachLine { println(it) }
+        proc.waitFor()
+        if (proc.exitValue() != 0) {
+            throw GradleException("JAR dedup script failed with exit code ${proc.exitValue()}")
         }
     }
 }
