@@ -115,31 +115,39 @@ tasks.test {
     }
 }
 
+// Build shadow JAR without plugin.yml, then create final JAR
+// with only the version-specific plugin.yml injected
+val shadowJarNoPlugin by tasks.registering(com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar::class) {
+    archiveBaseName = "Aurelium-1.21.11-no-plugin"
+    archiveVersion = "1.5.1"
+    destinationDirectory = layout.buildDirectory.dir("tmp")
+    from(sourceSets.main.get().output)
+    configurations = listOf(project.configurations.getByName("runtimeClasspath"))
+    // Exclude ALL plugin.yml copies to avoid duplicates
+    exclude("plugin.yml")
+    manifest {
+        attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
+        attributes("Implementation-Version" to "1.5.1")
+    }
+}
+
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     archiveBaseName = "Aurelium-1.21.11"
     archiveVersion = "1.5.1"
 
     // No relocate — ASM compatibility issue with Java 21 + shadow 8.1.8
 
-    // Remove duplicate plugin.yml from root resources that slipped through
-    // despite processResources duplicatesStrategy=EXCLUDE (shadow sees
-    // both copies from the two source dirs in the classes output)
-    exclude("plugin.yml")
+    dependsOn(shadowJarNoPlugin)
+
+    from(zipTree(shadowJarNoPlugin.flatMap { it.archiveFile })) {
+        // All classes and resources from shadow JAR
+    }
+    from("src/main/resources/plugin.yml") {
+        // Only the version-specific plugin.yml
+    }
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
         attributes("Implementation-Version" to "1.5.1")
-    }
-
-    doLast {
-        // Re-inject the version-specific plugin.yml since shadowJar
-        // excluded ALL plugin.yml copies above
-        val jarFile = archiveFile.get().asFile
-        ant.withGroovyBuilder {
-            "zipfileset"("src" to "src/main/resources/plugin.yml", "dest" to "plugin.yml")
-            "jar"("destfile" to jarFile.absolutePath, "update" to "true") {
-                "zipfileset"("src" to "src/main/resources/plugin.yml", "fullpath" to "plugin.yml")
-            }
-        }
     }
 }
