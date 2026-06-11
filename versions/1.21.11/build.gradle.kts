@@ -42,8 +42,8 @@ sourceSets {
             srcDirs("../../src/main/java", "src/main/java")
         }
         resources {
-            // Version-specific resources only (exclude shared root resources)
-            setSrcDirs(listOf("src/main/resources"))
+            srcDirs("src/main/resources", "../../src/main/resources")
+            exclude("plugin.yml")  // use version-specific plugin.yml only
         }
     }
     test {
@@ -93,6 +93,7 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.withType<ProcessResources>().configureEach {
     filteringCharset = Charsets.UTF_8.name()
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 tasks.test {
