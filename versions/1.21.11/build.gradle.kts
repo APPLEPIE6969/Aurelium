@@ -114,25 +114,6 @@ tasks.test {
     }
 }
 
-// Build a clean shadow JAR using a separate source set that only
-// includes the version-specific plugin.yml (avoids Paper Remapper
-// "Duplicate entries detected: plugin.yml" error)
-val mainWithoutRootPlugin by the<SourceSetContainer>().registering {
-    java {
-        srcDirs("../../src/main/java", "src/main/java")
-    }
-    resources {
-        // Only version-specific resources (plugin.yml with api-version 1.21)
-        // plus shared resources minus plugin.yml (config.yml, messages.yml, web/)
-        srcDirs("src/main/resources")
-        srcDirs("../../src/main/resources") {
-            exclude("plugin.yml")
-        }
-    }
-    compileClasspath = sourceSets.main.get().compileClasspath
-    runtimeClasspath = sourceSets.main.get().runtimeClasspath
-}
-
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     archiveBaseName = "Aurelium-1.21.11"
     archiveVersion = "1.5.1"
@@ -143,11 +124,36 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
         attributes("Implementation-Version" to "1.5.1")
     }
-}
 
-// Override the default shadowJar to use the clean source set
-afterEvaluate {
-    tasks.shadowJar {
-        from(mainWithoutRootPlugin.get().output)
+    // After shadow builds the fat JAR, remove any duplicate plugin.yml
+    // that may have come from the root resources dir.
+    // Paper's PluginRemapper rejects JARs with duplicate entries.
+    doLast {
+        val jarFile = archiveFile.get().asFile
+        val tmpJar = File(jarFile.parentFile, jarFile.name + ".tmp")
+        val pluginYml = File("src/main/resources/plugin.yml")
+
+        java.util.zip.ZipFile(jarFile).use { zip ->
+            java.util.zip.ZipOutputStream(tmpJar.outputStream()).use { out ->
+                val seen = mutableSetOf<String>()
+                // Add plugin.yml first (version-specific)
+                out.putNextEntry(java.util.zip.ZipEntry("plugin.yml"))
+                pluginYml.inputStream().use { it.copyTo(out) }
+                out.closeEntry()
+                seen.add("plugin.yml")
+                // Copy all other entries, skipping duplicates
+                zip.entries().asSequence().filter { it.name != "plugin.yml" }.forEach { entry ->
+                    if (seen.add(entry.name)) {
+                        out.putNextEntry(java.util.zip.ZipEntry(entry.name))
+                        if (!entry.isDirectory) {
+                            zip.getInputStream(entry).use { it.copyTo(out) }
+                        }
+                        out.closeEntry()
+                    }
+                }
+            }
+        }
+        jarFile.delete()
+        tmpJar.renameTo(jarFile)
     }
 }
