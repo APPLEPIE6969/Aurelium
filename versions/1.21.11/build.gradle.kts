@@ -132,11 +132,9 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
         val tmpJar = File(jarFile.parentFile, jarFile.name + ".tmp")
         val pluginYml = File(project.projectDir, "src/main/resources/plugin.yml")
 
-        ant.withProject(project.ant) {
-            "zip"("destFile" to tmpJar.absolutePath) {
-                "zipfileset"("src" to pluginYml.absolutePath, "fullpath" to "plugin.yml")
-                "zipgroupfileset"("src" to jarFile.absolutePath, "excludes" to "plugin.yml")
-            }
+        ant.zip(destFile = tmpJar.absolutePath) {
+            zipfileset(src = pluginYml.absolutePath, fullpath = "plugin.yml")
+            zipgroupfileset(src = jarFile.absolutePath, excludes = "plugin.yml")
         }
 
         jarFile.delete()
