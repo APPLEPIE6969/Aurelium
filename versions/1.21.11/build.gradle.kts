@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.aureleconomy"
-version = "1.5.1"
+version = "1.5.1-1.21.x"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
@@ -115,14 +115,14 @@ tasks.test {
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
-    archiveBaseName = "Aurelium-1.21.11"
-    archiveVersion = "1.5.1"
+    archiveBaseName = "Aurelium-1.5.1-1.21.x"
+    archiveVersion = ""  // Version already in base name
 
     // No relocate — ASM compatibility issue with Java 21 + shadow 8.1.8
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
-        attributes("Implementation-Version" to "1.5.1")
+        attributes("Implementation-Version" to "1.5.1-1.21.x")
     }
 
     // Post-process: rewrite the JAR to deduplicate all entries.
@@ -144,9 +144,9 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
                 for entry in zin.infolist():
                     if entry.filename not in seen:
                         zout.writestr(entry, zin.read(entry.filename))
-                        seen.add(entry.filename)
+                    seen.add(entry.filename)
             os.replace(dst, src)
-        """.trimIndent()
+            """.trimIndent()
 
         val proc = ProcessBuilder("python3", "-c", dedupScript, jarFile.absolutePath, tmpJar.absolutePath, pluginYml.absolutePath)
             .redirectErrorStream(true)
