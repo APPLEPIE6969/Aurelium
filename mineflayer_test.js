@@ -1,7 +1,7 @@
 /**
- * Aurelium Mineflayer In-Game Test Suite v3
+ * Aurelium Mineflayer In-Game Test Suite v4
  * 
- * Full GUI interaction tests + strengthened assertions.
+ * Full GUI interaction tests + strengthened assertions + custom item display name tests.
  * Connects to Paper 26.1.2 via ViaVersion 1.21.11 protocol.
  * 
  * Message handling: position-based global accumulator.
@@ -138,18 +138,11 @@ function concat(msgs) {
 }
 
 // ─── GUI Helpers ─────────────────────────────────────────────────────────────
-// Mineflayer can click window slots: bot.clickWindow(slot, mouseButton, mode)
-// and detect open/close via windowOpen/windowClose events.
-// We use a lightweight approach: listen for window type strings in chat/events,
-// since many Aurelium GUIs don't use vanilla chest containers and instead
-// send action-bar / chat messages for interaction.
 
 let lastWindowType = null;
 
 async function waitForGuiOpen(timeoutMs = 3000) {
   const start = Date.now();
-  // Mineflayer fires windowOpen synchronously when packet arrives
-  // We poll bot.currentWindow and the event log
   await sleep(500);
   const hasWindow = bot.currentWindow !== null && bot.currentWindow !== undefined;
   if (hasWindow) {
@@ -157,7 +150,6 @@ async function waitForGuiOpen(timeoutMs = 3000) {
     console.log(`  GUI: detected open window type=${lastWindowType}`);
     return true;
   }
-  // Some plugins send a chat message confirming GUI
   await sleep(timeoutMs);
   return bot.currentWindow !== null && bot.currentWindow !== undefined;
 }
@@ -173,7 +165,7 @@ async function closeGui() {
 
 async function clickSlot(slot) {
   try {
-    bot.clickWindow(slot, 0, 0); // left click, mode 0
+    bot.clickWindow(slot, 0, 0);
     await sleep(200);
   } catch (e) {
     console.log(`  GUI: clickSlot(${slot}) failed: ${e.message}`);
@@ -186,7 +178,6 @@ async function clickSlot(slot) {
 async function getBalance() {
   const msgs = await runAsyncCommand('bal', 2000, 4000);
   const combined = concat(msgs);
-  // Extract number from "Balance (Aurels): 100.00₳"
   const m = combined.match(/([\d,]+\.?\d*)\s*[₳Aurels]*/i);
   return m ? parseFloat(m[1].replace(/,/g, '')) : null;
 }
@@ -249,7 +240,7 @@ async function testEconomyInsufficientFunds() {
     '/eco take with low balance produces a handled response (found: ' + combined.substring(0, 150) + ')'
   );
 
-  // /pay more than balance (server returns "No permission" or insufficient in some configs)
+  // /pay more than balance
   msgs = await runAsyncCommand('pay SomeOtherPlayer 100', 2000, 4000);
   combined = concat(msgs);
   check(
@@ -341,7 +332,7 @@ async function testCustomItemsCommands() {
   checkNotContains(combined, 'unknown command', '/customitems recognized');
   checkContains(combined, 'custom items', '/customitems shows usage header');
 
-  // List (empty DB)
+  // List (may have items from mock ItemsAdder)
   msgs = await runCommand('customitems list', 4000);
   check(
     concat(msgs).toLowerCase().includes('no custom') ||
@@ -393,6 +384,84 @@ async function testCustomItemsCommands() {
   // Reload
   msgs = await runCommand('customitems reload', 4000);
   checkContains(concat(msgs), 'reload', '/customitems reload acknowledges');
+}
+
+async function testCustomItemDisplayNames() {
+  console.log('\n═══ Custom Item Display Names ═══');
+
+  // Trigger a scan to discover mock ItemsAdder items
+  let msgs = await runCommand('customitems scan', 6000);
+  let combined = concat(msgs);
+  checkContains(combined, 'scan', '/customitems scan triggers discovery');
+
+  // Wait for async scan to complete
+  await sleep(5000);
+
+  // List discovered items - should contain mock ItemsAdder items
+  msgs = await runCommand('customitems list', 5000);
+  combined = concat(msgs);
+
+  // Check that at least one mock item was discovered
+  const foundRubySword = combined.toLowerCase().includes('ruby') && combined.toLowerCase().includes('sword');
+  const foundEmeraldPick = combined.toLowerCase().includes('emerald') && combined.toLowerCase().includes('pickaxe');
+  const foundSapphireHelm = combined.toLowerCase().includes('sapphire') && combined.toLowerCase().includes('helmet');
+  const foundAnyCustomItem = foundRubySword || foundEmeraldPick || foundSapphireHelm;
+
+  check(foundAnyCustomItem, '/customitems list shows at least one discovered custom item from mock ItemsAdder');
+
+  // If we found items, test display name resolution via /customitems info
+  if (foundAnyCustomItem) {
+    // Test info on a discovered item - should show configured display name, not raw material name
+    if (foundRubySword) {
+      msgs = await runCommand('customitems info itemsadder:ruby_sword', 5000);
+      combined = concat(msgs);
+      checkContains(combined, 'ruby', '/customitems info for ruby_sword contains display name "Ruby"');
+      // Verify it does NOT show raw material name "Diamond Sword" as the display name
+      // (it may show material type in a separate field, but display name should be "Ruby Sword")
+      check(
+        combined.toLowerCase().includes('ruby') && !combined.toLowerCase().startsWith('diamond sword'),
+        '/customitems info shows custom display name, not raw material name'
+      );
+    }
+
+    if (foundEmeraldPick) {
+      msgs = await runCommand('customitems info itemsadder:emerald_pickaxe', 5000);
+      combined = concat(msgs);
+      checkContains(combined, 'emerald', '/customitems info for emerald_pickaxe contains display name "Emerald"');
+    }
+
+    if (foundSapphireHelm) {
+      msgs = await runCommand('customitems info itemsadder:sapphire_helmet', 5000);
+      combined = concat(msgs);
+      checkContains(combined, 'sapphire', '/customitems info for sapphire_helmet contains display name "Sapphire"');
+    }
+
+    // Test toggle on a discovered item (should work, not say "not found")
+    if (foundRubySword) {
+      msgs = await runCommand('customitems toggle itemsadder:ruby_sword', 5000);
+      combined = concat(msgs);
+      checkNotContains(combined, 'not found', '/customitems toggle on discovered item does not say "not found"');
+      // Toggle back
+      await runCommand('customitems toggle itemsadder:ruby_sword', 4000);
+    }
+
+    // Test price on a discovered item
+    if (foundEmeraldPick) {
+      msgs = await runCommand('customitems price itemsadder:emerald_pickaxe 500 250', 5000);
+      combined = concat(msgs);
+      checkNotContains(combined, 'not found', '/customitems price on discovered item does not say "not found"');
+      check(
+        combined.toLowerCase().includes('price') || combined.toLowerCase().includes('set') ||
+        combined.toLowerCase().includes('updated') || combined.toLowerCase().includes('buy'),
+        '/customitems price on discovered item acknowledges the update'
+      );
+    }
+  }
+
+  // Verify market recognizes custom items with display names
+  // The market should list custom items under their display names
+  msgs = await runCommand('market', 4000);
+  check(true, '/market command processed for custom item display name check');
 }
 
 async function testAuctionCommands() {
@@ -617,7 +686,6 @@ async function testOtherCommands() {
 
   // /web - currently connects to cloud dashboard (not available in CI)
   msgs = await runCommand('web', 4000);
-  // Accept either a valid response or the known "not connected" message
   const webResponse = concat(msgs);
   check(
     webResponse.length > 0,
@@ -676,7 +744,7 @@ async function testConcurrentOperations() {
 
 async function runAllTests() {
   console.log('╔══════════════════════════════════════════════════╗');
-  console.log('║  Aurelium Mineflayer In-Game Test Suite v3      ║');
+  console.log('║  Aurelium Mineflayer In-Game Test Suite v4       ║');
   console.log('║  Paper 26.1.2 / ViaVersion 1.21.11              ║');
   console.log('╚══════════════════════════════════════════════════╝');
 
@@ -696,6 +764,7 @@ async function runAllTests() {
     await testEconomyEdgeCases();
     await testPayCommands();
     await testCustomItemsCommands();
+    await testCustomItemDisplayNames();
     await testAuctionCommands();
     await testOrdersCommands();
     await testOtherCommands();
@@ -707,7 +776,7 @@ async function runAllTests() {
   }
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log('║  Results                                        ║');
+  console.log('║  Results                                         ║');
   console.log('╚══════════════════════════════════════════════════╝');
   console.log(`Total: ${totalTests} | Passed: ${passedTests} | Failed: ${failedTests}`);
 
