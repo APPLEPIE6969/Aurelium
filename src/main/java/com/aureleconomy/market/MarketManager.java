@@ -354,7 +354,7 @@ public class MarketManager {
 
  if (!entryCache.containsKey(key)) {
  MarketEntry entry = new MarketEntry(customItem.getItemStack().getType(),
- effectiveBuyPrice.doubleValue());
+ effectiveBuyPrice.doubleValue(), customItem.getDisplayName());
  entryCache.put(key, entry);
  }
 
