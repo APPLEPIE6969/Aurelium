@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.aureleconomy"
-version = "1.5.1"
+version = "1.5.2"
 
 // Root project doesn't produce a JAR — all builds happen in version subprojects
 tasks.compileJava { enabled = false }
