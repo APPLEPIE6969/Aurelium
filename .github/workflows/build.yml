@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 env:
-  PAPER_26_BUILD: "65"
-  PAPER_26_JAR_SHA: "cfb9281c2657e21ecc8acdaa9efbd6b5b3e873fb5bac4c3b8ba4bba67aa13ee2"
+  PAPER_26_BUILD: "69"
+  PAPER_26_JAR_SHA: "d30fae0c74092b10855f0412ca6b265c60301a013d34bc28a2a41bf5682dd80b"
   PAPER_12111_BUILD: "132"
   PAPER_12111_JAR_SHA: "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
   VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
