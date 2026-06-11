@@ -116,7 +116,8 @@ tasks.test {
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     archiveBaseName = "Aurelium-1.5.2-1.21.x"
-    archiveVersion = ""  // Version already in base name
+    archiveVersion = ""
+    archiveClassifier = ""
 
     // No relocate — ASM compatibility issue with Java 21 + shadow 8.1.8
 
