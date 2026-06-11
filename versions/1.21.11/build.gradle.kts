@@ -42,11 +42,9 @@ sourceSets {
             srcDirs("../../src/main/java", "src/main/java")
         }
         resources {
-            // Version-specific plugin.yml overrides the root one;
-            // shared config.yml and other resources come from root.
-            // setSrcDirs order matters: first listed wins on conflict
-            // with duplicatesStrategy=EXCLUDE
-            setSrcDirs(listOf("src/main/resources", "../../src/main/resources"))
+            // Use ONLY version-specific resources dir (has complete plugin.yml)
+            // Shared config.yml etc. are NOT in resources — they're created at runtime
+            setSrcDirs(listOf("src/main/resources"))
         }
     }
     test {
