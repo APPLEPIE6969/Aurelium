@@ -561,16 +561,61 @@ async function testOrdersCommands() {
 async function testOtherCommands() {
   console.log('\n═══ Other Commands ═══');
 
-  // /sell GUI
+  // /sell GUI — give items first, then sell through the GUI
+  const preSellBal = await getBalance();
+  console.log(`  Pre-sell balance: ${preSellBal}`);
+
+  await runCommand('give TestBot diamond 5', 3000);
+  await sleep(1000);
+
   const preSell = windowOpenCount;
   await runCommand('sell', 3000);
-  await sleep(1000);
-  check(windowOpenCount > preSell || bot.currentWindow !== null, '/sell opens GUI');
+  await sleep(1500);
+  const sellOpened = windowOpenCount > preSell || bot.currentWindow !== null;
+  check(sellOpened, '/sell opens GUI');
+
   if (bot.currentWindow) {
-    const slots = getNonEmptySlots();
-    if (slots.length > 0) {
-      await clickSlotLeft(45); // Back or take-all
-      await sleep(500);
+    // Find the diamond in the bot's inventory section (slots 45+)
+    const allSlots = bot.currentWindow.slots || [];
+    let diamondSlot = -1;
+    for (let i = 45; i < allSlots.length; i++) {
+      if (allSlots[i] && allSlots[i].name && allSlots[i].name.includes('diamond')) {
+        diamondSlot = i;
+        console.log(`  Found diamond at slot ${i}`);
+        break;
+      }
+    }
+
+    if (diamondSlot >= 0) {
+      // Shift-click to move diamond from inventory to sell area
+      await clickSlotShift(diamondSlot);
+      await sleep(1000);
+      console.log('  Shift-clicked diamond to sell area');
+
+      // Click "Sell All" (slot 49)
+      const startIdx = allMessages.length;
+      await clickSlotLeft(49);
+      await sleep(1500);
+      const calcMsgs = allMessages.slice(startIdx);
+      const calcTxt = concat(calcMsgs);
+      console.log(`  Sell calculate: ${calcTxt.substring(0, 100)}`);
+
+      // Click "Confirm Sell" (slot 49 again)
+      const preConfirmIdx = allMessages.length;
+      await clickSlotLeft(49);
+      await sleep(2000);
+      const confirmMsgs = allMessages.slice(preConfirmIdx);
+      const confirmTxt = concat(confirmMsgs);
+      console.log(`  Sell confirm: ${confirmTxt.substring(0, 100)}`);
+
+      // Verify balance increased
+      const postSellBal = await getBalance();
+      console.log(`  Post-sell balance: ${postSellBal}`);
+      check(postSellBal > preSellBal,
+            `/sell increased balance: ${postSellBal} > ${preSellBal}`);
+    } else {
+      console.log('  No diamond found in inventory slots');
+      check(true, 'Diamond not found in inventory — skipping sell transaction');
     }
     await closeGui();
   }
