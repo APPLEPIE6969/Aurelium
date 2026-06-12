@@ -132,7 +132,7 @@ jobs:
     - name: Wait for ViaVersion + op bot
       run: |
         for i in $(seq 1 30); do
-          if grep -qi "viaversion.*enable\|viaversion.*loaded\|protocol registry" logs/latest.log 2>/dev/null; then
+          if grep -qi "viaversion.*enable|viaversion.*loaded|protocol registry" logs/latest.log 2>/dev/null; then
             echo "ViaVersion loaded!"
             break
           fi
@@ -201,8 +201,8 @@ jobs:
     - name: Install mineflayer and run tests
       run: |
         npm install mineflayer
-        node mineflayer_test.js
-        TEST_EXIT=$?
+        node mineflayer_test.js 2>&1 | tee mineflayer-output.txt
+        TEST_EXIT=${PIPESTATUS[0]}
         echo "Mineflayer test exit code: $TEST_EXIT"
         exit $TEST_EXIT
 
@@ -211,7 +211,7 @@ jobs:
       run: |
         if [ -f logs/latest.log ]; then
           echo "=== Server exceptions ==="
-          grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No relevant exceptions found"
+          grep -i "exception|error.*aurel|severe" logs/latest.log | grep -vi "vault|registration attempt|PLEASE RESTART|io_uring|cloud dashboard" | head -30 || echo "No relevant exceptions found"
         fi
 
     - name: Stop server
@@ -221,6 +221,14 @@ jobs:
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
         fi
+
+    - name: Upload test output
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: mineflayer-test-output
+        path: mineflayer-output.txt
+        retention-days: 7
 
     - name: Upload server log on failure
       if: failure()
