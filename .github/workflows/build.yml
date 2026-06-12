@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact_name }}
-          path: versions/${{ matrix.version == '26.1.2' && '26.1.2' || '1.21.11' }}/build/libs/*.jar
+          path: versions/${{ matrix.version }}/build/libs/*.jar
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v6
