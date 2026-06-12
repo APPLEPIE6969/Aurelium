@@ -310,7 +310,7 @@ jobs:
             echo "Server failed to start"; cat logs/latest.log | tail -40; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
           sleep 5
-          python3 -c "
+          cat > /tmp/scanner_test.py << 'PYEOF'
 import socket, struct, subprocess, time
 def rcon(cmd):
     s = socket.socket()
@@ -350,7 +350,8 @@ if len(lines) > 2:
 else:
     print('FAIL: No custom items found in DB')
     assert False, 'Expected custom_items in database'
-"
+PYEOF
+          python3 /tmp/scanner_test.py
           RC=$?
           cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
           echo "=== Server exceptions ==="
