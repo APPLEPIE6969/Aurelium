@@ -168,8 +168,8 @@ jobs:
     - name: Install mineflayer and run tests
       run: |
         npm install mineflayer
-        node mineflayer_test.js
-        TEST_EXIT=$?
+        node mineflayer_test.js 2>&1 | tee mineflayer-output.txt
+        TEST_EXIT=${PIPESTATUS[0]}
         echo "Mineflayer test exit code: $TEST_EXIT"
         exit $TEST_EXIT
 
@@ -188,6 +188,14 @@ jobs:
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
         fi
+
+    - name: Upload test output
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: mineflayer-test-output-12111
+        path: mineflayer-output.txt
+        retention-days: 7
 
     - name: Upload server log on failure
       if: failure()
