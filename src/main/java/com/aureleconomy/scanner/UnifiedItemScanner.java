@@ -695,9 +695,10 @@ public class UnifiedItemScanner {
     }
 
     /**
-     * Resolve display name from Component displayName -> plain text, or fallback to formatted material name.
-     * Includes Adventure Component hashCode to distinguish items with same plain text
-     * but different color codes, preventing false dedup collisions.
+     * Resolve display name from Component displayName to plain text,
+     * or fallback to formatted material name.
+     * Returns clean human-readable name without hash suffixes.
+     * Dedup is handled by canonical ID (unique per plugin+item), not display name.
      */
     private String resolveDisplayName(ItemStack item) {
         if (item.hasItemMeta()) {
@@ -705,9 +706,8 @@ public class UnifiedItemScanner {
             if (meta.hasDisplayName() || meta.displayName() != null) {
                 net.kyori.adventure.text.Component display = meta.displayName();
                 if (display != null) {
-                    String plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+                    return net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
                             .serialize(display);
-                    return plain + "|" + Integer.toHexString(display.hashCode());
                 }
             }
         }
