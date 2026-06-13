@@ -191,6 +191,19 @@ jobs:
           PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
           if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Setup MySQL permissions for network access
+        run: |
+          for i in $(seq 1 15); do
+            if mysql -h127.0.0.1 -uroot -ptest -e "SELECT 1" 2>/dev/null; then
+              echo "MySQL reachable, configuring root@%"
+              mysql -h127.0.0.1 -uroot -ptest -e "ALTER USER IF EXISTS 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'test'; GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" 2>/dev/null || true
+              mysql -h127.0.0.1 -uroot -ptest -e "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'test'; GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES"
+              echo "MySQL permissions configured"
+              break
+            fi
+            echo "Waiting for MySQL... ($i)"
+            sleep 2
+          done
       - name: Create MySQL config
         run: |
           mkdir -p plugins/Aurelium
@@ -283,6 +296,19 @@ jobs:
           PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
           curl -sL "$PAPER_URL" -o paper.jar
           if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Setup MySQL permissions for network access
+        run: |
+          for i in $(seq 1 15); do
+            if mysql -h127.0.0.1 -uroot -ptest -e "SELECT 1" 2>/dev/null; then
+              echo "MySQL reachable, configuring root@%"
+              mysql -h127.0.0.1 -uroot -ptest -e "ALTER USER IF EXISTS 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'test'; GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" 2>/dev/null || true
+              mysql -h127.0.0.1 -uroot -ptest -e "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'test'; GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES"
+              echo "MySQL permissions configured"
+              break
+            fi
+            echo "Waiting for MySQL... ($i)"
+            sleep 2
+          done
       - name: Create MySQL config
         run: |
           mkdir -p plugins/Aurelium
@@ -403,22 +429,49 @@ jobs:
             sleep 2
           done
           sleep 3
-          python3 -c "
-          import socket, struct
-          s = socket.socket(); s.settimeout(10)
-          s.connect(('127.0.0.1', 25575))
-          body = b'test\x00'; data = struct.pack('<ii', 1, 3) + body + b'\x00'
-          s.sendall(struct.pack('<i', len(data)) + data)
-          for _ in range(2):
-              raw = b''
-              while len(raw) < 4: c = s.recv(4 - len(raw)); raw += c
-              l = struct.unpack('<i', raw[:4])[0]; body_data = b''
-              while len(body_data) < l: c = s.recv(min(l - len(body_data), 4096)); body_data += c
-          cmd = b'op TestBot\x00'; data = struct.pack('<ii', 2, 2) + cmd + b'\x00'
-          s.sendall(struct.pack('<i', len(data)) + data)
-          s.close()
-          print('op TestBot sent')
-          "
+          python3 << 'PYEOF_RCON'
+import socket, struct
+def rcon_read(sock):
+    raw = b''
+    while len(raw) < 4:
+        chunk = sock.recv(4 - len(raw))
+        if not chunk: return None
+        raw += chunk
+    l = struct.unpack('<i', raw[:4])[0]
+    body_data = b''
+    while len(body_data) < l:
+        chunk = sock.recv(min(l - len(body_data), 4096))
+        if not chunk: return None
+        body_data += chunk
+    return body_data
+
+def rcon_auth(sock, pwd):
+    body = pwd.encode() + b'\x00'
+    data = struct.pack('<ii', 1, 3) + body + b'\x00'
+    sock.sendall(struct.pack('<i', len(data)) + data)
+    for _ in range(2):
+        pkt = rcon_read(sock)
+        if pkt is None: return False
+    return True
+
+def rcon_cmd(sock, cmd):
+    body = cmd.encode() + b'\x00'
+    data = struct.pack('<ii', 2, 2) + body + b'\x00'
+    sock.sendall(struct.pack('<i', len(data)) + data)
+    pkt = rcon_read(sock)
+    if pkt is None: return ''
+    return pkt[8:].rstrip(b'\x00').decode(errors='replace')
+
+s = socket.socket()
+s.settimeout(10)
+s.connect(('127.0.0.1', 25575))
+if rcon_auth(s, 'test'):
+    resp = rcon_cmd(s, 'op TestBot')
+    print(f'op TestBot: {repr(resp)}')
+else:
+    print('RCON auth failed')
+s.close()
+PYEOF_RCON
       - name: Install mineflayer and run tests
         run: |
           npm install mineflayer
@@ -508,22 +561,49 @@ jobs:
       - name: Op the test bot via RCON
         run: |
           sleep 3
-          python3 -c "
-          import socket, struct
-          s = socket.socket(); s.settimeout(10)
-          s.connect(('127.0.0.1', 25575))
-          body = b'test\x00'; data = struct.pack('<ii', 1, 3) + body + b'\x00'
-          s.sendall(struct.pack('<i', len(data)) + data)
-          for _ in range(2):
-              raw = b''
-              while len(raw) < 4: c = s.recv(4 - len(raw)); raw += c
-              l = struct.unpack('<i', raw[:4])[0]; body_data = b''
-              while len(body_data) < l: c = s.recv(min(l - len(body_data), 4096)); body_data += c
-          cmd = b'op TestBot\x00'; data = struct.pack('<ii', 2, 2) + cmd + b'\x00'
-          s.sendall(struct.pack('<i', len(data)) + data)
-          s.close()
-          print('op TestBot sent')
-          "
+          python3 << 'PYEOF_RCON'
+import socket, struct
+def rcon_read(sock):
+    raw = b''
+    while len(raw) < 4:
+        chunk = sock.recv(4 - len(raw))
+        if not chunk: return None
+        raw += chunk
+    l = struct.unpack('<i', raw[:4])[0]
+    body_data = b''
+    while len(body_data) < l:
+        chunk = sock.recv(min(l - len(body_data), 4096))
+        if not chunk: return None
+        body_data += chunk
+    return body_data
+
+def rcon_auth(sock, pwd):
+    body = pwd.encode() + b'\x00'
+    data = struct.pack('<ii', 1, 3) + body + b'\x00'
+    sock.sendall(struct.pack('<i', len(data)) + data)
+    for _ in range(2):
+        pkt = rcon_read(sock)
+        if pkt is None: return False
+    return True
+
+def rcon_cmd(sock, cmd):
+    body = cmd.encode() + b'\x00'
+    data = struct.pack('<ii', 2, 2) + body + b'\x00'
+    sock.sendall(struct.pack('<i', len(data)) + data)
+    pkt = rcon_read(sock)
+    if pkt is None: return ''
+    return pkt[8:].rstrip(b'\x00').decode(errors='replace')
+
+s = socket.socket()
+s.settimeout(10)
+s.connect(('127.0.0.1', 25575))
+if rcon_auth(s, 'test'):
+    resp = rcon_cmd(s, 'op TestBot')
+    print(f'op TestBot: {repr(resp)}')
+else:
+    print('RCON auth failed')
+s.close()
+PYEOF_RCON
       - name: Install mineflayer and run tests
         run: |
           npm install mineflayer
