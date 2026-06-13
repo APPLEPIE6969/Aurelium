@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""RCON helper - ops a bot on the server. Robust version with longer timeouts and retry."""
-import socket, struct, time, sys
+"""RCON helper - ops a bot on the server. Single attempt with long timeout."""
+import socket, struct, sys
 
 def rcon_read(sock):
     raw = b''
@@ -51,41 +51,19 @@ def rcon_cmd(sock, cmd):
             return payload
     return ''
 
-def rcon_op_with_retry(host='127.0.0.1', port=25575, password='test', username='TestBot', max_attempts=10, delay=10):
-    for attempt in range(1, max_attempts + 1):
-        try:
-            s = socket.socket()
-            s.settimeout(30)
-            s.connect((host, port))
-            if rcon_auth(s, password):
-                resp = rcon_cmd(s, f'op {username}')
-                print(f'op {username}: {resp}')
-                s.close()
-                # Verify op worked
-                time.sleep(2)
-                s2 = socket.socket()
-                s2.settimeout(15)
-                s2.connect((host, port))
-                if rcon_auth(s2, password):
-                    verify = rcon_cmd(s2, f'op {username}')
-                    print(f'verify op: {verify}')
-                    s2.close()
-                    if 'already' in verify.lower() or 'opped' in verify.lower():
-                        return True
-                else:
-                    s2.close()
-                continue  # retry if verification failed
-            else:
-                print(f'Attempt {attempt}: RCON auth failed')
-                s.close()
-        except (TimeoutError, ConnectionRefusedError, OSError) as e:
-            print(f'Attempt {attempt}: {e}')
-        time.sleep(delay)
-    return False
-
-if __name__ == '__main__':
-    success = rcon_op_with_retry()
-    if not success:
-        print('FAIL: Could not op bot after all retries')
+try:
+    s = socket.socket()
+    s.settimeout(30)
+    s.connect(('127.0.0.1', 25575))
+    if rcon_auth(s, 'test'):
+        resp = rcon_cmd(s, 'op TestBot')
+        print(f'op TestBot: {resp}')
+        s.close()
+        sys.exit(0)
+    else:
+        print('RCON auth failed')
+        s.close()
         sys.exit(1)
-    print('PASS: Bot opped successfully')
+except (TimeoutError, ConnectionRefusedError, OSError) as e:
+    print(f'RCON error: {e}')
+    sys.exit(1)
