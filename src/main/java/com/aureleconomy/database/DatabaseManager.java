@@ -42,7 +42,7 @@ public class DatabaseManager {
  return dbWriteLock;
  }
 
- private static final int LATEST_SCHEMA_VERSION = 2;
+ private static final int LATEST_SCHEMA_VERSION = 3;
 
  public boolean initialize() {
  try {
@@ -148,7 +148,8 @@ public class DatabaseManager {
  "ended BOOLEAN DEFAULT 0, " +
  "collected BOOLEAN DEFAULT 0, " +
  "listing_fee DOUBLE DEFAULT 0.0, " +
- "start_time LONG" +
+ "start_time LONG, " +
+ "purchase_mode VARCHAR(16) DEFAULT 'STACK'" +
  ");");
 
  statement.execute("CREATE TABLE IF NOT EXISTS offline_earnings (" +
@@ -184,7 +185,7 @@ public class DatabaseManager {
 
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Could not create tables for " + databaseType + "!", e);
-            throw e;  // Propagate so initialize() returns false instead of silently succeeding
+ throw e; // Propagate so initialize() returns false instead of silently succeeding
 
  }
 }
@@ -255,6 +256,9 @@ public class DatabaseManager {
  case 2:
  // Fix: propagate DDL failure — throw instead of swallowing
  createCustomItemsTable();
+ break;
+ case 3:
+ addColumnIfNotExists("auctions", "purchase_mode", "VARCHAR(16) DEFAULT 'STACK'");
  break;
  }
  }
@@ -341,9 +345,9 @@ public class DatabaseManager {
  }
 
  /**
-     * Creates the custom_items table for both MySQL and SQLite.
-     * Propagates SQLException so callers (createTables, migration v2) can handle failure.
-     */
+ * Creates the custom_items table for both MySQL and SQLite.
+ * Propagates SQLException so callers (createTables, migration v2) can handle failure.
+ */
  private void createCustomItemsTable() throws SQLException {
  try (Statement statement = connection.createStatement()) {
  if ("mysql".equals(databaseType)) {
