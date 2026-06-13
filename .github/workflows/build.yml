@@ -19,7 +19,6 @@ env:
   VIABACKWARDS_URL: "https://cdn.modrinth.com/data/NpvuJQoq/versions/Og77hOkC/ViaBackwards-5.9.2-SNAPSHOT.jar"
 
 jobs:
-  # ===== BUILD (all versions) =====
   build:
     strategy:
       matrix:
@@ -57,7 +56,6 @@ jobs:
           path: build-${{ matrix.version }}.log
           retention-days: 7
 
-  # ===== SMOKE + IN-GAME TESTS (26.1.2, SQLite) =====
   smoke-and-ingame-test:
     runs-on: ubuntu-latest
     needs: build
@@ -152,7 +150,6 @@ jobs:
           path: logs/latest.log
           retention-days: 7
 
-  # ===== MYSQL TEST (26.1.2) =====
   mysql-test:
     runs-on: ubuntu-latest
     needs: build
@@ -240,7 +237,6 @@ jobs:
           path: logs/latest.log
           retention-days: 7
 
-  # ===== SCANNER MYSQL TEST (26.1.2 + mock ItemsAdder) =====
   scanner-mysql-test:
     runs-on: ubuntu-latest
     needs: build
@@ -334,7 +330,6 @@ jobs:
           path: logs/latest.log
           retention-days: 7
 
-  # ===== MINEFLAYER TEST (26.1.2) =====
   mineflayer-test:
     runs-on: ubuntu-latest
     needs: build
@@ -442,7 +437,6 @@ jobs:
           path: logs/latest.log
           retention-days: 7
 
-  # ===== MINEFLAYER TEST (1.21.11) =====
   mineflayer-test-1-21-11:
     runs-on: ubuntu-latest
     needs: build
@@ -518,7 +512,7 @@ jobs:
       - name: Stop server
         if: always()
         run: |
-          if [ -n "$SERVER_PID" ); then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
+          if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload test output
         if: always()
         uses: actions/upload-artifact@v6
