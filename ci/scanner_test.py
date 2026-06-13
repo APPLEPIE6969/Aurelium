@@ -34,8 +34,8 @@ def rcon_auth(sock, password):
         if pkt is None:
             return False
         req_id, pkt_type, payload = pkt
-        if pkt_type == 2:  # response
-            return req_id == 1 and 'Welcome' in payload
+        if pkt_type == 2 and req_id == 1:
+            return True
     return False
 
 def rcon_cmd(sock, cmd):
@@ -47,7 +47,7 @@ def rcon_cmd(sock, cmd):
         if pkt is None:
             return ''
         req_id, pkt_type, payload = pkt
-        if pkt_type == 2:
+        if pkt_type == 2 and req_id == 2:
             return payload
     return ''
 
