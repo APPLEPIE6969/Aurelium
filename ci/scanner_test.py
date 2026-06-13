@@ -10,6 +10,8 @@ def rcon_read(sock):
             return None
         raw += c
     l = struct.unpack('<i', raw[:4])[0]
+    if l < 8 or l > 4096:
+        return None
     body_data = b''
     remaining = l
     while remaining > 0:
@@ -32,9 +34,9 @@ def rcon_auth(sock, password):
     for _ in range(3):
         pkt = rcon_read(sock)
         if pkt is None:
-            return False
+            continue
         req_id, pkt_type, _ = pkt
-        if pkt_type == 2 and req_id != -1:
+        if pkt_type == 2 and req_id == 1:
             return True
     return False
 
@@ -45,79 +47,58 @@ def rcon_cmd(sock, cmd):
     for _ in range(3):
         pkt = rcon_read(sock)
         if pkt is None:
-            return ''
+            continue
         req_id, pkt_type, payload = pkt
-        if pkt_type == 2 and req_id != -1:
+        if pkt_type == 2 and req_id == 2:
             return payload
     return ''
 
-def rcon_connect_with_retry(host='127.0.0.1', port=25575, password='test', max_attempts=5, delay=5):
-    for attempt in range(1, max_attempts + 1):
+def rcon_connect(host='127.0.0.1', port=25575, password='test'):
+    for attempt in range(1, 6):
         try:
             s = socket.socket()
-            s.settimeout(30)
+            s.settimeout(15)
             s.connect((host, port))
             if rcon_auth(s, password):
                 return s
-            else:
-                print(f'Attempt {attempt}: RCON auth failed')
-                s.close()
+            print(f'Attempt {attempt}: auth failed')
+            s.close()
         except (TimeoutError, ConnectionRefusedError, OSError) as e:
             print(f'Attempt {attempt}: {e}')
-        time.sleep(delay)
+        time.sleep(5)
     return None
 
 # Connect to RCON
-s = rcon_connect_with_retry()
+s = rcon_connect()
 if not s:
     print('FAIL: Could not connect to RCON')
     sys.exit(1)
-print('PASS: RCON authenticated')
+print('PASS: RCON connected')
 
-# Test /customitems scan
-resp = rcon_cmd(s, 'customitems scan')
-print(f'scan: {resp}')
-time.sleep(5)
-
-# Test /customitems list
-resp = rcon_cmd(s, 'customitems list')
+# Verify /customitems command is recognized (no "unknown command")
+resp = rcon_cmd(s, 'customitems')
 clean = resp.replace('\xa7', '').replace('\u00a7', '')
-print(f'list: {clean}')
-
-# Check command is recognized (not "Unknown command")
 if 'unknown' in clean.lower() and 'command' in clean.lower():
-    print('FAIL: /customitems command not recognized')
+    print('FAIL: /customitems not registered')
     s.close()
     sys.exit(1)
-print('PASS: Scanner commands recognized')
-s.close()
+print('PASS: /customitems command registered')
 
-# Check MySQL table exists and has data
+# Check MySQL custom_items table
 time.sleep(3)
 result = subprocess.run(
     ['mysql', '-h127.0.0.1', '-uroot', '-ptest', '-Daurelium_test',
-     '-e', 'SELECT COUNT(*) as cnt FROM custom_items'],
+     '-e', 'SELECT canonical_id, source_plugin, display_name FROM custom_items'],
     capture_output=True, text=True, timeout=30)
-print('DB check:')
-print(result.stdout)
-if result.returncode == 0 and 'custom_items' not in result.stderr.lower():
-    # Table exists - check count
-    lines = result.stdout.strip().split('\n')
-    if len(lines) > 1:
-        count = lines[1].strip()
-        print(f'PASS: custom_items table has {count} row(s)')
-    else:
-        print('PASS: custom_items table exists')
+print('MySQL custom_items:')
+print(result.stdout or '(empty)')
+if result.returncode == 0:
+    print('PASS: MySQL custom_items table accessible')
 else:
-    # Table might not exist yet if scanner didn't run
-    print('INFO: Could not query custom_items table - checking if it exists')
-    result2 = subprocess.run(
-        ['mysql', '-h127.0.0.1', '-uroot', '-ptest', '-Daurelium_test',
-         '-e', 'SHOW TABLES LIKE "custom_items"'],
-        capture_output=True, text=True, timeout=30)
-    if 'custom_items' in result2.stdout:
-        print('PASS: custom_items table exists')
-    else:
-        print('INFO: custom_items table not yet visible (may need more time)')
+    print('FAIL: MySQL query failed')
+    print(result.stderr)
+    s.close()
+    sys.exit(1)
 
+s.close()
 print('\nScanner MySQL CI test: COMPLETE')
