@@ -104,7 +104,7 @@ public class AuctionGUI extends GUIHolder {
  .lore(Component.text("Click to Buy/Bid", NamedTextColor.GRAY),
  Component.text("Right-Click to MAKE OFFER", NamedTextColor.GRAY),
  Component.text("Shift+Right-Click to CANCEL (Yours)", NamedTextColor.GRAY),
- Component.text("UNIT mode: Middle-Click for quantity buy", NamedTextColor.DARK_AQUA))
+ Component.text("UNIT mode: Click to buy per-unit", NamedTextColor.DARK_AQUA))
  .build());
 
  inventory.setItem(46, new ItemBuilder(Material.COMPASS)
@@ -165,7 +165,9 @@ public class AuctionGUI extends GUIHolder {
  } else {
  lore.add(Component.text(ai.isBin() ? "Click to Buy" : "Click to BID", NamedTextColor.YELLOW));
  }
+ if (ai.getPurchaseMode() != AuctionItem.PurchaseMode.UNIT) {
  lore.add(Component.text("Right-Click to MAKE OFFER", NamedTextColor.GOLD));
+ }
  }
  meta.lore(lore);
  meta.getPersistentDataContainer().set(auctionIdKey, PersistentDataType.INTEGER, ai.getId());
@@ -340,6 +342,12 @@ public class AuctionGUI extends GUIHolder {
  new ConfirmPurchaseGUI(plugin, player, ai, ai.getPrice(), false).open();
  }
  } else {
+ // UNIT mode listings don't support bidding — only direct per-unit purchase
+ if (ai.getPurchaseMode() == AuctionItem.PurchaseMode.UNIT) {
+ player.sendMessage(Component.text("This is a UNIT-mode listing. Click to buy per-unit.", NamedTextColor.BLUE));
+ promptUnitPurchase(player, ai);
+ return;
+ }
  if (event.isRightClick()) {
  promptOffer(player, ai);
  } else {
