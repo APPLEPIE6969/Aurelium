@@ -163,6 +163,7 @@ jobs:
           MYSQL_ROOT_PASSWORD: test
           MYSQL_DATABASE: aurelium_test
           MYSQL_ROOT_HOST: '%'
+          MYSQL_INITDB_SKIP_TZINFO: 'yes'
         ports:
           - 3306:3306
         options: >-
@@ -170,6 +171,7 @@ jobs:
           --health-interval=10s
           --health-timeout=10s
           --health-retries=10
+          --default-authentication-plugin=mysql_native_password
     steps:
       - uses: actions/checkout@v6
       - name: Set up JDK 25
@@ -248,6 +250,7 @@ jobs:
           MYSQL_ROOT_PASSWORD: test
           MYSQL_DATABASE: aurelium_test
           MYSQL_ROOT_HOST: '%'
+          MYSQL_INITDB_SKIP_TZINFO: 'yes'
         ports:
           - 3306:3306
         options: >-
@@ -255,6 +258,7 @@ jobs:
           --health-interval=10s
           --health-timeout=10s
           --health-retries=10
+          --default-authentication-plugin=mysql_native_password
     steps:
       - uses: actions/checkout@v6
       - name: Set up JDK 25
