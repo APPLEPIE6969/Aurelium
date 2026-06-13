@@ -429,8 +429,9 @@ jobs:
             sleep 2
           done
           sleep 3
-          python3 << 'PYEOF_RCON'
+          python3 -c "
 import socket, struct
+
 def rcon_read(sock):
     raw = b''
     while len(raw) < 4:
@@ -471,7 +472,7 @@ if rcon_auth(s, 'test'):
 else:
     print('RCON auth failed')
 s.close()
-PYEOF_RCON
+"
       - name: Install mineflayer and run tests
         run: |
           npm install mineflayer
@@ -561,8 +562,9 @@ PYEOF_RCON
       - name: Op the test bot via RCON
         run: |
           sleep 3
-          python3 << 'PYEOF_RCON'
+          python3 -c "
 import socket, struct
+
 def rcon_read(sock):
     raw = b''
     while len(raw) < 4:
@@ -603,7 +605,7 @@ if rcon_auth(s, 'test'):
 else:
     print('RCON auth failed')
 s.close()
-PYEOF_RCON
+"
       - name: Install mineflayer and run tests
         run: |
           npm install mineflayer
