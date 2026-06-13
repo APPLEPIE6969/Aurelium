@@ -162,6 +162,7 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: test
           MYSQL_DATABASE: aurelium_test
+          MYSQL_ROOT_HOST: '%'
         ports:
           - 3306:3306
         options: >-
@@ -246,6 +247,7 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: test
           MYSQL_DATABASE: aurelium_test
+          MYSQL_ROOT_HOST: '%'
         ports:
           - 3306:3306
         options: >-
