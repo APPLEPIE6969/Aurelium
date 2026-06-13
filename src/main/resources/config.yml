@@ -5,144 +5,151 @@ config-version: 1
 
 # --- Database ---
 database:
-  # sqlite or mysql
-  type: sqlite
+ # sqlite or mysql
+ type: sqlite
 
-  # SQLite
-  file: "database.db"
+ # SQLite
+ file: "database.db"
 
-  # MySQL (only if type is mysql)
-  mysql:
-    host: "localhost"
-    port: 3306
-    database: "aurelium"
-    username: "root"
-    password: "password"
+ # MySQL (only if type is mysql)
+ mysql:
+ host: "localhost"
+ port: 3306
+ database: "aurelium"
+ username: "root"
+ password: "password"
 
 # --- Economy ---
 economy:
-  default-currency: "Aurels"
+ default-currency: "Aurels"
 
-  currencies:
-    Aurels:
-      symbol: "₳"
-      starting-balance: 100.0
-    # Add more currencies here:
-    # Dollars:
-    #   symbol: "$"
-    #   starting-balance: 0.0
+ currencies:
+ Aurels:
+ symbol: "₳"
+ starting-balance: 100.0
+ # Add more currencies here:
+ # Dollars:
+ # symbol: "$"
+ # starting-balance: 0.0
 
-  # -1 = no cap
-  max-balance: -1
-  min-pay-amount: 0.01
+ # -1 = no cap
+ max-balance: -1
+ min-pay-amount: 0.01
 
-  # Messages (MiniMessage format)
-  # Placeholders: %amount%, %symbol%, %player%, %currency%
-  prefix: "<gold>[Aurelium] <gray>"
-  balance: "Balance (%currency%): %amount%%symbol%"
-  balance-other: "Balance of %player% (%currency%): %amount%%symbol%"
-  paid: "You paid <green>%amount%%symbol%</green> to <yellow>%player%</yellow>."
-  received: "You received <green>%amount%%symbol%</green> from <yellow>%player%</yellow>."
-  insufficient-funds: "You don't have enough %currency%!"
-  admin-give: "Gave <green>%amount%%symbol%</green> (%currency%) to <yellow>%player%</yellow>."
-  admin-take: "Took <red>%amount%%symbol%</red> (%currency%) from <yellow>%player%</yellow>."
-  admin-set: "Set <yellow>%player%</yellow>'s balance to <green>%amount%%symbol%</green> (%currency%)."
+ # Messages (MiniMessage format)
+ # Placeholders: %amount%, %symbol%, %player%, %currency%
+ prefix: "<gold>[Aurelium] <gray>"
+ balance: "Balance (%currency%): %amount%%symbol%"
+ balance-other: "Balance of %player% (%currency%): %amount%%symbol%"
+ paid: "You paid <green>%amount%%symbol%</green> to <yellow>%player%</yellow>."
+ received: "You received <green>%amount%%symbol%</green> from <yellow>%player%</yellow>."
+ insufficient-funds: "You don't have enough %currency%!"
+ admin-give: "Gave <green>%amount%%symbol%</green> (%currency%) to <yellow>%player%</yellow>."
+ admin-take: "Took <red>%amount%%symbol%</red> (%currency%) from <yellow>%player%</yellow>."
+ admin-set: "Set <yellow>%player%</yellow>'s balance to <green>%amount%%symbol%</green> (%currency%)."
 
 # --- Market ---
 market:
-  enabled: true
-  # "classic" = plain chest, "modern" = styled with borders and gradients
-  gui-mode: modern
-  dynamic-pricing: true
-  # How much prices shift per transaction (0.001 = 0.1%)
-  price-increase-per-buy: 0.001
-  price-decrease-per-sell: 0.001
-  # Sell price = buy price * this ratio
-  default-sell-ratio: 0.5
+ enabled: true
+ # "classic" = plain chest, "modern" = styled with borders and gradients
+ gui-mode: modern
+ dynamic-pricing: true
+ # How much prices shift per transaction (0.001 = 0.1%)
+ price-increase-per-buy: 0.001
+ price-decrease-per-sell: 0.001
+ # Sell price = buy price * this ratio
+ default-sell-ratio: 0.5
 
-  # Prevents auto-farms from tanking prices forever
-  price-floor: 0.2 # 20% of base = minimum price
-  price-ceiling: 5.0 # 500% of base = maximum price
+ # Prevents auto-farms from tanking prices forever
+ price-floor: 0.2 # 20% of base = minimum price
+ price-ceiling: 5.0 # 500% of base = maximum price
 
-  # Prices slowly drift back to base over time
-  price-recovery:
-    enabled: true
-    rate: 0.01 # 1% closer per cycle
-    interval-minutes: 10
+ # Prices slowly drift back to base over time
+ price-recovery:
+ enabled: true
+ rate: 0.01 # 1% closer per cycle
+ interval-minutes: 10
 
-  # Broadcast when expensive items crash in value
-  alerts:
-    enabled: true
-    threshold: 0.5 # Alert at 50% of base price
-    min-base-price: 200.0
+ # Broadcast when expensive items crash in value
+ alerts:
+ enabled: true
+ threshold: 0.5 # Alert at 50% of base price
+ min-base-price: 200.0
 
-  blacklist:
-    - BEDROCK
-    - BARRIER
-    - COMMAND_BLOCK
-    - STRUCTURE_VOID
-    - LIGHT
+ blacklist:
+ - BEDROCK
+ - BARRIER
+ - COMMAND_BLOCK
+ - STRUCTURE_VOID
+ - LIGHT
 
 # --- Auction House ---
 auction-house:
-  enabled: true
-  default-duration: 86400 # 24 hours
-  max-duration: 604800 # 7 days
-  listing-fee-percent: 2.0
-  sales-tax-percent: 5.0
-  max-listings-per-player: -1
-  min-listing-price: 1.0
+ enabled: true
+ default-duration: 86400 # 24 hours
+ max-duration: 604800 # 7 days
+ listing-fee-percent: 2.0
+ sales-tax-percent: 5.0
+ max-listings-per-player: -1
+ min-listing-price: 1.0
+
+ # Purchase mode: STACK = buyer gets full stack at once, UNIT = buyer chooses quantity
+ purchase-mode: STACK
+ allowed-purchase-modes:
+ - STACK
+ - UNIT
+ unit-mode-max-quantity: 64
 
 # --- Buy Orders ---
 buy-orders:
-  enabled: true
-  max-active-orders-per-player: 10
-  min-price-per-piece: 0.1
-  max-order-value: -1 # -1 = no limit
-  creation-fee-percent: 2.0
-  sales-tax-percent: 5.0
+ enabled: true
+ max-active-orders-per-player: 10
+ min-price-per-piece: 0.1
+ max-order-value: -1 # -1 = no limit
+ creation-fee-percent: 2.0
+ sales-tax-percent: 5.0
 
 # --- Web Dashboard ---
 # Browser-based market UI. Players run /web to get a link.
 web:
-  enabled: true
-  # "local" = runs a webserver inside the plugin (needs open port)
-  # "cloud" = syncs to external server (works on all hosts)
-  mode: cloud
+ enabled: true
+ # "local" = runs a webserver inside the plugin (needs open port)
+ # "cloud" = syncs to external server (works on all hosts)
+ mode: cloud
 
-  # Only used when mode is "local"
-  local:
-    host: "localhost"
-    port: 8585
-    session-timeout-minutes: 10
-    cors-allowed-origins: []
+ # Only used when mode is "local"
+ local:
+ host: "localhost"
+ port: 8585
+ session-timeout-minutes: 10
+ cors-allowed-origins: []
 
-  # Only used when mode is "cloud"
-  cloud:
-    url: "https://webaureliummc.onrender.com"
-    # Auto-generated on first run, don't share these
-    server-id: ""
-    api-key: ""
-    sync-interval: 30
+ # Only used when mode is "cloud"
+ cloud:
+ url: "https://webaureliummc.onrender.com"
+ # Auto-generated on first run, don't share these
+ server-id: ""
+ api-key: ""
+ sync-interval: 30
 
 
 # --- Custom Item Scanner ---
 custom-items:
-  enabled: true
-  scan-on-startup: true
-  scan-interval-minutes: 10
-  auto-add-to-market: true
-  default-price-multiplier: 1.5
-  discovery-methods:
-    plugin-api: true
-    pdc-scan: true
-    custom-model-data: true
-    lore-pattern: true
-    inventory-scan: true
-    interaction-detect: true
-  excluded-namespaces:
-    - minecraft
-    - aureleconomy
+ enabled: true
+ scan-on-startup: true
+ scan-interval-minutes: 10
+ auto-add-to-market: true
+ default-price-multiplier: 1.5
+ discovery-methods:
+ plugin-api: true
+ pdc-scan: true
+ custom-model-data: true
+ lore-pattern: true
+ inventory-scan: true
+ interaction-detect: true
+ excluded-namespaces:
+ - minecraft
+ - aureleconomy
 
 
 
@@ -156,10 +163,10 @@ custom-items:
 # Changes take effect on next server restart. Delete an entry to reset it to scanner defaults.
 # Example:
 # itemsadder:ruby_sword:
-#   source-plugin: ItemsAdder
-#   display-name: "Ruby Sword"
-#   category: CUSTOM_ITEMS
-#   buy-price: 500.0
-#   sell-price: 250.0
-#   enabled: true
+# source-plugin: ItemsAdder
+# display-name: "Ruby Sword"
+# category: CUSTOM_ITEMS
+# buy-price: 500.0
+# sell-price: 250.0
+# enabled: true
 discovered-items: {}
