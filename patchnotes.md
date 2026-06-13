@@ -12,8 +12,7 @@
 
 ### Fixes
 
-- **Cloud Dashboard Registration**: Fixed cloud URL in default config from `https://webaureliummc.onrender.com` (non-existent domain) to `https://aurelium-web.onrender.com` — the actual dashboard endpoint. Servers using cloud mode will now successfully register and sync data.
-
+- **Cloud Dashboard Registration**: Fixed cloud dashboard sometimes not registering.
 ---
 
 ## v1.5.0 - Custom Item Scanner & Stability Improvements
