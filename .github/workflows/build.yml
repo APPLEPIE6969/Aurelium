@@ -71,8 +71,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
-          merge-multiple: false
+          path: artifact-tmp
+      - name: Move JAR to plugins folder
+        run: |
+          mkdir -p plugins
+          find artifact-tmp -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Verify Vault is NOT present initially
         run: |
           if [ -f "plugins/Vault.jar" ]; then
@@ -109,7 +113,6 @@ jobs:
         run: |
           VAULT_AUTOINSTALL_FAIL=0
           
-          # Check 1: Vault.jar should be extracted to plugins/
           if [ -f "plugins/Vault.jar" ]; then
             echo "PASS: Vault.jar was auto-extracted to plugins/"
           else
@@ -117,7 +120,6 @@ jobs:
             VAULT_AUTOINSTALL_FAIL=1
           fi
           
-          # Check 2: Console should show auto-install message
           if grep -q "Vault not found. Attempting to auto-install Vault" logs/latest.log; then
             echo "PASS: Auto-install log message found"
           else
@@ -125,7 +127,6 @@ jobs:
             VAULT_AUTOINSTALL_FAIL=1
           fi
           
-          # Check 3: Console should show "IMPORTANT: PLEASE RESTART" message
           if grep -q "IMPORTANT: PLEASE RESTART THE SERVER TO LOAD VAULT" logs/latest.log; then
             echo "PASS: Restart required message found"
           else
@@ -133,7 +134,6 @@ jobs:
             VAULT_AUTOINSTALL_FAIL=1
           fi
           
-          # Check 4: Console should show colored announcement
           if grep -q "Aurelium has installed Vault.jar" logs/latest.log; then
             echo "PASS: Installation success message found"
           else
@@ -176,8 +176,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
-          merge-multiple: false
+          path: artifact-tmp
+      - name: Move JAR to plugins folder
+        run: |
+          mkdir -p plugins
+          find artifact-tmp -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
       - name: Download Paper 26.1.2
@@ -287,8 +291,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
-          merge-multiple: false
+          path: artifact-tmp
+      - name: Move JAR to plugins folder
+        run: |
+          mkdir -p plugins
+          find artifact-tmp -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
       - name: Download Paper 26.1.2
@@ -375,8 +383,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
-          merge-multiple: false
+          path: artifact-tmp
+      - name: Move JAR to plugins folder
+        run: |
+          mkdir -p plugins
+          find artifact-tmp -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Build mock ItemsAdder
         run: |
           cd ci/mock-itemsadder
@@ -458,8 +470,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
-          merge-multiple: false
+          path: artifact-tmp
+      - name: Move JAR to plugins folder
+        run: |
+          mkdir -p plugins
+          find artifact-tmp -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Build mock ItemsAdder
         run: |
           cd ci/mock-itemsadder
@@ -566,8 +582,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-1-21-11
-          path: plugins
-          merge-multiple: false
+          path: artifact-tmp
+      - name: Move JAR to plugins folder
+        run: |
+          mkdir -p plugins
+          find artifact-tmp -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
       - name: Download Paper 1.21.11
