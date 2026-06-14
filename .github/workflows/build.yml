@@ -44,14 +44,14 @@ jobs:
       - name: Build ${{ matrix.version }}
         run: ./gradlew ${{ matrix.gradle_task }} 2>&1 | tee build-${{ matrix.version }}.log
       - name: Upload JAR
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: versions/${{ matrix.version }}/build/libs/*.jar
           retention-days: 1
       - name: Upload build log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ matrix.version }}-log
           path: build-${{ matrix.version }}.log
@@ -68,7 +68,7 @@ jobs:
           java-version: "25"
           distribution: "temurin"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -150,7 +150,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vault-autoinstall-log
           path: logs/latest.log
@@ -167,7 +167,7 @@ jobs:
           java-version: "25"
           distribution: "temurin"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -250,7 +250,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-ingame-log
           path: logs/latest.log
@@ -283,7 +283,7 @@ jobs:
           java-version: "25"
           distribution: "temurin"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -343,7 +343,7 @@ jobs:
           exit $RC
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mysql-test-log
           path: logs/latest.log
@@ -376,7 +376,7 @@ jobs:
           java-version: "25"
           distribution: "temurin"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -442,7 +442,7 @@ jobs:
           exit $RC
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: scanner-mysql-log
           path: logs/latest.log
@@ -464,7 +464,7 @@ jobs:
         with:
           node-version: "22"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -548,14 +548,14 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload test output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mineflayer-output
           path: mineflayer-output.txt
           retention-days: 7
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mineflayer-server-log
           path: logs/latest.log
@@ -577,7 +577,7 @@ jobs:
         with:
           node-version: "22"
       - name: Download Aurelium 1.21.11
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurelium-1-21-11
           path: artifact-tmp
@@ -645,14 +645,14 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload test output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mineflayer-output-12111
           path: mineflayer-output-12111.txt
           retention-days: 7
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mineflayer-12111-server-log
           path: logs/latest.log
