@@ -48,6 +48,7 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: versions/${{ matrix.version }}/build/libs/*.jar
+          retention-days: 1
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,7 +71,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
+          path: downloaded-artifact
+      - name: Extract JAR from artifact
+        run: |
+          mkdir -p plugins
+          find downloaded-artifact -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Verify Vault is NOT present initially
         run: |
           if [ -f "plugins/Vault.jar" ]; then
@@ -174,7 +180,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
+          path: downloaded-artifact
+      - name: Extract JAR from artifact
+        run: |
+          mkdir -p plugins
+          find downloaded-artifact -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
       - name: Download Paper 26.1.2
@@ -284,7 +295,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
+          path: downloaded-artifact
+      - name: Extract JAR from artifact
+        run: |
+          mkdir -p plugins
+          find downloaded-artifact -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
       - name: Download Paper 26.1.2
@@ -371,7 +387,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
+          path: downloaded-artifact
+      - name: Extract JAR from artifact
+        run: |
+          mkdir -p plugins
+          find downloaded-artifact -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Build mock ItemsAdder
         run: |
           cd ci/mock-itemsadder
@@ -453,7 +474,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-26-1-2
-          path: plugins
+          path: downloaded-artifact
+      - name: Extract JAR from artifact
+        run: |
+          mkdir -p plugins
+          find downloaded-artifact -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Build mock ItemsAdder
         run: |
           cd ci/mock-itemsadder
@@ -560,7 +586,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aurelium-1-21-11
-          path: plugins
+          path: downloaded-artifact
+      - name: Extract JAR from artifact
+        run: |
+          mkdir -p plugins
+          find downloaded-artifact -name "*.jar" -type f -exec mv {} plugins/ \;
+          ls -la plugins/
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
       - name: Download Paper 1.21.11
