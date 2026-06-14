@@ -56,6 +56,110 @@ jobs:
           path: build-${{ matrix.version }}.log
           retention-days: 7
 
+  vault-autoinstall-test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: "temurin"
+      - name: Download Aurelium 26.1.2
+        uses: actions/download-artifact@v7
+        with:
+          name: aurelium-26-1-2
+          path: plugins
+      - name: Verify Vault is NOT present initially
+        run: |
+          if [ -f "plugins/Vault.jar" ]; then
+            echo "FAIL: Vault.jar should not exist before test"
+            exit 1
+          fi
+          echo "PASS: Vault.jar not present (as expected)"
+      - name: Download Paper 26.1.2
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Start server (first run - no Vault)
+        run: |
+          echo "eula=true" > eula.txt
+          cat > server.properties << 'PROPS'
+          online-mode=false
+          server-port=25565
+          enable-rcon=true
+          rcon.port=25575
+          rcon.password=test
+          PROPS
+          java -Xmx2G -jar paper.jar --nogui &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          for i in $(seq 1 60); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started!"; break; fi
+            sleep 2
+          done
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"; kill $SERVER_PID 2>/dev/null || true; exit 1
+          fi
+      - name: Verify Vault auto-install
+        run: |
+          VAULT_AUTOINSTALL_FAIL=0
+          
+          # Check 1: Vault.jar should be extracted to plugins/
+          if [ -f "plugins/Vault.jar" ]; then
+            echo "PASS: Vault.jar was auto-extracted to plugins/"
+          else
+            echo "FAIL: Vault.jar was not auto-extracted"
+            VAULT_AUTOINSTALL_FAIL=1
+          fi
+          
+          # Check 2: Console should show auto-install message
+          if grep -q "Vault not found. Attempting to auto-install Vault" logs/latest.log; then
+            echo "PASS: Auto-install log message found"
+          else
+            echo "FAIL: Auto-install log message not found"
+            VAULT_AUTOINSTALL_FAIL=1
+          fi
+          
+          # Check 3: Console should show "IMPORTANT: PLEASE RESTART" message
+          if grep -q "IMPORTANT: PLEASE RESTART THE SERVER TO LOAD VAULT" logs/latest.log; then
+            echo "PASS: Restart required message found"
+          else
+            echo "FAIL: Restart required message not found"
+            VAULT_AUTOINSTALL_FAIL=1
+          fi
+          
+          # Check 4: Console should show colored announcement
+          if grep -q "Aurelium has installed Vault.jar" logs/latest.log; then
+            echo "PASS: Installation success message found"
+          else
+            echo "FAIL: Installation success message not found"
+            VAULT_AUTOINSTALL_FAIL=1
+          fi
+          
+          exit $VAULT_AUTOINSTALL_FAIL
+      - name: Dump server log
+        if: always()
+        run: |
+          cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
+          if [ -f logs/latest.log ]; then
+            echo "=== Server log (last 50 lines) ==="
+            tail -50 logs/latest.log
+          fi
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
+      - name: Upload server log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: vault-autoinstall-log
+          path: logs/latest.log
+          retention-days: 7
+
   smoke-and-ingame-test:
     runs-on: ubuntu-latest
     needs: build
