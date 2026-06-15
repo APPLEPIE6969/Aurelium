@@ -132,10 +132,8 @@ public class AuctionGUI extends GUIHolder {
  ItemStack display = ai.getItem().clone();
  String sellerName = Bukkit.getOfflinePlayer(ai.getSeller()).getName();
  String priceFormatted = plugin.getEconomyManager().getFormattedWithSymbol(ai.getPrice(), ai.getCurrency());
- String priceLine = (ai.isBin() ? "Buy It Now: " : "Current Bid: ") + priceFormatted;
- if (ai.getPurchaseMode() == AuctionItem.PurchaseMode.UNIT) {
- priceLine += " each";
- }
+   final String priceLine = (ai.isBin() ? "Buy It Now: " : "Current Bid: ") + priceFormatted
+  + (ai.getPurchaseMode() == AuctionItem.PurchaseMode.UNIT ? " each" : "");
  String timeLeft = formatTime(ai.getExpiration() - System.currentTimeMillis());
 
  display.editMeta(meta -> {
