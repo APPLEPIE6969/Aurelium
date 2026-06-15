@@ -46,8 +46,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
       - name: Build ${{ matrix.version }}
         run: |
-        set -o pipefail
-        ./gradlew ${{ matrix.gradle_task }} 2>&1 | tee build-${{ matrix.version }}.log
+          set -o pipefail
+          ./gradlew ${{ matrix.gradle_task }} 2>&1 | tee build-${{ matrix.version }}.log
       - name: Upload JAR
         uses: actions/upload-artifact@v6
         with:
