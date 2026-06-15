@@ -45,7 +45,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
       - name: Build ${{ matrix.version }}
-        run: ./gradlew ${{ matrix.gradle_task }} 2>&1 | tee build-${{ matrix.version }}.log
+        run: |
+        set -o pipefail
+        ./gradlew ${{ matrix.gradle_task }} 2>&1 | tee build-${{ matrix.version }}.log
       - name: Upload JAR
         uses: actions/upload-artifact@v6
         with:
