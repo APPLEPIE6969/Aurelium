@@ -107,7 +107,7 @@ jobs:
           java-version: "25"
           distribution: "temurin"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -226,7 +226,7 @@ jobs:
           java-version: "25"
           distribution: "temurin"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -366,7 +366,7 @@ jobs:
           java-version: "25"
           distribution: "temurin"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -483,7 +483,7 @@ jobs:
           java-version: "25"
           distribution: "temurin"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -595,7 +595,7 @@ jobs:
         with:
           node-version: "22"
       - name: Download Aurelium 26.1.2
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
@@ -732,7 +732,7 @@ jobs:
         with:
           node-version: "22"
       - name: Download Aurelium 1.21.11
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: aurelium-1-21-11
           path: artifact-tmp
