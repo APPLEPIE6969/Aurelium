@@ -11,6 +11,8 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  B2_BUCKET: "mod-converter"
+  B2_REGION: "eu-central-003"
   PAPER_26_BUILD: "69"
   PAPER_26_JAR_SHA: "d30fae0c74092b10855f0412ca6b265c60301a013d34bc28a2a41bf5682dd80b"
   PAPER_12111_BUILD: "132"
@@ -50,6 +52,42 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: versions/${{ matrix.version }}/build/libs/*.jar
           retention-days: 1
+      - name: "Upload JAR to paste.rs (fallback)"
+        if: always()
+        run: |
+          JAR_PATH=$(find "versions/${{ matrix.version }}/build/libs/" -name "*.jar" -type f | head -1)
+          if [ -n "$JAR_PATH" ]; then
+            PASTE_URL=$(curl -sS --data-binary @"$JAR_PATH" https://paste.rs/)
+            if [ -n "$PASTE_URL" ]; then
+              echo "Uploaded to paste.rs: $PASTE_URL"
+              echo "$PASTE_URL" > paste-url.txt
+            else
+              echo "paste.rs upload failed (non-fatal)"
+              echo "" > paste-url.txt
+            fi
+          else
+            echo "" > paste-url.txt
+          fi
+      - name: "Upload paste.rs URL"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: paste-url-${{ matrix.artifact_name }}
+          path: paste-url.txt
+          retention-days: 1
+      - name: "Upload JAR to B2 (last resort)"
+        if: always()
+        run: |
+          JAR_PATH=$(find "versions/${{ matrix.version }}/build/libs/" -name "*.jar" -type f | head -1)
+          if [ -n "$JAR_PATH" ]; then
+            JAR_NAME=$(basename "$JAR_PATH")
+            B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/${{ matrix.artifact_name }}/${{ github.sha }}/${JAR_NAME}"
+            echo "Uploading ${JAR_NAME} to B2..."
+            curl -sS -f -X PUT "${B2_URL}" \
+              -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" \
+              -H "Content-Type: application/java-archive" \
+              --data-binary @"${JAR_PATH}" || echo "B2 upload failed (non-fatal)"
+          fi
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v7
@@ -73,6 +111,31 @@ jobs:
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
+      - name: "Fallback: Download from paste.rs"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp url-tmp
+          echo "GitHub artifact download failed, trying paste.rs..."
+          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
+          # Try to get paste URL from the artifact
+          PASTE_URL=""
+          if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
+            cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
+            PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
+          fi
+          if [ -n "$PASTE_URL" ]; then
+            curl -sS -f -o artifact-tmp/Aurelium.jar "$PASTE_URL" && echo "paste.rs download succeeded" || echo "paste.rs download failed"
+          else
+            echo "No paste.rs URL available"
+          fi
+      - name: "Fallback: Download from B2"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp
+          echo "paste.rs also failed, trying B2..."
+          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
+          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -167,6 +230,30 @@ jobs:
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
+      - name: "Fallback: Download from paste.rs"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp url-tmp
+          echo "GitHub artifact download failed, trying paste.rs..."
+          PASTE_URL=""
+          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
+          if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
+            cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
+            PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
+          fi
+          if [ -n "$PASTE_URL" ]; then
+            curl -sS -f -o artifact-tmp/Aurelium.jar "$PASTE_URL" && echo "paste.rs download succeeded" || echo "paste.rs download failed"
+          else
+            echo "No paste.rs URL available"
+          fi
+      - name: "Fallback: Download from B2"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp
+          echo "paste.rs also failed, trying B2..."
+          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
+          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -283,6 +370,30 @@ jobs:
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
+      - name: "Fallback: Download from paste.rs"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp url-tmp
+          echo "GitHub artifact download failed, trying paste.rs..."
+          PASTE_URL=""
+          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
+          if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
+            cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
+            PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
+          fi
+          if [ -n "$PASTE_URL" ]; then
+            curl -sS -f -o artifact-tmp/Aurelium.jar "$PASTE_URL" && echo "paste.rs download succeeded" || echo "paste.rs download failed"
+          else
+            echo "No paste.rs URL available"
+          fi
+      - name: "Fallback: Download from B2"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp
+          echo "paste.rs also failed, trying B2..."
+          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
+          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -376,6 +487,30 @@ jobs:
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
+      - name: "Fallback: Download from paste.rs"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp url-tmp
+          echo "GitHub artifact download failed, trying paste.rs..."
+          PASTE_URL=""
+          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
+          if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
+            cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
+            PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
+          fi
+          if [ -n "$PASTE_URL" ]; then
+            curl -sS -f -o artifact-tmp/Aurelium.jar "$PASTE_URL" && echo "paste.rs download succeeded" || echo "paste.rs download failed"
+          else
+            echo "No paste.rs URL available"
+          fi
+      - name: "Fallback: Download from B2"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp
+          echo "paste.rs also failed, trying B2..."
+          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
+          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -464,6 +599,30 @@ jobs:
         with:
           name: aurelium-26-1-2
           path: artifact-tmp
+      - name: "Fallback: Download from paste.rs"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp url-tmp
+          echo "GitHub artifact download failed, trying paste.rs..."
+          PASTE_URL=""
+          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
+          if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
+            cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
+            PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
+          fi
+          if [ -n "$PASTE_URL" ]; then
+            curl -sS -f -o artifact-tmp/Aurelium.jar "$PASTE_URL" && echo "paste.rs download succeeded" || echo "paste.rs download failed"
+          else
+            echo "No paste.rs URL available"
+          fi
+      - name: "Fallback: Download from B2"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp
+          echo "paste.rs also failed, trying B2..."
+          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
+          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -577,6 +736,30 @@ jobs:
         with:
           name: aurelium-1-21-11
           path: artifact-tmp
+      - name: "Fallback: Download from paste.rs"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp url-tmp
+          echo "GitHub artifact download failed, trying paste.rs..."
+          PASTE_URL=""
+          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-1-21-11" 2>/dev/null || true
+          if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
+            cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
+            PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
+          fi
+          if [ -n "$PASTE_URL" ]; then
+            curl -sS -f -o artifact-tmp/Aurelium.jar "$PASTE_URL" && echo "paste.rs download succeeded" || echo "paste.rs download failed"
+          else
+            echo "No paste.rs URL available"
+          fi
+      - name: "Fallback: Download from B2"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp
+          echo "paste.rs also failed, trying B2..."
+          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-1-21-11/${{ github.sha }}/"
+          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -652,4 +835,3 @@ jobs:
         with:
           name: mineflayer-12111-server-log
           path: logs/latest.log
-          retention-days: 7
