@@ -11,8 +11,6 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  B2_BUCKET: "mod-converter"
-  B2_REGION: "eu-central-003"
   PAPER_26_BUILD: "69"
   PAPER_26_JAR_SHA: "d30fae0c74092b10855f0412ca6b265c60301a013d34bc28a2a41bf5682dd80b"
   PAPER_12111_BUILD: "132"
@@ -77,19 +75,6 @@ jobs:
           name: paste-url-${{ matrix.artifact_name }}
           path: paste-url.txt
           retention-days: 1
-      - name: "Upload JAR to B2 (last resort)"
-        if: always()
-        run: |
-          JAR_PATH=$(find "versions/${{ matrix.version }}/build/libs/" -name "*.jar" -type f | head -1)
-          if [ -n "$JAR_PATH" ]; then
-            JAR_NAME=$(basename "$JAR_PATH")
-            B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/${{ matrix.artifact_name }}/${{ github.sha }}/${JAR_NAME}"
-            echo "Uploading ${JAR_NAME} to B2..."
-            curl -sS -f -X PUT "${B2_URL}" \
-              -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" \
-              -H "Content-Type: application/java-archive" \
-              --data-binary @"${JAR_PATH}" || echo "B2 upload failed (non-fatal)"
-          fi
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v6
@@ -131,13 +116,6 @@ jobs:
           else
             echo "No paste.rs URL available"
           fi
-      - name: "Fallback: Download from B2"
-        if: failure()
-        run: |
-          mkdir -p artifact-tmp
-          echo "paste.rs also failed, trying B2..."
-          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
-          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -249,13 +227,6 @@ jobs:
           else
             echo "No paste.rs URL available"
           fi
-      - name: "Fallback: Download from B2"
-        if: failure()
-        run: |
-          mkdir -p artifact-tmp
-          echo "paste.rs also failed, trying B2..."
-          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
-          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -389,13 +360,6 @@ jobs:
           else
             echo "No paste.rs URL available"
           fi
-      - name: "Fallback: Download from B2"
-        if: failure()
-        run: |
-          mkdir -p artifact-tmp
-          echo "paste.rs also failed, trying B2..."
-          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
-          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -506,13 +470,6 @@ jobs:
           else
             echo "No paste.rs URL available"
           fi
-      - name: "Fallback: Download from B2"
-        if: failure()
-        run: |
-          mkdir -p artifact-tmp
-          echo "paste.rs also failed, trying B2..."
-          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
-          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -618,13 +575,6 @@ jobs:
           else
             echo "No paste.rs URL available"
           fi
-      - name: "Fallback: Download from B2"
-        if: failure()
-        run: |
-          mkdir -p artifact-tmp
-          echo "paste.rs also failed, trying B2..."
-          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-26-1-2/${{ github.sha }}/"
-          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
@@ -755,13 +705,6 @@ jobs:
           else
             echo "No paste.rs URL available"
           fi
-      - name: "Fallback: Download from B2"
-        if: failure()
-        run: |
-          mkdir -p artifact-tmp
-          echo "paste.rs also failed, trying B2..."
-          B2_URL="https://s3.${{ env.B2_REGION }}.backblazeb2.com/${{ env.B2_BUCKET }}/ci-artifacts/aurelium/aurelium-1-21-11/${{ github.sha }}/"
-          curl -sS -f "${B2_URL}" -H "Authorization: Basic ${{ secrets.B2_AUTH_BASIC }}" -o artifact-tmp/Aurelium.jar || echo "B2 fallback also failed"
       - name: Move JAR to plugins folder
         run: |
           mkdir -p plugins
