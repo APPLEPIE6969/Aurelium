@@ -303,8 +303,8 @@ jobs:
             echo "FAIL: No .db file"; SMOKE_FAIL=1
           fi
           SCHEMA_VER=$(sqlite3 plugins/Aurelium/database.db "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "0")
-          if [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
-            echo "PASS: Schema v2"
+          if [ "$SCHEMA_VER" = "3" ] || [ "$SCHEMA_VER" = "v3" ] || [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
+            echo "PASS: Schema $SCHEMA_VER"
           else
             echo "FAIL: Schema version '$SCHEMA_VER'"; SMOKE_FAIL=1
           fi
