@@ -14,18 +14,33 @@ public class DatabaseManager {
     private final AurelEconomy plugin;
     private Connection connection;
     private String databaseType;
+    // Lock for serializing all async DB writes to prevent concurrent Connection use
+    private final Object dbWriteLock = new Object();
 
     public DatabaseManager(AurelEconomy plugin) {
         this.plugin = plugin;
         this.databaseType = plugin.getConfig().getString("database.type", "sqlite").toLowerCase();
     }
 
-	/**
-	 * Returns true if the configured database type is MySQL/MariaDB.
-	 */
-	public boolean isMySQL() {
-		return "mysql".equals(databaseType);
-	}
+    /**
+     * Returns true if the configured database type is MySQL/MariaDB.
+     */
+    public boolean isMySQL() {
+        return "mysql".equals(databaseType);
+    }
+
+    /**
+     * Returns the lock object for serializing async DB write operations.
+     * All async tasks that use getConnection() for writes should synchronize on this.
+     * <pre>
+     * synchronized (dbManager.getWriteLock()) {
+     *   try (PreparedStatement ps = dbManager.getConnection().prepareStatement(...)) { ... }
+     * }
+     * </pre>
+     */
+    public Object getWriteLock() {
+        return dbWriteLock;
+    }
 
     private static final int LATEST_SCHEMA_VERSION = 2;
 
@@ -93,11 +108,11 @@ public class DatabaseManager {
         String username = config.getString("database.mysql.username", "root");
         String password = config.getString("database.mysql.password", "");
 
-        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false";
+        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true";
         connection = DriverManager.getConnection(url, username, password);
     }
 
-    private void createTables() {
+    private void createTables() throws SQLException {
         String autoIncrement = "mysql".equals(databaseType) ? "INT AUTO_INCREMENT PRIMARY KEY"
                 : "INTEGER PRIMARY KEY AUTOINCREMENT";
 
@@ -162,11 +177,14 @@ public class DatabaseManager {
                     "buy_price DOUBLE, " +
                     "sell_price DOUBLE, " +
                     "timestamp LONG" +
-                    ")"); 
+                    ")");
+
             createOffersTable(autoIncrement);
+            createCustomItemsTable();
 
         } catch (SQLException e) {
             plugin.getComponentLogger().error("Could not create tables for " + databaseType + "!", e);
+            throw e;  // Propagate so initialize() returns false instead of silently succeeding
         }
     }
 
@@ -193,13 +211,15 @@ public class DatabaseManager {
             try {
                 connection.rollback();
             } catch (SQLException ex) {
-                /* ignored */ }
+                /* ignored */
+            }
             plugin.getComponentLogger().error("Database migration FAILED! Some features might be broken.", e);
         } finally {
             try {
                 connection.setAutoCommit(true);
             } catch (SQLException ex) {
-                /* ignored */ }
+                /* ignored */
+            }
         }
     }
 
@@ -230,6 +250,10 @@ public class DatabaseManager {
                 addColumnIfNotExists("offline_earnings", "currency", "VARCHAR(32)");
                 addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
                 addColumnIfNotExists("auction_offers", "currency", "VARCHAR(32)");
+                break;
+            case 2:
+                // Fix: propagate DDL failure — throw instead of swallowing
+                createCustomItemsTable();
                 break;
         }
     }
@@ -315,47 +339,50 @@ public class DatabaseManager {
         }
     }
 
- private void createCustomItemsTable() {
-     try (Statement statement = connection.createStatement()) {
-         if ("mysql".equals(databaseType)) {
-             statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
-                 "canonical_id VARCHAR(255) PRIMARY KEY, " +
-                 "source_plugin VARCHAR(64) NOT NULL, " +
-                 "display_name VARCHAR(256), " +
-                 "item_data TEXT NOT NULL, " +
-                 "pdc_key VARCHAR(255), " +
-                 "model_data_key VARCHAR(128), " +
-                 "lore_hash VARCHAR(64), " +
-                 "plugin_native_id VARCHAR(255), " +
-                 "category VARCHAR(64), " +
-                 "buy_price DOUBLE DEFAULT -1, " +
-                 "sell_price DOUBLE DEFAULT -1, " +
-                 "enabled TINYINT(1) DEFAULT 1, " +
-                 "discovery_methods VARCHAR(256), " +
-                 "first_discovered BIGINT NOT NULL, " +
-                 "last_seen BIGINT NOT NULL" +
-                 ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-         } else {
-             statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
-                 "canonical_id TEXT PRIMARY KEY, " +
-                 "source_plugin TEXT NOT NULL, " +
-                 "display_name TEXT, " +
-                 "item_data TEXT NOT NULL, " +
-                 "pdc_key TEXT, " +
-                 "model_data_key TEXT, " +
-                 "lore_hash TEXT, " +
-                 "plugin_native_id TEXT, " +
-                 "category TEXT, " +
-                 "buy_price REAL DEFAULT -1, " +
-                 "sell_price REAL DEFAULT -1, " +
-                 "enabled INTEGER DEFAULT 1, " +
-                 "discovery_methods TEXT, " +
-                 "first_discovered INTEGER NOT NULL, " +
-                 "last_seen INTEGER NOT NULL" +
-                 ")");
-         }
-     } catch (SQLException e) {
-         plugin.getComponentLogger().error("Could not create custom_items table for " + databaseType + "!", e);
-     }
- }
+    /**
+     * Creates the custom_items table for both MySQL and SQLite.
+     * Propagates SQLException so callers (createTables, migration v2) can handle failure.
+     */
+    private void createCustomItemsTable() throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            if ("mysql".equals(databaseType)) {
+                statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+                    "canonical_id VARCHAR(255) PRIMARY KEY, " +
+                    "source_plugin VARCHAR(64) NOT NULL, " +
+                    "display_name VARCHAR(256), " +
+                    "item_data TEXT NOT NULL, " +
+                    "pdc_key VARCHAR(255), " +
+                    "model_data_key VARCHAR(128), " +
+                    "lore_hash VARCHAR(64), " +
+                    "plugin_native_id VARCHAR(255), " +
+                    "category VARCHAR(64), " +
+                    "buy_price DOUBLE DEFAULT -1, " +
+                    "sell_price DOUBLE DEFAULT -1, " +
+                    "enabled TINYINT(1) DEFAULT 1, " +
+                    "discovery_methods VARCHAR(256), " +
+                    "first_discovered BIGINT NOT NULL, " +
+                    "last_seen BIGINT NOT NULL" +
+                    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            } else {
+                statement.execute("CREATE TABLE IF NOT EXISTS custom_items (" +
+                    "canonical_id TEXT PRIMARY KEY, " +
+                    "source_plugin TEXT NOT NULL, " +
+                    "display_name TEXT, " +
+                    "item_data TEXT NOT NULL, " +
+                    "pdc_key TEXT, " +
+                    "model_data_key TEXT, " +
+                    "lore_hash TEXT, " +
+                    "plugin_native_id TEXT, " +
+                    "category TEXT, " +
+                    "buy_price REAL DEFAULT -1, " +
+                    "sell_price REAL DEFAULT -1, " +
+                    "enabled INTEGER DEFAULT 1, " +
+                    "discovery_methods TEXT, " +
+                    "first_discovered INTEGER NOT NULL, " +
+                    "last_seen INTEGER NOT NULL" +
+                    ")");
+            }
+        }
+    }
+
 }
