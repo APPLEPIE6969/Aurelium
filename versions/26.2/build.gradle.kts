@@ -17,7 +17,8 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.2.build.21-stable")
+    compileOnly("io.papermc.paper:paper-api:26.2-rc-2")
+    implementation("io.papermc.paper:paper-server:26.2-rc-2")
 
     implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("com.mysql:mysql-connector-j:8.3.0")
@@ -26,7 +27,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation("org.mockito:mockito-core:5.23.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
-    testImplementation("io.papermc.paper:paper-api:26.2.build.21-stable")
+    testImplementation("io.papermc.paper:paper-api:26.2-rc-2")
     testImplementation("net.kyori:adventure-api:4.17.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testRuntimeOnly("org.xerial:sqlite-jdbc:3.45.3.0")
