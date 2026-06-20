@@ -244,7 +244,7 @@ jobs:
       - name: Start server
         run: |
           echo "eula=true" > eula.txt
-          cat > server.properties << \'PROPS\'
+          cat > server.properties << 'PROPS'
           online-mode=false
           server-port=25565
           enable-rcon=true
@@ -377,7 +377,7 @@ jobs:
       - name: Create MySQL config
         run: |
           mkdir -p plugins/Aurelium
-          cat > plugins/Aurelium/config.yml << \'CONFIG\'
+          cat > plugins/Aurelium/config.yml << 'CONFIG'
           database:
             type: mysql
             mysql:
@@ -390,7 +390,7 @@ jobs:
       - name: Start server and run RCON tests
         run: |
           echo "eula=true" > eula.txt
-          cat > server.properties << \'PROPS\'
+          cat > server.properties << 'PROPS'
           online-mode=false
           server-port=25565
           enable-rcon=true
@@ -492,7 +492,7 @@ jobs:
       - name: Create MySQL config
         run: |
           mkdir -p plugins/Aurelium
-          cat > plugins/Aurelium/config.yml << \'CONFIG\'
+          cat > plugins/Aurelium/config.yml << 'CONFIG'
           database:
             type: mysql
             mysql:
@@ -505,7 +505,7 @@ jobs:
       - name: Start server and run scanner tests
         run: |
           echo "eula=true" > eula.txt
-          cat > server.properties << \'PROPS\'
+          cat > server.properties << 'PROPS'
           online-mode=false
           server-port=25565
           enable-rcon=true
@@ -602,7 +602,7 @@ jobs:
       - name: Configure and start server
         run: |
           echo "eula=true" > eula.txt
-          cat > server.properties << \'PROPS\'
+          cat > server.properties << 'PROPS'
           online-mode=false
           server-port=25565
           max-players=10
@@ -722,7 +722,7 @@ jobs:
       - name: Configure and start server
         run: |
           echo "eula=true" > eula.txt
-          cat > server.properties << \'PROPS\'
+          cat > server.properties << 'PROPS'
           online-mode=false
           server-port=25565
           max-players=10
