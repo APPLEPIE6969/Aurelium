@@ -15,6 +15,8 @@ env:
   PAPER_26_JAR_SHA: "d30fae0c74092b10855f0412ca6b265c60301a013d34bc28a2a41bf5682dd80b"
   PAPER_12111_BUILD: "132"
   PAPER_12111_JAR_SHA: "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
+  PAPER_262_BUILD: "24"
+  PAPER_262_JAR_SHA: "668ca744350ff08c27b5f51d2c929a1dc2b3c4b7cdc1408295c61211e6e924fc"
   VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
   VIAVERSION_URL: "https://cdn.modrinth.com/data/P1OZGk5p/versions/6LC4R0sP/ViaVersion-5.9.2-SNAPSHOT.jar"
   VIABACKWARDS_URL: "https://cdn.modrinth.com/data/NpvuJQoq/versions/Og77hOkC/ViaBackwards-5.9.2-SNAPSHOT.jar"
@@ -24,6 +26,10 @@ jobs:
     strategy:
       matrix:
         include:
+          - version: "26.2"
+            jdk: 25
+            gradle_task: ":v26_2:shadowJar"
+            artifact_name: aurelium-26-2
           - version: "26.1.2"
             jdk: 25
             gradle_task: ":v26_1_2:shadowJar"
@@ -105,7 +111,6 @@ jobs:
           echo "GitHub artifact download failed, trying paste.rs..."
           curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
-          # Try to get paste URL from the artifact
           PASTE_URL=""
           if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
             cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
@@ -150,15 +155,12 @@ jobs:
       - name: Verify Vault auto-install attempt
         run: |
           VAULT_AUTOINSTALL_FAIL=0
-          # VaultInstaller tries to extract embedded Vault.jar but shadow JAR strips it
-          # So we verify the attempt was made and the fallback error is logged
           if grep -q "Vault not found. Attempting to auto-install Vault" logs/latest.log; then
             echo "PASS: Auto-install attempt message found"
           else
             echo "FAIL: Auto-install attempt message not found"
             VAULT_AUTOINSTALL_FAIL=1
           fi
-          # Either embedded Vault.jar was extracted OR the fallback message was logged
           if [ -f "plugins/Vault.jar" ]; then
             echo "PASS: Vault.jar was auto-extracted to plugins/"
           elif grep -qi "Could not find embedded Vault.jar" logs/latest.log; then
@@ -167,7 +169,6 @@ jobs:
             echo "FAIL: Neither Vault.jar extracted nor fallback error logged"
             VAULT_AUTOINSTALL_FAIL=1
           fi
-          # Vault hook should NOT be present since Vault was never loaded
           if grep -q "Vault hooked" logs/latest.log; then
             echo "FAIL: Vault should not be hooked (Vault was never loaded)"
             VAULT_AUTOINSTALL_FAIL=1
@@ -780,3 +781,4 @@ jobs:
         with:
           name: mineflayer-12111-server-log
           path: logs/latest.log
+          retention-days: 7
