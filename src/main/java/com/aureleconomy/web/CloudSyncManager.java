@@ -157,15 +157,15 @@ public class CloudSyncManager {
             } catch (Exception e) {
                 String msg = e.getMessage();
                 if (msg != null && (msg.contains("HTTP 4") || msg.contains("HTTP 5") || msg.contains("http 4") || msg.contains("http 5"))) {
-                    plugin.getComponentLogger().warn("Cloud dashboard registration failed: " + msg);
-                    plugin.getComponentLogger().info("Cloud dashboard disabled. Set web.cloud.url in config if you have a dashboard.");
+                    plugin.getComponentLogger().error("Cloud dashboard registration failed (dashboard returned error): " + msg);
+                    plugin.getComponentLogger().error("Cloud dashboard disabled. Set web.cloud.url in config if you have a dashboard.");
                 } else {
-                    plugin.getComponentLogger().warn("Registration attempt " + attempt + " failed (transient): " + msg);
+                    plugin.getComponentLogger().error("Registration attempt " + attempt + " failed (transient): " + msg);
                     if (attempt < 3) {
                         long delay = 300L * attempt;
                         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> attemptRegistration(attempt + 1), delay);
                     } else {
-                        plugin.getComponentLogger().warn("Cloud dashboard registration gave up after " + attempt + " attempts");
+                        plugin.getComponentLogger().error("Cloud dashboard registration gave up after " + attempt + " attempts");
                     }
                 }
             }

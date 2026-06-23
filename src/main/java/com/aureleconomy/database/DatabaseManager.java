@@ -308,30 +308,30 @@ public class DatabaseManager {
  }
  }
 
- public Connection getConnection() {
- try {
- if (connection == null || connection.isClosed()) {
- if ("mysql".equals(databaseType)) {
- initializeMySQL();
- } else {
- initializeSQLite();
- }
- }
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Failed to re-establish " + databaseType + " database connection!", e);
- }
- return connection;
- }
+ public synchronized Connection getConnection() {
+  try {
+  if (connection == null || connection.isClosed()) {
+  if ("mysql".equals(databaseType)) {
+  initializeMySQL();
+  } else {
+  initializeSQLite();
+  }
+  }
+  } catch (SQLException e) {
+  plugin.getComponentLogger().error("Failed to re-establish " + databaseType + " database connection!", e);
+  }
+  return connection;
+  }
 
- public void close() {
- try {
- if (connection != null && !connection.isClosed()) {
- connection.close();
- }
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Could not close database connection!", e);
- }
- }
+  public synchronized void close() {
+  try {
+  if (connection != null && !connection.isClosed()) {
+  connection.close();
+  }
+  } catch (SQLException e) {
+  plugin.getComponentLogger().error("Could not close database connection!", e);
+  }
+  }
 
  private void addColumnIfNotExists(String table, String column, String type) throws SQLException {
  try (Statement statement = connection.createStatement()) {

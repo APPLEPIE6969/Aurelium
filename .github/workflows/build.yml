@@ -11,15 +11,15 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PAPER_26_BUILD: "69"
-  PAPER_26_JAR_SHA: "d30fae0c74092b10855f0412ca6b265c60301a013d34bc28a2a41bf5682dd80b"
+  PAPER_26_BUILD: "72"
+  PAPER_26_JAR_SHA: "0555a0b0468a5198d8fb1a16e1f9e95c81a917a2dc8f2e09867b4044742f6401"
   PAPER_12111_BUILD: "132"
   PAPER_12111_JAR_SHA: "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
-  PAPER_262_BUILD: "24"
-  PAPER_262_JAR_SHA: "668ca744350ff08c27b5f51d2c929a1dc2b3c4b7cdc1408295c61211e6e924fc"
+  PAPER_262_BUILD: "32"
+  PAPER_262_JAR_SHA: "cb96324c0b451c8c20b965c78cb82b93f15cdcf95c337a6cbbd9075faae78587"
   VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
-  VIAVERSION_URL: "https://cdn.modrinth.com/data/P1OZGk5p/versions/6LC4R0sP/ViaVersion-5.9.2-SNAPSHOT.jar"
-  VIABACKWARDS_URL: "https://cdn.modrinth.com/data/NpvuJQoq/versions/Og77hOkC/ViaBackwards-5.9.2-SNAPSHOT.jar"
+  VIAVERSION_URL: "https://cdn.modrinth.com/data/P1OZGk5p/versions/z0sCGSmk/ViaVersion-5.10.1-SNAPSHOT.jar"
+  VIABACKWARDS_URL: "https://cdn.modrinth.com/data/NpvuJQoq/versions/2dyKr4e5/ViaBackwards-5.10.1-SNAPSHOT.jar"
 
 jobs:
   build:
@@ -550,10 +550,10 @@ jobs:
         with:
           java-version: "25"
           distribution: "temurin"
-      - name: Set up Node.js 22
+      - name: Set up Node.js 24
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version: "24"
       - name: Download Aurelium 26.1.2
         uses: actions/download-artifact@v8
         with:
@@ -680,10 +680,10 @@ jobs:
         with:
           java-version: "21"
           distribution: "temurin"
-      - name: Set up Node.js 22
+      - name: Set up Node.js 24
         uses: actions/setup-node@v5
         with:
-          node-version: "22"
+          node-version: "24"
       - name: Download Aurelium 1.21.11
         uses: actions/download-artifact@v7
         with:
