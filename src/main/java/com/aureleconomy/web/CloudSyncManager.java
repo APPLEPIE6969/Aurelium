@@ -353,6 +353,8 @@ public class CloudSyncManager {
             json.append(",\"currencySymbol\":\"")
                     .append(escJson(plugin.getEconomyManager().getCurrencySymbol(ai.getCurrency()))).append("\"");
             json.append(",\"isBin\":").append(ai.isBin());
+            json.append(",\"purchaseMode\":\"").append(escJson(ai.getPurchaseMode().name())).append("\"");
+            json.append(",\"remaining\":").append(ai.getAvailableQuantity());
             json.append(",\"expiration\":").append(ai.getExpiration());
             json.append(",\"startTime\":").append(ai.getStartTime());
             String bidderName = ai.getHighestBidder() != null ? resolvePlayerName(ai.getHighestBidder()) : "";
@@ -589,12 +591,24 @@ public class CloudSyncManager {
         return Collections.emptyList();
     }
 
-    private final Set<String> processedPurchases = Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
+    /** Time-based expiry for processed purchase IDs. Key = purchaseId, Value = timestamp. */
+    private final Map<String, Long> processedPurchases = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long PURCHASE_EXPIRY_MS = 600_000L; // 10 minutes
 
     private void executePurchases(List<Map<String, Object>> pending) {
+        long now = System.currentTimeMillis();
+
+        // Purge expired entries
+        var iter = processedPurchases.entrySet().iterator();
+        while (iter.hasNext()) {
+            if (now - iter.next().getValue() > PURCHASE_EXPIRY_MS) {
+                iter.remove();
+            }
+        }
+
         for (Map<String, Object> purchase : pending) {
             String purchaseId = (String) purchase.get("id");
-            if (processedPurchases.contains(purchaseId)) continue;
+            if (purchaseId != null && processedPurchases.containsKey(purchaseId)) continue;
 
             String playerUuid = (String) purchase.get("playerUuid");
             String type = (String) purchase.getOrDefault("type", "buy");
@@ -605,9 +619,11 @@ public class CloudSyncManager {
                 continue;
             }
 
-            processedPurchases.add(purchaseId);
+            processedPurchases.put(purchaseId, now);
 
-            if ("bid".equals(type)) {
+            if ("bin".equals(type)) {
+                executeAuctionWebBinPurchase(player, purchase, purchaseId);
+            } else if ("bid".equals(type)) {
                 executeAuctionWebBid(player, purchase, purchaseId);
             } else if ("fill_order".equals(type)) {
                 executeOrderWebFill(player, purchase, purchaseId);
@@ -615,36 +631,25 @@ public class CloudSyncManager {
                 executeMarketWebBuy(player, purchase, purchaseId);
             }
 
-            if (processedPurchases.size() > 1000) {
-                processedPurchases.clear();
             }
         }
     }
 
-    private void executeAuctionWebBid(Player player, Map<String, Object> purchase, String purchaseId) {
-        int auctionId = 0;
-        if (purchase.get("auctionId") instanceof Number) {
-            auctionId = ((Number) purchase.get("auctionId")).intValue();
-        } else if (purchase.get("auctionId") instanceof String) {
-            try {
-                auctionId = Integer.parseInt(purchase.get("auctionId").toString());
-            } catch (Exception ignored) {
-            }
-        }
-
-        BigDecimal amount = BigDecimal.ZERO;
-        if (purchase.get("amount") instanceof Number) {
-            amount = BigDecimal.valueOf(((Number) purchase.get("amount")).doubleValue());
-        } else if (purchase.get("amount") instanceof String) {
-            try {
-                amount = new BigDecimal(purchase.get("amount").toString());
-            } catch (Exception ignored) {
-            }
-        }
+    /**
+     * Handle BIN auction purchases from the web dashboard.
+     * Reads the "quantity" field for UNIT mode, or buys full stack for STACK mode.
+     */
+    private void executeAuctionWebBinPurchase(Player player, Map<String, Object> purchase, String purchaseId) {
+        int auctionId = parseFieldInt(purchase, "auctionId", 0);
 
         com.aureleconomy.auction.AuctionItem auction = plugin.getAuctionManager().getAuctionById(auctionId);
         if (auction == null || auction.isEnded()) {
             confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Auction ended or invalid");
+            return;
+        }
+
+        if (!auction.isBin()) {
+            executeAuctionWebBid(player, purchase, purchaseId);
             return;
         }
 
@@ -653,16 +658,40 @@ public class CloudSyncManager {
             return;
         }
 
-        if (!plugin.getEconomyManager().has(player, amount, auction.getCurrency())) {
-            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Not enough funds");
-            return;
-        }
+        if (auction.getPurchaseMode() == com.aureleconomy.auction.AuctionItem.PurchaseMode.UNIT) {
+            // UNIT mode: buy specific quantity
+            int quantity = parseFieldInt(purchase, "quantity", 1);
+            quantity = Math.max(1, Math.min(quantity, auction.getAvailableQuantity()));
 
-        if (auction.isBin()) {
-            if (amount.compareTo(auction.getPrice()) < 0) {
-                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Amount below BIN price");
+            BigDecimal unitPrice = auction.getPricePerUnit();
+            BigDecimal totalCost = unitPrice.multiply(BigDecimal.valueOf(quantity))
+                    .setScale(2, RoundingMode.HALF_UP);
+            String currency = auction.getCurrency();
+
+            if (!plugin.getEconomyManager().has(player, totalCost, currency)) {
+                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Not enough funds");
                 return;
             }
+
+            int purchased = plugin.getAuctionManager().purchaseUnits(auction, player, quantity);
+            if (purchased <= 0) {
+                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Purchase failed");
+                return;
+            }
+
+            BigDecimal newBalance = plugin.getEconomyManager().getBalance(player, currency);
+            String formatted = plugin.getEconomyManager().getFormattedWithSymbol(totalCost, currency);
+            confirmPurchase(purchaseId, true, newBalance, formatted);
+        } else {
+            // STACK mode: buy entire stack
+            BigDecimal totalCost = auction.getPrice();
+            String currency = auction.getCurrency();
+
+            if (!plugin.getEconomyManager().has(player, totalCost, currency)) {
+                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Not enough funds");
+                return;
+            }
+
             if (!com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), auction.getItem(),
                     auction.getItem().getAmount())) {
                 confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Inventory full");
@@ -674,8 +703,8 @@ public class CloudSyncManager {
                 return;
             }
 
-            plugin.getEconomyManager().withdraw(player, amount, auction.getCurrency());
-            plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
+            plugin.getEconomyManager().withdraw(player, totalCost, currency);
+            plugin.getAuctionManager().bid(auction, player.getUniqueId(), totalCost);
             plugin.getAuctionManager().endAuction(auction);
             player.getInventory().addItem(auction.getItem().clone());
             plugin.getAuctionManager().markCollectedAtomic(auction.getId());
@@ -683,25 +712,78 @@ public class CloudSyncManager {
             player.sendMessage(MM.deserialize("<green><bold>✔</bold> Web purchase: <white>"
                     + auction.getItem().getAmount() + "x " + auction.getItem().getType().name().replace("_", " ")
                     + "</white> from Auction House</green>"));
-        } else {
-            if (amount.compareTo(auction.getPrice()) <= 0) {
-                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Bid must be higher than current price");
-                return;
-            }
-            plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
-            player.sendMessage(MM.deserialize("<green><bold>✔</bold> Web bid placed: <gold>"
-                    + plugin.getEconomyManager().getFormattedWithSymbol(amount, auction.getCurrency()) + "</gold> on <white>"
-                    + auction.getItem().getType().name().replace("_", " ") + "</white></green>"));
+
+            BigDecimal newBalance = plugin.getEconomyManager().getBalance(player, currency);
+            String formatted = plugin.getEconomyManager().getFormattedWithSymbol(totalCost, currency);
+            confirmPurchase(purchaseId, true, newBalance, formatted);
         }
+    }
+
+    /**
+     * Handle auction BIDS (non-BIN) from the web dashboard.
+     */
+    private void executeAuctionWebBid(Player player, Map<String, Object> purchase, String purchaseId) {
+        int auctionId = parseFieldInt(purchase, "auctionId", 0);
+        BigDecimal amount = parseFieldBigDecimal(purchase, "amount", BigDecimal.ZERO);
+
+        com.aureleconomy.auction.AuctionItem auction = plugin.getAuctionManager().getAuctionById(auctionId);
+        if (auction == null || auction.isEnded()) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Auction ended or invalid");
+            return;
+        }
+
+        if (auction.getSeller().equals(player.getUniqueId())) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "You cannot bid on your own auction");
+            return;
+        }
+
+        if (auction.isBin()) {
+            executeAuctionWebBinPurchase(player, purchase, purchaseId);
+            return;
+        }
+
+        if (!plugin.getEconomyManager().has(player, amount, auction.getCurrency())) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Not enough funds");
+            return;
+        }
+
+        if (amount.compareTo(auction.getPrice()) <= 0) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Bid must be higher than current price");
+            return;
+        }
+        plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
+        player.sendMessage(MM.deserialize("<green><bold>✔</bold> Web bid placed: <gold>"
+                + plugin.getEconomyManager().getFormattedWithSymbol(amount, auction.getCurrency()) + "</gold> on <white>"
+                + auction.getItem().getType().name().replace("_", " ") + "</white></green>"));
 
         BigDecimal newBalance = plugin.getEconomyManager().getBalance(player, auction.getCurrency());
         String formatted = plugin.getEconomyManager().getFormattedWithSymbol(amount, auction.getCurrency());
         confirmPurchase(purchaseId, true, newBalance, formatted);
     }
 
+    /** Parse an int field from the purchase map, with fallback. */
+    private int parseFieldInt(Map<String, Object> map, String key, int defaultVal) {
+        Object val = map.get(key);
+        if (val instanceof Number) return ((Number) val).intValue();
+        if (val instanceof String) {
+            try { return Integer.parseInt((String) val); } catch (Exception ignored) {}
+        }
+        return defaultVal;
+    }
+
+    /** Parse a BigDecimal field from the purchase map, with fallback. */
+    private BigDecimal parseFieldBigDecimal(Map<String, Object> map, String key, BigDecimal defaultVal) {
+        Object val = map.get(key);
+        if (val instanceof Number) return BigDecimal.valueOf(((Number) val).doubleValue());
+        if (val instanceof String) {
+            try { return new BigDecimal((String) val); } catch (Exception ignored) {}
+        }
+        return defaultVal;
+    }
+
     private void executeMarketWebBuy(Player player, Map<String, Object> purchase, String purchaseId) {
         String itemKey = (String) purchase.get("item");
-        int amount = ((Number) purchase.get("amount")).intValue();
+        int amount = parseFieldInt(purchase, "amount", 1);
 
         BigDecimal buyPrice;
         String currency;
@@ -751,25 +833,9 @@ public class CloudSyncManager {
     }
 
     private void executeOrderWebFill(Player seller, Map<String, Object> purchase, String purchaseId) {
-        int orderId = 0;
-        if (purchase.get("orderId") instanceof Number) {
-            orderId = ((Number) purchase.get("orderId")).intValue();
-        } else if (purchase.get("orderId") instanceof String) {
-            try {
-                orderId = Integer.parseInt((String) purchase.get("orderId"));
-            } catch (Exception ignored) {
-            }
-        }
+        int orderId = parseFieldInt(purchase, "orderId", 0);
 
-        int amount = 0;
-        if (purchase.get("amount") instanceof Number) {
-            amount = ((Number) purchase.get("amount")).intValue();
-        } else if (purchase.get("amount") instanceof String) {
-            try {
-                amount = Integer.parseInt((String) purchase.get("amount"));
-            } catch (Exception ignored) {
-            }
-        }
+        int amount = parseFieldInt(purchase, "amount", 0);
 
         if (amount <= 0) {
             confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Amount must be positive");
