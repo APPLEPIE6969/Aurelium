@@ -49,3 +49,17 @@ recovery_tmp/
 package com.aureleconomy.web;
 hs_err_pid*.log
 build.log
+*.py
+build-*.yml
+check_*.py
+fix_*.py
+get_*.py
+push_*.py
+add_*.py
+update_*.py
+verify_*.py
+wire_*.py
+dl_*.py
+merge_*.py
+remove_*.py
+SCANNER_PROMPT.md
