@@ -12,7 +12,7 @@
 - **CI Heredoc Fixes**: Corrected bash heredoc escaping in workflow YAML (`<< 'PROPS'` vs `<< \'PROPS\'`) preventing server.properties corruption
 - **MySQL 8.0 Compatibility**: Docker service configured with `mysql_native_password` auth plugin; JDBC URL includes `allowPublicKeyRetrieval=true`
 
-### Website Changes (WebMarketMC)
+### Website Changes ([WebMarketMC](https://github.com/APPLEPIE6969/WebMarketMC))
 
 - **Astra DB Persistence**: Full rewrite of `server.js` with write-through cache, startup cache load, and fallback to in-memory mode
 - **Field-Level Encryption**: AES-256-GCM encryption for sensitive fields (`api_key`, `session_token`, `player_uuid`, `balances_json`, `result_json`) — backward compatible with plaintext data
