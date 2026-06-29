@@ -1,5 +1,30 @@
 # Aurelium - Patch Notes
 
+## v1.5.3 - Paper 26.2 Support & Web Dashboard Overhaul
+
+### Plugin Changes
+
+- **Paper 26.2 (build 40) Support**: Full compatibility with Paper 26.2 alpha — CI matrix now builds and tests against 26.2, 26.1.2 (build 72), and 1.21.1111 (build 132)
+- **ViaVersion 5.10.1-SNAPSHOT** & **ViaBackwards 5.10.1-SNAPSHOT**: Updated protocol support for cross-version connectivity
+- **Node.js 24** in CI: Updated from Node 22 (deprecated June 2026) for mineflayer test jobs
+- **SQLite Race Condition Fix**: `DatabaseManager.getConnection()` and `close()` now `synchronized` to prevent concurrent access issues on async threads
+- **Cloud Dashboard Registration**: Failure logs now at `ERROR` level (was `WARN`) — registration failures are actionable and should be visible
+- **CI Heredoc Fixes**: Corrected bash heredoc escaping in workflow YAML (`<< 'PROPS'` vs `<< \'PROPS\'`) preventing server.properties corruption
+- **MySQL 8.0 Compatibility**: Docker service configured with `mysql_native_password` auth plugin; JDBC URL includes `allowPublicKeyRetrieval=true`
+
+### Website Changes (WebMarketMC)
+
+- **Astra DB Persistence**: Full rewrite of `server.js` with write-through cache, startup cache load, and fallback to in-memory mode
+- **Field-Level Encryption**: AES-256-GCM encryption for sensitive fields (`api_key`, `session_token`, `player_uuid`, `balances_json`, `result_json`) — backward compatible with plaintext data
+- **Auction Modal Quantity Selector**: BIN auctions with stacked items now show +/- quantity buttons (1 to remaining), per-unit price, and live total cost calculation
+- **Currency Display**: Uses each item's assigned currency instead of hardcoded dollars
+- **Auction Quantity Display**: Listings show available quantity, remaining count, and per-item price
+- **RAM-Based Registration Queue**: OOM protection with configurable limits (`MAX_RAM_MB=500`, `MAX_QUEUE_SIZE=50`) for Render free tier
+- **CQL Injection Fix**: Parameterized queries in `astraQuery` function (was string interpolation)
+- **Security Audit**: Verified no dupe/money bypass vulnerabilities in purchase flow
+
+---
+
 ## v1.5.2 - Custom Item Display Name Fix
 
 ### Fixes
