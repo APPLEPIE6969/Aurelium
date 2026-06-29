@@ -15,8 +15,8 @@ env:
   PAPER_26_JAR_SHA: "0555a0b0468a5198d8fb1a16e1f9e95c81a917a2dc8f2e09867b4044742f6401"
   PAPER_12111_BUILD: "132"
   PAPER_12111_JAR_SHA: "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
-  PAPER_262_BUILD: "32"
-  PAPER_262_JAR_SHA: "cb96324c0b451c8c20b965c78cb82b93f15cdcf95c337a6cbbd9075faae78587"
+  PAPER_262_BUILD: "40"
+  PAPER_262_JAR_SHA: "6d23cedf3e2e5724fe62cbce727bb1d963264b2c"
   VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
   VIAVERSION_URL: "https://cdn.modrinth.com/data/P1OZGk5p/versions/z0sCGSmk/ViaVersion-5.10.1-SNAPSHOT.jar"
   VIABACKWARDS_URL: "https://cdn.modrinth.com/data/NpvuJQoq/versions/2dyKr4e5/ViaBackwards-5.10.1-SNAPSHOT.jar"
@@ -278,16 +278,16 @@ jobs:
           if [ "$SCHEMA_VER" = "3" ] || [ "$SCHEMA_VER" = "v3" ] || [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
             echo "PASS: Schema $SCHEMA_VER"
           else
-            echo "FAIL: Schema version \'$SCHEMA_VER\'"; SMOKE_FAIL=1
+            echo "FAIL: Schema version '$SCHEMA_VER'"; SMOKE_FAIL=1
           fi
           for table in players player_balances auctions offline_earnings buy_orders price_history auction_offers custom_items database_info; do
             if sqlite3 plugins/Aurelium/database.db ".tables" 2>/dev/null | grep -qw "$table"; then
-              echo "PASS: Table \'$table\' exists"
+              echo "PASS: Table '$table' exists"
             else
-              echo "FAIL: Table \'$table\' missing"; SMOKE_FAIL=1
+              echo "FAIL: Table '$table' missing"; SMOKE_FAIL=1
             fi
           done
-          if grep -qi "exception.*aurelium\\|error.*aurelium\\|severe" logs/latest.log | grep -vi "vault\\|registration attempt\\|PLEASE RESTART\\|io_uring\\|cloud dashboard" 2>/dev/null; then
+          if grep -qi "exception.*aurelium\|error.*aurelium\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" 2>/dev/null; then
             echo "FAIL: Exceptions found in log"; SMOKE_FAIL=1
           fi
           exit $SMOKE_FAIL
@@ -299,7 +299,7 @@ jobs:
           cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
           if [ -f logs/latest.log ]; then
             echo "=== Server exceptions ==="
-            grep -i "exception\\|error.*aurel\\|severe" logs/latest.log | grep -vi "vault\\|registration attempt\\|PLEASE RESTART\\|io_uring\\|cloud dashboard" | head -30 || echo "No exceptions found"
+            grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions found"
           fi
       - name: Stop server
         if: always()
@@ -328,7 +328,7 @@ jobs:
           for i in $(seq 1 30); do
             if docker exec mysql-test mysqladmin ping -h localhost -ptest 2>/dev/null; then
               echo "MySQL ready!"
-              docker exec mysql-test mysql -h localhost -ptest -e "ALTER USER \'root\'@\'%\' IDENTIFIED WITH mysql_native_password BY \'test\'; FLUSH PRIVILEGES;" 2>/dev/null || true
+              docker exec mysql-test mysql -h localhost -ptest -e "ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'test'; FLUSH PRIVILEGES;" 2>/dev/null || true
               break
             fi
             sleep 2
@@ -411,7 +411,7 @@ jobs:
           RC=$?
           cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
           echo "=== Server exceptions ==="
-          grep -i "exception\\|error.*aurel\\|severe" logs/latest.log | grep -vi "vault\\|registration attempt\\|PLEASE RESTART\\|io_uring\\|cloud dashboard" | head -30 || echo "No exceptions"
+          grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions"
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
           exit $RC
@@ -438,7 +438,7 @@ jobs:
           for i in $(seq 1 30); do
             if docker exec mysql-scanner mysqladmin ping -h localhost -ptest 2>/dev/null; then
               echo "MySQL ready!"
-              docker exec mysql-scanner mysql -h localhost -ptest -e "ALTER USER \'root\'@\'%\' IDENTIFIED WITH mysql_native_password BY \'test\'; FLUSH PRIVILEGES;" 2>/dev/null || true
+              docker exec mysql-scanner mysql -h localhost -ptest -e "ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'test'; FLUSH PRIVILEGES;" 2>/dev/null || true
               break
             fi
             sleep 2
@@ -527,7 +527,7 @@ jobs:
           RC=$?
           cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
           echo "=== Server exceptions ==="
-          grep -i "exception\\|error.*aurel\\|severe" logs/latest.log | grep -vi "vault\\|registration attempt\\|PLEASE RESTART\\|io_uring\\|cloud dashboard" | head -30 || echo "No exceptions"
+          grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions"
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
           exit $RC
@@ -626,7 +626,7 @@ jobs:
       - name: Wait for ViaVersion + op bot
         run: |
           for i in $(seq 1 30); do
-            if grep -qi "viaversion.*enable\\|viaversion.*loaded\\|protocol registry" logs/latest.log 2>/dev/null; then
+            if grep -qi "viaversion.*enable\|viaversion.*loaded\|protocol registry" logs/latest.log 2>/dev/null; then
               echo "ViaVersion loaded!"; break
             fi
             sleep 2
@@ -648,7 +648,7 @@ jobs:
           cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
           if [ -f logs/latest.log ]; then
             echo "=== Server exceptions ==="
-            grep -i "exception\\|error.*aurel\\|severe" logs/latest.log | grep -vi "vault\\|registration attempt\\|PLEASE RESTART\\|io_uring\\|cloud dashboard" | head -30 || echo "No exceptions"
+            grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions"
           fi
       - name: Stop server
         if: always()
@@ -762,7 +762,7 @@ jobs:
           cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
           if [ -f logs/latest.log ]; then
             echo "=== Server exceptions ==="
-            grep -i "exception\\|error.*aurel\\|severe" logs/latest.log | grep -vi "vault\\|registration attempt\\|PLEASE RESTART\\|io_uring\\|cloud dashboard" | head -30 || echo "No exceptions"
+            grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions"
           fi
       - name: Stop server
         if: always()
