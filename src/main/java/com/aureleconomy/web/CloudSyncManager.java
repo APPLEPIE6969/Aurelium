@@ -630,8 +630,6 @@ public class CloudSyncManager {
             } else {
                 executeMarketWebBuy(player, purchase, purchaseId);
             }
-
-            }
         }
     }
 
