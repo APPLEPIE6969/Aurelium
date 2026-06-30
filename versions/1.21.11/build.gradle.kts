@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.aureleconomy"
-version = "1.5.2-1.21.x"
+version = "1.5.3-1.21.x"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(21))
@@ -115,7 +115,7 @@ tasks.test {
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
-    archiveBaseName = "Aurelium-1.5.2-1.21.x"
+    archiveBaseName = "Aurelium-1.5.3-1.21.x"
     archiveVersion = ""
     archiveClassifier = ""
 
@@ -123,7 +123,7 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
-        attributes("Implementation-Version" to "1.5.2-1.21.x")
+        attributes("Implementation-Version" to "1.5.3-1.21.x")
     }
 
     // Post-process: rewrite the JAR to deduplicate all entries.
