@@ -4,24 +4,35 @@
 
 ### Plugin Changes
 
-- **Paper 26.2 (build 40) Support**: Full compatibility with Paper 26.2 alpha — CI matrix now builds and tests against 26.2, 26.1.2 (build 72), and 1.21.1111 (build 132)
+- **Paper 26.2 (build 40) Support**: Full compatibility with Paper 26.2 alpha — CI matrix now builds and tests against 26.2, 26.1.2 (build 72), and 1.21.11 (build 132)
 - **ViaVersion 5.10.1-SNAPSHOT** & **ViaBackwards 5.10.1-SNAPSHOT**: Updated protocol support for cross-version connectivity
 - **Node.js 24** in CI: Updated from Node 22 (deprecated June 2026) for mineflayer test jobs
 - **SQLite Race Condition Fix**: `DatabaseManager.getConnection()` and `close()` now `synchronized` to prevent concurrent access issues on async threads
 - **Cloud Dashboard Registration**: Failure logs now at `ERROR` level (was `WARN`) — registration failures are actionable and should be visible
 - **CI Heredoc Fixes**: Corrected bash heredoc escaping in workflow YAML (`<< 'PROPS'` vs `<< \'PROPS\'`) preventing server.properties corruption
 - **MySQL 8.0 Compatibility**: Docker service configured with `mysql_native_password` auth plugin; JDBC URL includes `allowPublicKeyRetrieval=true`
+- **54 In-Game CI Tests**: Full RCON-based test suite covering economy commands, auctions, orders, and web dashboard integration across all 3 Paper versions
 
 ### Website Changes ([WebMarketMC](https://github.com/APPLEPIE6969/WebMarketMC))
 
-- **Astra DB Persistence**: Full rewrite of `server.js` with write-through cache, startup cache load, and fallback to in-memory mode
-- **Field-Level Encryption**: AES-256-GCM encryption for sensitive fields (`api_key`, `session_token`, `player_uuid`, `balances_json`, `result_json`) — backward compatible with plaintext data
+- **Astra DB Persistence**: Full rewrite of `server.js` with write-through cache, startup cache load from all pages (paginated), and automatic fallback to in-memory mode when no `ASTRA_TOKEN` is set
+- **AES-256-GCM Field-Level Encryption**: All sensitive data stored in Astra DB is encrypted at rest — `api_key`, `session_token`, `player_uuid`, `balances_json`, and `result_json`. Uses deterministic HMAC-SHA256 for session primary keys (stable across restarts) and random-IV AES-256-GCM for everything else. Backward compatible: old plaintext data is read as-is. Server refuses to start with `ASTRA_TOKEN` but no `ENCRYPTION_KEY` (fail-closed)
+- **Write-Through Integrity**: Failed Astra DB writes now return 503 to the caller instead of silently succeeding with cache-only data — no more data loss on restart after a failed write
+- **Transport Error Handling**: `astraFetch()` and `astraQuery()` catch timeout/network errors and return structured `{ ok: false }` instead of throwing into route handlers
+- **Session Cache Consistency**: `sessionCache` keyed by `tokenHash(token)` everywhere — startup load, session creation, lookup, and cleanup all use the same HMAC-based key, so persisted sessions survive restarts
+- **Input Validation Hardening**: Buy amounts validated with `Number()` + `Number.isInteger()` (no more NaN bypass); auction/order IDs validated with `Number()` + `Number.isFinite()` + `Number.isInteger()` (no more partial parses like `parseInt('12abc')`)
 - **Auction Modal Quantity Selector**: BIN auctions with stacked items now show +/- quantity buttons (1 to remaining), per-unit price, and live total cost calculation
 - **Currency Display**: Uses each item's assigned currency instead of hardcoded dollars
 - **Auction Quantity Display**: Listings show available quantity, remaining count, and per-item price
+- **Auction Category Sidebar**: Auction page now has the same sidebar layout as the market page, with filters for All Listings, BIN Listings, and BID Listings
+- **Empty State Messages**: Category filters with no results show "No auctions in this category" with smooth animation instead of falling back to showing all auctions
+- **Modal Close Animations**: Confirm bid/purchase modals now animate closed smoothly instead of vanishing instantly
+- **Quantity Button States**: Plus button grays out at listing limit, minus button grays out at quantity 1
+- **BIN Modal Label**: Shows "Price (per item)" instead of "Your Bid (per item)" for buy-now listings
+- **Minecraft Item Icon Fallback Chain**: 26.2 item -> 26.2 block -> 26.1 item -> 26.1 block -> 1.21.11 item -> 1.21.11 block -> box icon SVG
 - **RAM-Based Registration Queue**: OOM protection with configurable limits (`MAX_RAM_MB=500`, `MAX_QUEUE_SIZE=50`) for Render free tier
 - **CQL Injection Fix**: Parameterized queries in `astraQuery` function (was string interpolation)
-- **Security Audit**: Verified no dupe/money bypass vulnerabilities in purchase flow
+- **Security Audit**: Verified no dupe/money bypass vulnerabilities in purchase flow; IDOR protection on purchase-status endpoint
 
 ---
 
