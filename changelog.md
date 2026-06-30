@@ -7,21 +7,21 @@
 - **Paper 26.2 support** — works with the latest Paper alpha builds
 - **Web dashboard is now persistent** — your market data, auctions, and player sessions survive server restarts (powered by Astra DB)
 - **All sensitive data is encrypted** — API keys, player UUIDs, balances, and session tokens are encrypted with AES-256 before being stored in the database. Even if someone gets access to the database, they can't read your players' data
-- **Auction quantity selector** — when buying a BIN auction with stacked items (like 64x Diamonds), you can now choose how many you want instead of being forced to buy the whole stack
-- **Auction category sidebar** — the auction page now has the same sidebar as the market, with filters for All Listings, BIN Listings, and BID Listings
-- **Per-item pricing** — auctions and market items now show the price per item, not just the total
+- **Auction quantity selector (web)** — when buying a BIN auction with stacked items (like 64x Diamonds), you can now choose how many you want instead of being forced to buy the whole stack
+- **Auction category sidebar (web)** — the auction page now has the same sidebar as the market, with filters for All Listings, BIN Listings, and BID Listings
+- **Per-item pricing (web)** — auctions and market items now show the price per item, not just the total
 
 ### Bug Fixes
 
 - **Sessions survive restarts** — player web sessions no longer break after the server restarts
 - **No more silent data loss** — if the database write fails, you get an error instead of the server pretending everything worked fine
-- **Better input validation** — the website now properly rejects invalid amounts and IDs instead of silently accepting them
-- **Network errors handled** — temporary database connection issues no longer crash the website
-- **Auction empty states** — filtering by category now shows "No auctions in this category" instead of showing all auctions
-- **Smooth modal animations** — closing bid/purchase popups now animates smoothly instead of vanishing instantly
-- **Quantity button states** — the + button grays out when you hit the max, the - button grays out at 1
-- **Correct BIN label** — buy-now listings show "Price (per item)" instead of "Your Bid (per item)"
-- **Better item icons** — fallback chain tries multiple Minecraft versions before showing a generic box icon
+- **Better input validation (web)** — the website now properly rejects invalid amounts and IDs instead of silently accepting them
+- **Network errors handled (web)** — temporary database connection issues no longer crash the website
+- **Auction empty states (web)** — filtering by category now shows "No auctions in this category" instead of showing all auctions
+- **Smooth modal animations (web)** — closing bid/purchase popups now animates smoothly instead of vanishing instantly
+- **Quantity button states (web)** — the + button grays out when you hit the max, the - button grays out at 1
+- **Correct BIN label (web)** — buy-now listings show "Price (per item)" instead of "Your Bid (per item)"
+- **Better item icons (web)** — fallback chain tries multiple Minecraft versions before showing a generic box icon
 
 ---
 
