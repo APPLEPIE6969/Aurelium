@@ -23,12 +23,6 @@
 - **Correct BIN label** — buy-now listings show "Price (per item)" instead of "Your Bid (per item)"
 - **Better item icons** — fallback chain tries multiple Minecraft versions before showing a generic box icon
 
-### For Server Owners
-
-- Set `ASTRA_TOKEN` and `ENCRYPTION_KEY` environment variables on your Render webservice to enable database persistence + encryption
-- Without `ASTRA_TOKEN`, the web dashboard runs in memory-only mode (all data lost on restart)
-- The server will refuse to start if you set `ASTRA_TOKEN` without `ENCRYPTION_KEY` — this is intentional to prevent storing sensitive data unencrypted
-
 ---
 
 ## v1.5.2 - Custom Item Display Name Fix
