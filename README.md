@@ -109,7 +109,7 @@ A modern, responsive web app with [nearly 100% uptime](https://stats.uptimerobot
 **Web Features:**
 - Live Sync: in-game changes reflect instantly on the web and vice-versa
 - Prices recorded every 10 minutes, stored for 7 days
-- Cloud Mode: optional cloud hosting via Render
+- Cloud Mode: optional cloud hosted dashboard via Render
 - Multi-Currency UI: custom currency symbols synced from `config.yml`
 - Icon Fallbacks: seamless fallback for older MC versions
 - Secure Sessions: `/web` in-game generates a time-limited link (rolling 1-hour timeout)
