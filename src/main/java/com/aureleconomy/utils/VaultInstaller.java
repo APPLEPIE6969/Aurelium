@@ -19,8 +19,8 @@ import java.time.Duration;
 
 public class VaultInstaller {
 
-    private static final String VAULT_MODRINTH_URL =
-            "https://cdn.modrinth.com/data/9uLXB4Yz/versions/7VNmMqhn/Vault.jar";
+    private static final String VAULT_GITHUB_URL =
+            "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar";
 
     public static void install(AurelEconomy plugin) {
         Plugin vault = plugin.getServer().getPluginManager().getPlugin("Vault");
@@ -36,7 +36,7 @@ public class VaultInstaller {
             return;
         }
 
-        plugin.getComponentLogger().info("Vault not found. Attempting to auto-install Vault from Modrinth...");
+        plugin.getComponentLogger().info("Vault not found. Attempting to auto-install Vault from GitHub Releases...");
 
         try {
             HttpClient client = HttpClient.newBuilder()
@@ -45,8 +45,8 @@ public class VaultInstaller {
                     .build();
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(VAULT_MODRINTH_URL))
-                    .timeout(Duration.ofSeconds(30))
+                    .uri(URI.create(VAULT_GITHUB_URL))
+                    .timeout(Duration.ofSeconds(60))
                     .GET()
                     .build();
 
