@@ -7,17 +7,23 @@ import org.bukkit.plugin.Plugin;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 
 public class VaultInstaller {
 
+    private static final String VAULT_MODRINTH_URL =
+            "https://cdn.modrinth.com/data/9uLXB4Yz/versions/7VNmMqhn/Vault.jar";
+
     public static void install(AurelEconomy plugin) {
-        // Check if Vault is loaded
         Plugin vault = plugin.getServer().getPluginManager().getPlugin("Vault");
         if (vault != null) {
-            return; // Vault is present
+            return;
         }
 
         File pluginsDir = plugin.getDataFolder().getParentFile();
@@ -28,19 +34,41 @@ public class VaultInstaller {
             return;
         }
 
-        plugin.getComponentLogger().info("Vault not found. Attempting to auto-install Vault...");
+        plugin.getComponentLogger().info("Vault not found. Attempting to auto-install Vault from Modrinth...");
 
-        try (InputStream in = plugin.getResource("Vault.jar")) {
-            if (in == null) {
-                plugin.getComponentLogger().error("Could not find embedded Vault.jar!");
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(15))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(VAULT_MODRINTH_URL))
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+
+            HttpResponse<java.nio.file.Path> response = client.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofFile(vaultJar.toPath(), StandardCopyOption.REPLACE_EXISTING));
+
+            if (response.statusCode() >= 300) {
+                Files.deleteIfExists(vaultJar.toPath());
+                plugin.getComponentLogger().error("Failed to download Vault.jar (HTTP " + response.statusCode() + ")");
                 return;
             }
 
-            Files.copy(in, vaultJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            plugin.getComponentLogger().info("Vault.jar has been installed to " + vaultJar.getAbsolutePath());
+            long fileSize = Files.size(vaultJar.toPath());
+            if (fileSize < 1000) {
+                Files.deleteIfExists(vaultJar.toPath());
+                plugin.getComponentLogger().error("Downloaded Vault.jar is too small (" + fileSize + " bytes) — likely an error page");
+                return;
+            }
+
+            plugin.getComponentLogger().info("Vault.jar has been installed to " + vaultJar.getAbsolutePath()
+                    + " (" + fileSize + " bytes)");
             plugin.getComponentLogger().error(">>> IMPORTANT: PLEASE RESTART THE SERVER TO LOAD VAULT! <<<");
 
-            // Announce to console with color if possible or just log error to stand out
             plugin.getServer().getConsoleSender().sendMessage(
                     Component.text("--------------------------------------------------", NamedTextColor.RED));
             plugin.getServer().getConsoleSender().sendMessage(
@@ -51,6 +79,11 @@ public class VaultInstaller {
                     Component.text("--------------------------------------------------", NamedTextColor.RED));
 
         } catch (IOException e) {
+            plugin.getComponentLogger().error("Failed to install Vault.jar (I/O error)", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            plugin.getComponentLogger().error("Vault download was interrupted");
+        } catch (Exception e) {
             plugin.getComponentLogger().error("Failed to install Vault.jar", e);
         }
     }
