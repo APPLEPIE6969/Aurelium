@@ -162,11 +162,11 @@ jobs:
             VAULT_AUTOINSTALL_FAIL=1
           fi
           if [ -f "plugins/Vault.jar" ]; then
-            echo "PASS: Vault.jar was auto-extracted to plugins/"
-          elif grep -qi "Could not find embedded Vault.jar" logs/latest.log; then
-            echo "PASS: Fallback error logged (embedded Vault.jar not in shadow JAR)"
+            echo "PASS: Vault.jar was downloaded to plugins/"
+          elif grep -qi "Vault.jar has been installed to" logs/latest.log; then
+            echo "PASS: Vault.jar download logged (Modrinth CDN)"
           else
-            echo "FAIL: Neither Vault.jar extracted nor fallback error logged"
+            echo "FAIL: Neither Vault.jar downloaded nor download logged"
             VAULT_AUTOINSTALL_FAIL=1
           fi
           if grep -q "Vault hooked" logs/latest.log; then
@@ -1083,11 +1083,11 @@ jobs:
             VAULT_AUTOINSTALL_FAIL=1
           fi
           if [ -f "plugins/Vault.jar" ]; then
-            echo "PASS: Vault.jar was auto-extracted to plugins/"
-          elif grep -qi "Could not find embedded Vault.jar" logs/latest.log; then
-            echo "PASS: Fallback error logged (embedded Vault.jar not in shadow JAR)"
+            echo "PASS: Vault.jar was downloaded to plugins/"
+          elif grep -qi "Vault.jar has been installed to" logs/latest.log; then
+            echo "PASS: Vault.jar download logged (Modrinth CDN)"
           else
-            echo "FAIL: Neither Vault.jar extracted nor fallback error logged"
+            echo "FAIL: Neither Vault.jar downloaded nor download logged"
             VAULT_AUTOINSTALL_FAIL=1
           fi
           if grep -q "Vault hooked" logs/latest.log; then
