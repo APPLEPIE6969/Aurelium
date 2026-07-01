@@ -7,13 +7,14 @@ import org.bukkit.plugin.Plugin;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 
 public class VaultInstaller {
@@ -50,15 +51,18 @@ public class VaultInstaller {
                     .build();
 
             Path targetPath = vaultJar.toPath();
-            HttpResponse<Path> response = client.send(
+            Files.createDirectories(targetPath.getParent());
+
+            HttpResponse<InputStream> response = client.send(
                     request,
-                    HttpResponse.BodyHandlers.ofFile(targetPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING));
+                    HttpResponse.BodyHandlers.ofInputStream());
 
             if (response.statusCode() >= 300) {
-                Files.deleteIfExists(targetPath);
                 plugin.getComponentLogger().error("Failed to download Vault.jar (HTTP " + response.statusCode() + ")");
                 return;
             }
+
+            Files.copy(response.body(), targetPath, StandardCopyOption.REPLACE_EXISTING);
 
             long fileSize = Files.size(targetPath);
             if (fileSize < 1000) {
