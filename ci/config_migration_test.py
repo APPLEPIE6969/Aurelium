@@ -7,17 +7,102 @@ to the current version. Verifies that:
 2. User-modified values are preserved (not overwritten by defaults)
 3. New keys from the default config are added
 4. config-version is updated
+5. Cloud dashboard endpoint is reachable
 """
 
 import yaml
 import sys
 import os
+import urllib.request
+import urllib.error
+import json
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "plugins/Aurelium/config.yml")
 
 def load_config(path):
     with open(path, "r") as f:
         return yaml.safe_load(f) or {}
+
+def test_cloud_dashboard(config):
+    """Test that the cloud dashboard endpoint is reachable and responds."""
+    errors = []
+    web_cloud = config.get("web", {}).get("cloud", {})
+    base_url = web_cloud.get("url", "").rstrip("/")
+    server_id = web_cloud.get("server-id", "")
+    api_key = web_cloud.get("api-key", "")
+
+    if not base_url:
+        errors.append("FAIL: web.cloud.url is empty, cannot test dashboard")
+        return errors
+
+    print(f"INFO: Testing cloud dashboard at {base_url}")
+
+    # Test 1: Health check - just hit the root to see if it's up
+    try:
+        req = urllib.request.Request(base_url, method="GET")
+        req.add_header("Accept", "application/json")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            status = resp.status
+            print(f"PASS: Cloud dashboard is reachable (HTTP {status})")
+    except urllib.error.HTTPError as e:
+        # Any HTTP response means the server is up
+        print(f"PASS: Cloud dashboard is reachable (HTTP {e.code})")
+    except urllib.error.URLError as e:
+        errors.append(f"FAIL: Cloud dashboard unreachable: {e.reason}")
+        return errors
+    except Exception as e:
+        errors.append(f"FAIL: Cloud dashboard connection error: {e}")
+        return errors
+
+    # Test 2: Registration endpoint responds
+    if server_id and api_key:
+        try:
+            reg_url = base_url + "/api/register"
+            payload = json.dumps({
+                "serverId": server_id,
+                "apiKey": api_key,
+                "serverName": "CI-ConfigMigrationTest"
+            }).encode("utf-8")
+            req = urllib.request.Request(reg_url, data=payload, method="POST")
+            req.add_header("Content-Type", "application/json")
+            req.add_header("X-Api-Key", api_key)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                body = resp.read().decode("utf-8")
+                print(f"PASS: /api/register responded (HTTP {resp.status})")
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8") if e.fp else ""
+            # 403 = API key mismatch (expected for CI since server-id/key are random)
+            # 404 = endpoint doesn't exist (real failure)
+            # 503 = server starting up (acceptable)
+            if e.code == 403:
+                print(f"PASS: /api/register endpoint exists (HTTP 403 = key mismatch, expected for CI)")
+            elif e.code == 503:
+                print(f"PASS: /api/register endpoint exists (HTTP 503 = server waking, acceptable)")
+            else:
+                errors.append(f"FAIL: /api/register returned HTTP {e.code}: {body[:200]}")
+        except Exception as e:
+            errors.append(f"FAIL: /api/register request failed: {e}")
+    else:
+        print("INFO: Skipping /api/register test (no server-id/api-key in config)")
+
+    # Test 3: Sync endpoint responds
+    try:
+        sync_url = base_url + "/api/sync"
+        payload = json.dumps({"serverId": server_id or "ci-test"}).encode("utf-8")
+        req = urllib.request.Request(sync_url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+        req.add_header("X-Api-Key", api_key or "ci-test-key")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            print(f"PASS: /api/sync endpoint exists (HTTP {resp.status})")
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 401, 503):
+            print(f"PASS: /api/sync endpoint exists (HTTP {e.code} = auth/wake, expected for CI)")
+        else:
+            errors.append(f"FAIL: /api/sync returned HTTP {e.code}")
+    except Exception as e:
+        errors.append(f"FAIL: /api/sync request failed: {e}")
+
+    return errors
 
 def test_migration():
     config = load_config(CONFIG_PATH)
@@ -120,6 +205,10 @@ def test_migration():
         errors.append("FAIL: buy-orders section missing (should be added from defaults)")
     else:
         print(f"PASS: buy-orders section present (from defaults)")
+
+    # 11. Cloud dashboard connectivity test
+    cloud_errors = test_cloud_dashboard(config)
+    errors.extend(cloud_errors)
 
     # Summary
     print()
