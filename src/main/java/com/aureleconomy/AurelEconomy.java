@@ -236,6 +236,15 @@ public class AurelEconomy extends JavaPlugin {
     public UnifiedItemScanner getUnifiedScanner() { return unifiedScanner; }
     public com.aureleconomy.web.CloudSyncManager getCloudSync() { return cloudSync; }
 
+    /**
+     * Migrate config.yml to the latest default format while preserving
+     * ALL user-modified values — including nested sections.
+     *
+     * Previous implementation only copied leaf values, which broke
+     * nested sections like economy.currencies, web.cloud, etc.
+     * This version deep-merges the old config into the new defaults,
+     * preserving user values at every nesting level.
+     */
     private void upgradeConfig() {
         java.io.File configFile = new java.io.File(getDataFolder(), "config.yml");
         if (!configFile.exists()) {
@@ -243,23 +252,59 @@ public class AurelEconomy extends JavaPlugin {
             return;
         }
 
-        org.bukkit.configuration.file.YamlConfiguration oldConfig = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(configFile);
-        java.util.Map<String, Object> userValues = new java.util.LinkedHashMap<>();
-        for (String key : oldConfig.getKeys(true)) {
-            if (!oldConfig.isConfigurationSection(key)) {
-                userValues.put(key, oldConfig.get(key));
-            }
-        }
+        org.bukkit.configuration.file.YamlConfiguration oldConfig =
+                org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(configFile);
+
+        // Deep-copy all user values (including nested sections)
+        java.util.Map<String, Object> userValues = deepExtract(oldConfig);
 
         configFile.delete();
         saveDefaultConfig();
         reloadConfig();
 
+        // Deep-merge user values into the new defaults
         for (java.util.Map.Entry<String, Object> entry : userValues.entrySet()) {
             if (entry.getKey().equals("config-version")) continue;
-            getConfig().set(entry.getKey(), entry.getValue());
+            deepSet(getConfig(), entry.getKey(), entry.getValue());
         }
         saveConfig();
         getComponentLogger().info("config.yml updated to version " + getConfig().getInt("config-version", 0));
+    }
+
+    /**
+     * Recursively extract all key-value pairs from a ConfigurationSection,
+     * including nested sections as Maps. This preserves the full tree
+     * structure rather than flattening to leaf-only values.
+     */
+    private java.util.Map<String, Object> deepExtract(org.bukkit.configuration.ConfigurationSection section) {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        for (String key : section.getKeys(false)) {
+            Object value = section.get(key);
+            if (value instanceof org.bukkit.configuration.ConfigurationSection sub) {
+                result.put(key, deepExtract(sub));
+            } else {
+                result.put(key, value);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Deep-merge a value into the config at the given dotted key path.
+     * If the value is a Map (from a nested section), recursively merge
+     * instead of overwriting the entire section.
+     */
+    @SuppressWarnings("unchecked")
+    private void deepSet(org.bukkit.configuration.ConfigurationSection config, String key, Object value) {
+        if (value instanceof java.util.Map) {
+            // Nested section: merge into existing section rather than replacing it
+            org.bukkit.configuration.ConfigurationSection existing = config.isConfigurationSection(key)
+                    ? config.getConfigurationSection(key) : config.createSection(key);
+            for (java.util.Map.Entry<String, Object> entry : ((java.util.Map<String, Object>) value).entrySet()) {
+                deepSet(existing, entry.getKey(), entry.getValue());
+            }
+        } else {
+            config.set(key, value);
+        }
     }
 }
