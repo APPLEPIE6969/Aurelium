@@ -1,4 +1,4 @@
-# Aurelium
+ Aurelium
 
 > **Experimental Web Features**
 > The web dashboard is in active development. Expect potential bugs or instability if you enable `web.enabled`. The core in-game economy, GUI markets, and auction house are stable.
