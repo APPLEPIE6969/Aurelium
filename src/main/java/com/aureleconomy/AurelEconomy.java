@@ -244,6 +244,9 @@ public class AurelEconomy extends JavaPlugin {
      * nested sections like economy.currencies, web.cloud, etc.
      * This version deep-merges the old config into the new defaults,
      * preserving user values at every nesting level.
+     *
+     * config-version is always updated to the new default since it
+     * tracks which config schema the plugin expects.
      */
     private void upgradeConfig() {
         java.io.File configFile = new java.io.File(getDataFolder(), "config.yml");
@@ -255,6 +258,8 @@ public class AurelEconomy extends JavaPlugin {
         org.bukkit.configuration.file.YamlConfiguration oldConfig =
                 org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(configFile);
 
+        int oldVersion = oldConfig.getInt("config-version", 0);
+
         // Deep-copy all user values (including nested sections)
         java.util.Map<String, Object> userValues = deepExtract(oldConfig);
 
@@ -264,11 +269,13 @@ public class AurelEconomy extends JavaPlugin {
 
         // Deep-merge user values into the new defaults
         for (java.util.Map.Entry<String, Object> entry : userValues.entrySet()) {
+            // Always use the new default config-version — it tracks the schema version
             if (entry.getKey().equals("config-version")) continue;
             deepSet(getConfig(), entry.getKey(), entry.getValue());
         }
         saveConfig();
-        getComponentLogger().info("config.yml updated to version " + getConfig().getInt("config-version", 0));
+        getComponentLogger().info("config.yml updated from version " + oldVersion
+                + " to version " + getConfig().getInt("config-version", 0));
     }
 
     /**
