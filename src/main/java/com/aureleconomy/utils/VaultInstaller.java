@@ -12,7 +12,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 
 public class VaultInstaller {
@@ -48,19 +49,20 @@ public class VaultInstaller {
                     .GET()
                     .build();
 
-            HttpResponse<java.nio.file.Path> response = client.send(
+            Path targetPath = vaultJar.toPath();
+            HttpResponse<Path> response = client.send(
                     request,
-                    HttpResponse.BodyHandlers.ofFile(vaultJar.toPath(), StandardCopyOption.REPLACE_EXISTING));
+                    HttpResponse.BodyHandlers.ofFile(targetPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING));
 
             if (response.statusCode() >= 300) {
-                Files.deleteIfExists(vaultJar.toPath());
+                Files.deleteIfExists(targetPath);
                 plugin.getComponentLogger().error("Failed to download Vault.jar (HTTP " + response.statusCode() + ")");
                 return;
             }
 
-            long fileSize = Files.size(vaultJar.toPath());
+            long fileSize = Files.size(targetPath);
             if (fileSize < 1000) {
-                Files.deleteIfExists(vaultJar.toPath());
+                Files.deleteIfExists(targetPath);
                 plugin.getComponentLogger().error("Downloaded Vault.jar is too small (" + fileSize + " bytes) — likely an error page");
                 return;
             }
