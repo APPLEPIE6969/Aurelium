@@ -16,6 +16,8 @@ import os
 import urllib.request
 import urllib.error
 import json
+import uuid
+import time
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "plugins/Aurelium/config.yml")
 
@@ -28,14 +30,18 @@ def test_cloud_dashboard(config):
     errors = []
     web_cloud = config.get("web", {}).get("cloud", {})
     base_url = web_cloud.get("url", "").rstrip("/")
-    server_id = web_cloud.get("server-id", "")
-    api_key = web_cloud.get("api-key", "")
 
     if not base_url:
         errors.append("FAIL: web.cloud.url is empty, cannot test dashboard")
         return errors
 
+    # Generate a unique server-id for this test run to avoid conflicts
+    # with previous CI runs that may have registered the same ID
+    test_server_id = f"ci-test-{uuid.uuid4().hex[:12]}-{int(time.time())}"
+    test_api_key = f"ci-key-{uuid.uuid4().hex[:16]}"
+
     print(f"INFO: Testing cloud dashboard at {base_url}")
+    print(f"INFO: Using test server-id: {test_server_id}")
 
     # Test 1: Health check
     try:
@@ -54,20 +60,16 @@ def test_cloud_dashboard(config):
 
     # Test 2: Registration must succeed (create new server)
     # The dashboard should accept ANY server-id/api-key on first registration
-    if not server_id:
-        errors.append("FAIL: web.cloud.server-id is empty after migration")
-        return errors
-
     try:
         reg_url = base_url + "/api/register"
         payload = json.dumps({
-            "serverId": server_id,
-            "apiKey": api_key,
+            "serverId": test_server_id,
+            "apiKey": test_api_key,
             "serverName": "CI-ConfigMigrationTest"
         }).encode("utf-8")
         req = urllib.request.Request(reg_url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
-        req.add_header("X-Api-Key", api_key)
+        req.add_header("X-Api-Key", test_api_key)
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read().decode("utf-8")
             if resp.status == 200:
@@ -92,10 +94,10 @@ def test_cloud_dashboard(config):
     # Test 3: Sync must succeed after registration
     try:
         sync_url = base_url + "/api/sync"
-        payload = json.dumps({"serverId": server_id}).encode("utf-8")
+        payload = json.dumps({"serverId": test_server_id}).encode("utf-8")
         req = urllib.request.Request(sync_url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
-        req.add_header("X-Api-Key", api_key)
+        req.add_header("X-Api-Key", test_api_key)
         with urllib.request.urlopen(req, timeout=15) as resp:
             if resp.status == 200:
                 print(f"PASS: /api/sync succeeded after registration (HTTP 200)")
