@@ -31,9 +31,6 @@ def test_cloud_dashboard(config):
     web_cloud = config.get("web", {}).get("cloud", {})
     base_url = web_cloud.get("url", "").rstrip("/")
 
-    print(f"DEBUG: web.cloud config = {web_cloud}")
-    print(f"DEBUG: base_url = '{base_url}'")
-
     if not base_url:
         errors.append("FAIL: web.cloud.url is empty, cannot test dashboard")
         return errors
@@ -59,8 +56,6 @@ def test_cloud_dashboard(config):
         errors.append(f"FAIL: Cloud dashboard connection error: {e}")
         return errors
 
-    errors
-
     # Test 2: Registration must succeed
     try:
         reg_url = base_url + "/api/register"
@@ -72,17 +67,14 @@ def test_cloud_dashboard(config):
         req = urllib.request.Request(reg_url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
         req.add_header("X-Api-Key", test_api_key)
-        print(f"DEBUG: POST {reg_url}")
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read().decode("utf-8")
-            print(f"DEBUG: /api/register response: HTTP {resp.status}, body={body[:200]}")
             if resp.status == 200:
                 print(f"PASS: /api/register succeeded (HTTP 200)")
             else:
                 errors.append(f"FAIL: /api/register returned HTTP {resp.status}, expected 200")
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8") if e.fp else ""
-        print(f"DEBUG: /api/register HTTPError: {e.code}, body={body[:200]}")
         if e.code == 403:
             errors.append(f"FAIL: /api/register returned 403 - dashboard rejected new registration. Body: {body[:200]}")
         elif e.code == 404:
@@ -93,7 +85,6 @@ def test_cloud_dashboard(config):
             errors.append(f"FAIL: /api/register returned HTTP {e.code}: {body[:200]}")
         return errors
     except Exception as e:
-        print(f"DEBUG: /api/register Exception: {e}")
         errors.append(f"FAIL: /api/register request failed: {e}")
         return errors
 
@@ -104,17 +95,12 @@ def test_cloud_dashboard(config):
         req = urllib.request.Request(sync_url, data=payload, method="POST")
         req.add_header("Content-Type", "application/json")
         req.add_header("X-Api-Key", test_api_key)
-        print(f"DEBUG: POST {sync_url}")
         with urllib.request.urlopen(req, timeout=15) as resp:
-            body = resp.read().decode("utf-8")
-            print(f"DEBUG: /api/sync response: HTTP {resp.status}, body={body[:200]}")
             if resp.status == 200:
                 print(f"PASS: /api/sync succeeded after registration (HTTP 200)")
             else:
                 errors.append(f"FAIL: /api/sync returned HTTP {resp.status}, expected 200")
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8") if e.fp else ""
-        print(f"DEBUG: /api/sync HTTPError: {e.code}, body={body[:200]}")
         if e.code == 403:
             errors.append(f"FAIL: /api/sync returned 403 - server not recognized after registration")
         elif e.code == 503:
@@ -122,7 +108,6 @@ def test_cloud_dashboard(config):
         else:
             errors.append(f"FAIL: /api/sync returned HTTP {e.code}")
     except Exception as e:
-        print(f"DEBUG: /api/sync Exception: {e}")
         errors.append(f"FAIL: /api/sync request failed: {e}")
 
     return errors
@@ -131,8 +116,6 @@ def test_cloud_dashboard(config):
 def test_migration():
     config = load_config(CONFIG_PATH)
     errors = []
-
-    print(f"DEBUG: Loaded config keys: {list(config.keys())}")
 
     # 1. config-version should be 2 (no change from 1.5.2)
     cv = config.get("config-version", 0)
