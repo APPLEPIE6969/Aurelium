@@ -15,7 +15,7 @@ env:
   PAPER_26_JAR_SHA: "0555a0b0468a5198d8fb1a16e1f9e95c81a917a2dc8f2e09867b4044742f6401"
   PAPER_12111_BUILD: "132"
   PAPER_12111_JAR_SHA: "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
-  PAPER_262_BUILD: "40"
+  PAPER_262_BUILD: "43"
   PAPER_262_JAR_SHA: "4e1ab8b87f780d6d7e367115312d3798aef35f77e4634529d88abfa84683244b"
   VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
   VIAVERSION_URL: "https://cdn.modrinth.com/data/P1OZGk5p/versions/z0sCGSmk/ViaVersion-5.10.1-SNAPSHOT.jar"
