@@ -19,9 +19,11 @@ import time
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "plugins/Aurelium/config.yml")
 
+
 def load_config(path):
     with open(path, "r") as f:
         return yaml.safe_load(f) or {}
+
 
 def test_cloud_dashboard(config):
     """Test that the cloud dashboard accepts new registrations."""
@@ -109,6 +111,7 @@ def test_cloud_dashboard(config):
         errors.append(f"FAIL: /api/sync request failed: {e}")
 
     return errors
+
 
 def test_migration():
     config = load_config(CONFIG_PATH)
@@ -231,6 +234,7 @@ def test_migration():
     else:
         print("All 1.5.2 -> 1.5.3 config migration tests PASSED")
         return 0
+
 
 if __name__ == "__main__":
     sys.exit(test_migration())
