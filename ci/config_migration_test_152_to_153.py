@@ -35,25 +35,25 @@ def test_cloud_dashboard(config):
         errors.append("FAIL: web.cloud.url is empty, cannot test dashboard")
         return errors
 
-    test_server_id = f"ci-test-152-{uuid.uuid4().hex[:12]}-{int(time.time())}"
-    test_api_key = f"ci-key-{uuid.uuid4().hex[:16]}"
+    test_server_id = "ci-test-152-" + uuid.uuid4().hex[:12] + "-" + str(int(time.time()))
+    test_api_key = "ci-key-" + uuid.uuid4().hex[:16]
 
-    print(f"INFO: Testing cloud dashboard at {base_url}")
-    print(f"INFO: Using test server-id: {test_server_id}")
+    print("INFO: Testing cloud dashboard at " + base_url)
+    print("INFO: Using test server-id: " + test_server_id)
 
     # Test 1: Health check
     try:
         req = urllib.request.Request(base_url, method="GET")
         req.add_header("Accept", "application/json")
         with urllib.request.urlopen(req, timeout=15) as resp:
-            print(f"PASS: Cloud dashboard is reachable (HTTP {resp.status})")
+            print("PASS: Cloud dashboard is reachable (HTTP " + str(resp.status) + ")")
     except urllib.error.HTTPError as e:
-        print(f"PASS: Cloud dashboard is reachable (HTTP {e.code})")
+        print("PASS: Cloud dashboard is reachable (HTTP " + str(e.code) + ")")
     except urllib.error.URLError as e:
-        errors.append(f"FAIL: Cloud dashboard unreachable: {e.reason}")
+        errors.append("FAIL: Cloud dashboard unreachable: " + str(e.reason))
         return errors
     except Exception as e:
-        errors.append(f"FAIL: Cloud dashboard connection error: {e}")
+        errors.append("FAIL: Cloud dashboard connection error: " + str(e))
         return errors
 
     # Test 2: Registration must succeed
@@ -70,22 +70,22 @@ def test_cloud_dashboard(config):
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read().decode("utf-8")
             if resp.status == 200:
-                print(f"PASS: /api/register succeeded (HTTP 200)")
+                print("PASS: /api/register succeeded (HTTP 200)")
             else:
-                errors.append(f"FAIL: /api/register returned HTTP {resp.status}, expected 200")
+                errors.append("FAIL: /api/register returned HTTP " + str(resp.status) + ", expected 200")
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8") if e.fp else ""
         if e.code == 403:
-            errors.append(f"FAIL: /api/register returned 403 - dashboard rejected new registration. Body: {body[:200]}")
+            errors.append("FAIL: /api/register returned 403 - dashboard rejected new registration. Body: " + body[:200])
         elif e.code == 404:
-            errors.append(f"FAIL: /api/register returned 404 - endpoint missing")
+            errors.append("FAIL: /api/register returned 404 - endpoint missing")
         elif e.code == 503:
-            errors.append(f"FAIL: /api/register returned 503 - dashboard not ready")
+            errors.append("FAIL: /api/register returned 503 - dashboard not ready")
         else:
-            errors.append(f"FAIL: /api/register returned HTTP {e.code}: {body[:200]}")
+            errors.append("FAIL: /api/register returned HTTP " + str(e.code) + ": " + body[:200])
         return errors
     except Exception as e:
-        errors.append(f"FAIL: /api/register request failed: {e}")
+        errors.append("FAIL: /api/register request failed: " + str(e))
         return errors
 
     # Test 3: Sync must succeed after registration
@@ -97,18 +97,18 @@ def test_cloud_dashboard(config):
         req.add_header("X-Api-Key", test_api_key)
         with urllib.request.urlopen(req, timeout=15) as resp:
             if resp.status == 200:
-                print(f"PASS: /api/sync succeeded after registration (HTTP 200)")
+                print("PASS: /api/sync succeeded after registration (HTTP 200)")
             else:
-                errors.append(f"FAIL: /api/sync returned HTTP {resp.status}, expected 200")
+                errors.append("FAIL: /api/sync returned HTTP " + str(resp.status) + ", expected 200")
     except urllib.error.HTTPError as e:
         if e.code == 403:
-            errors.append(f"FAIL: /api/sync returned 403 - server not recognized after registration")
+            errors.append("FAIL: /api/sync returned 403 - server not recognized after registration")
         elif e.code == 503:
-            errors.append(f"FAIL: /api/sync returned 503 - dashboard not ready")
+            errors.append("FAIL: /api/sync returned 503 - dashboard not ready")
         else:
-            errors.append(f"FAIL: /api/sync returned HTTP {e.code}")
+            errors.append("FAIL: /api/sync returned HTTP " + str(e.code))
     except Exception as e:
-        errors.append(f"FAIL: /api/sync request failed: {e}")
+        errors.append("FAIL: /api/sync request failed: " + str(e))
 
     return errors
 
@@ -120,9 +120,9 @@ def test_migration():
     # 1. config-version should be 2 (no change from 1.5.2)
     cv = config.get("config-version", 0)
     if cv != 2:
-        errors.append(f"FAIL: config-version = {cv}, expected 2")
+        errors.append("FAIL: config-version = " + str(cv) + ", expected 2")
     else:
-        print(f"PASS: config-version = {cv}")
+        print("PASS: config-version = " + str(cv))
 
     # 2. economy.currencies should survive
     currencies = config.get("economy", {}).get("currencies", {})
@@ -135,9 +135,9 @@ def test_migration():
         symbol = aurels.get("symbol", "")
         starting = aurels.get("starting-balance", 0)
         if symbol != "\u20b3":
-            errors.append(f"FAIL: economy.currencies.Aurels.symbol = '{symbol}', expected '\u20b3'")
+            errors.append("FAIL: economy.currencies.Aurels.symbol = '" + symbol + "', expected '\u20b3'")
         else:
-            print(f"PASS: economy.currencies.Aurels preserved (symbol={symbol}, starting-balance={starting})")
+            print("PASS: economy.currencies.Aurels preserved (symbol=" + symbol + ", starting-balance=" + str(starting) + ")")
 
     # 3. web.cloud should survive
     web_cloud = config.get("web", {}).get("cloud", {})
@@ -146,23 +146,23 @@ def test_migration():
     else:
         url = web_cloud.get("url", "")
         if "webaureliummc" in url or url == "https://webaureliummc.onrender.com":
-            print(f"PASS: web.cloud.url preserved ({url})")
+            print("PASS: web.cloud.url preserved (" + url + ")")
         else:
-            errors.append(f"FAIL: web.cloud.url = '{url}', expected cloud dashboard URL")
+            errors.append("FAIL: web.cloud.url = '" + url + "', expected cloud dashboard URL")
 
     # 4. web.local should survive
     web_local = config.get("web", {}).get("local", {})
     if not web_local:
         errors.append("FAIL: web.local is missing/empty")
     else:
-        print(f"PASS: web.local preserved (host={web_local.get('host','')})")
+        print("PASS: web.local preserved (host=" + web_local.get("host", "") + ")")
 
     # 5. User-modified values should be preserved
     default_currency = config.get("economy", {}).get("default-currency", "")
     if default_currency == "Aurels":
-        print(f"PASS: economy.default-currency preserved ({default_currency})")
+        print("PASS: economy.default-currency preserved (" + default_currency + ")")
     else:
-        errors.append(f"FAIL: economy.default-currency = '{default_currency}', expected 'Aurels'")
+        errors.append("FAIL: economy.default-currency = '" + default_currency + "', expected 'Aurels'")
 
     # 6. market section should survive
     market = config.get("market", {})
@@ -171,9 +171,9 @@ def test_migration():
     else:
         gui_mode = market.get("gui-mode", "")
         if gui_mode == "modern":
-            print(f"PASS: market.gui-mode preserved ({gui_mode})")
+            print("PASS: market.gui-mode preserved (" + gui_mode + ")")
         else:
-            errors.append(f"FAIL: market.gui-mode = '{gui_mode}', expected 'modern'")
+            errors.append("FAIL: market.gui-mode = '" + gui_mode + "', expected 'modern'")
 
     # 7. auction-house section should survive
     auction = config.get("auction-house", {})
@@ -182,9 +182,9 @@ def test_migration():
     else:
         purchase_mode = auction.get("purchase-mode", "")
         if purchase_mode == "STACK":
-            print(f"PASS: auction-house.purchase-mode preserved ({purchase_mode})")
+            print("PASS: auction-house.purchase-mode preserved (" + purchase_mode + ")")
         else:
-            errors.append(f"FAIL: auction-house.purchase-mode = '{purchase_mode}', expected 'STACK'")
+            errors.append("FAIL: auction-house.purchase-mode = '" + purchase_mode + "', expected 'STACK'")
 
     # 8. custom-items section should survive
     custom_items = config.get("custom-items", {})
@@ -193,9 +193,9 @@ def test_migration():
     else:
         scan = custom_items.get("scan-on-startup", None)
         if scan is True:
-            print(f"PASS: custom-items.scan-on-startup preserved ({scan})")
+            print("PASS: custom-items.scan-on-startup preserved (" + str(scan) + ")")
         else:
-            errors.append(f"FAIL: custom-items.scan-on-startup = {scan}, expected True")
+            errors.append("FAIL: custom-items.scan-on-startup = " + str(scan) + ", expected True")
 
     # 9. database section should survive
     db = config.get("database", {})
@@ -204,9 +204,9 @@ def test_migration():
     else:
         db_type = db.get("type", "")
         if db_type == "sqlite":
-            print(f"PASS: database.type preserved ({db_type})")
+            print("PASS: database.type preserved (" + db_type + ")")
         else:
-            errors.append(f"FAIL: database.type = '{db_type}', expected 'sqlite'")
+            errors.append("FAIL: database.type = '" + db_type + "', expected 'sqlite'")
 
     # 10. NEW: buy-orders section should be added from defaults
     buy_orders = config.get("buy-orders", {})
@@ -215,9 +215,9 @@ def test_migration():
     else:
         enabled = buy_orders.get("enabled", False)
         if enabled is True:
-            print(f"PASS: buy-orders section added from defaults (enabled={enabled})")
+            print("PASS: buy-orders section added from defaults (enabled=" + str(enabled) + ")")
         else:
-            errors.append(f"FAIL: buy-orders.enabled = {enabled}, expected True")
+            errors.append("FAIL: buy-orders.enabled = " + str(enabled) + ", expected True")
 
     # 11. Cloud dashboard registration must succeed
     cloud_errors = test_cloud_dashboard(config)
@@ -228,8 +228,8 @@ def test_migration():
     if errors:
         for e in errors:
             print(e)
-        print(f"
-{len(errors)} test(s) FAILED")
+        print("")
+        print(str(len(errors)) + " test(s) FAILED")
         return 1
     else:
         print("All 1.5.2 -> 1.5.3 config migration tests PASSED")
