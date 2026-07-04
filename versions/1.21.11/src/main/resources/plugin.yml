@@ -1,6 +1,6 @@
 name: Aurelium
 main: com.aureleconomy.AurelEconomy
-version: '1.5.3'
+version: '1.5.4'
 api-version: '1.21'
 description: Economy plugin with market, auction house, and web dashboard.
 authors:
