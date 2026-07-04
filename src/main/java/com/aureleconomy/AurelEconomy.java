@@ -9,6 +9,7 @@ import com.aureleconomy.economy.VaultEconomy;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import com.aureleconomy.utils.VersionChecker;
 
 /**
  * Main plugin class for AurelEconomy.
@@ -71,6 +72,10 @@ public class AurelEconomy extends JavaPlugin {
         }
 
         // Initialize Managers
+
+        // Check for updates
+        VersionChecker.checkVersion(this);
+
         economyManager = new EconomyManager(this);
         marketManager = new com.aureleconomy.market.MarketManager(this);
         auctionManager = new com.aureleconomy.auction.AuctionManager(this);
