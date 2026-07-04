@@ -1,5 +1,17 @@
 # Aurelium - Patch Notes
 
+## v1.5.4 - Version Checker
+
+### Plugin Changes
+
+- **Version Checker**: On server startup, Aurelium now asynchronously queries the Modrinth API to check if you are running the latest version for your server's Minecraft version. If you are behind, a console message is logged:
+  - `[Aurelium] You are X versions behind based on your server's Minecraft version. Latest is X.Y.Z, you have A.B.C.`
+  - `[Aurelium] Download the latest version at: https://modrinth.com/plugin/aurelium/versions`
+  - The check is non-blocking and runs on an async thread, so it does not impact server startup time
+  - All log messages are prefixed with `[Aurelium]` so they are clearly identifiable
+
+---
+
 ## v1.5.3 - Paper 26.2 Support & Web Dashboard Overhaul
 
 ### Plugin Changes
@@ -9,7 +21,7 @@
 - **Node.js 24** in CI: Updated from Node 22 (deprecated June 2026) for mineflayer test jobs
 - **SQLite Race Condition Fix**: `DatabaseManager.getConnection()` and `close()` now `synchronized` to prevent concurrent access issues on async threads
 - **Cloud Dashboard Registration**: Failure logs now at `ERROR` level (was `WARN`) — registration failures are actionable and should be visible
-- **CI Heredoc Fixes**: Corrected bash heredoc escaping in workflow YAML (`<< 'PROPS'` vs `<< \'PROPS\'`) preventing server.properties corruption
+- **CI Heredoc Fixes**: Corrected bash heredoc escaping in workflow YAML (`<< \'PROPS\'` vs `<< \\\'PROPS\\\'`) preventing server.properties corruption
 - **MySQL 8.0 Compatibility**: Docker service configured with `mysql_native_password` auth plugin; JDBC URL includes `allowPublicKeyRetrieval=true`
 - **54 In-Game CI Tests**: Full RCON-based test suite covering economy commands, auctions, orders, and web dashboard integration across all 3 Paper versions
 
@@ -20,9 +32,9 @@
 - **Write-Through Integrity**: Failed Astra DB writes now return 503 to the caller instead of silently succeeding with cache-only data — no more data loss on restart after a failed write
 - **Transport Error Handling**: `astraFetch()` and `astraQuery()` catch timeout/network errors and return structured `{ ok: false }` instead of throwing into route handlers
 - **Session Cache Consistency**: `sessionCache` keyed by `tokenHash(token)` everywhere — startup load, session creation, lookup, and cleanup all use the same HMAC-based key, so persisted sessions survive restarts
-- **Input Validation Hardening**: Buy amounts validated with `Number()` + `Number.isInteger()` (no more NaN bypass); auction/order IDs validated with `Number()` + `Number.isFinite()` + `Number.isInteger()` (no more partial parses like `parseInt('12abc')`)
+- **Input Validation Hardening**: Buy amounts validated with `Number()` + `Number.isInteger()` (no more NaN bypass); auction/order IDs validated with `Number()` + `Number.isFinite()` + `Number.isInteger()` (no more partial parses like `parseInt(\'12abc\')`)
 - **Auction Modal Quantity Selector**: BIN auctions with stacked items now show +/- quantity buttons (1 to remaining), per-unit price, and live total cost calculation
-- **Currency Display**: Uses each item's assigned currency instead of hardcoded dollars
+- **Currency Display**: Uses each item\'s assigned currency instead of hardcoded dollars
 - **Auction Quantity Display**: Listings show available quantity, remaining count, and per-item price
 - **Auction Category Sidebar**: Auction page now has the same sidebar layout as the market page, with filters for All Listings, BIN Listings, and BID Listings
 - **Empty State Messages**: Category filters with no results show "No auctions in this category" with smooth animation instead of falling back to showing all auctions
@@ -58,11 +70,11 @@
 ### New - Auto Custom Item Detection (Scanner)
 
 - **UnifiedItemScanner**: Automatically detects custom items from installed third-party plugins on server startup and via `/customitems scan`
- - Supported plugins (via reflection, zero hard dependencies): ItemsAdder, Oraxen, MMOItems, MythicMobs, ExecutableItems, Nexo, SX-Item
- - Each plugin API is accessed via reflection only—no compile-time dependencies required
+  - Supported plugins (via reflection, zero hard dependencies): ItemsAdder, Oraxen, MMOItems, MythicMobs, ExecutableItems, Nexo, SX-Item
+  - Each plugin API is accessed via reflection only—no compile-time dependencies required
 - **Cross-Plugin Deduplication**: If the same item is registered by multiple plugins (e.g., ItemsAdder ruby_sword and MMOItems SWORD:RUBY_BLADE), it is deduplicated by canonical ID and stored as a single entry in `custom_items`
 - **Config Override Sync**: Discovered items are written to `config.yml` under `discovered-items:` with source plugin, display name, material type, and default buy/sell prices
- - Server owners can edit prices/flags in config, and changes persist across restarts
+  - Server owners can edit prices/flags in config, and changes persist across restarts
 - **Database schema v2**: Added `custom_items` table for persistent custom item tracking with automatic v1-to-v2 migration
 - **Thread-Safe Scanning**: All scan operations run async with proper locking to avoid race conditions during startup
 - Custom items appear in the market with proper display names and configurable pricing
@@ -70,12 +82,12 @@
 ### New - /customitems Command
 
 - **Full management commands** for discovered custom items:
- - `/customitems scan` — Force rescan of all supported plugins
- - `/customitems list` — View all discovered custom items
- - `/customitems info <id>` — Show details for a specific item
- - `/customitems reload` — Reload config overrides from disk
- - `/customitems toggle <id>` — Enable or disable a discovered item in the market
- - `/customitems price <id> <buy> [sell]` — Set buy/sell prices for a discovered item
+  - `/customitems scan` — Force rescan of all supported plugins
+  - `/customitems list` — View all discovered custom items
+  - `/customitems info <id>` — Show details for a specific item
+  - `/customitems reload` — Reload config overrides from disk
+  - `/customitems toggle <id>` — Enable or disable a discovered item in the market
+  - `/customitems price <id> <buy> [sell]` — Set buy/sell prices for a discovered item
 
 ### Fixes
 
@@ -94,8 +106,8 @@
 
 ### Platform
 
-- Targets **Paper 26.1+** (Java 25, api-version: '26.1')
-- Uses Paper's `RegistryAccess` / `RegistryKey` API for enchantment lookups
+- Targets **Paper 26.1+** (Java 25, api-version: \'26.1\')
+- Uses Paper\'s `RegistryAccess` / `RegistryKey` API for enchantment lookups
 - CI tested against Paper 26.1.2
 
 ---
@@ -117,8 +129,8 @@
 
 ### Platform
 
-- Targets **Paper 26.1+** (Java 25, api-version: '26.1')
-- Uses Paper's `RegistryAccess` / `RegistryKey` API for enchantment lookups
+- Targets **Paper 26.1+** (Java 25, api-version: \'26.1\')
+- Uses Paper\'s `RegistryAccess` / `RegistryKey` API for enchantment lookups
 - CI tested against Paper 26.1.2
 
 ---
