@@ -146,6 +146,9 @@ public class AurelEconomy extends JavaPlugin {
 
         getComponentLogger().info("AurelEconomy has been enabled!");
 
+        // Check for version updates (async, logs to console)
+        com.aureleconomy.utils.VersionChecker.checkVersion(this);
+
         // Start Web Services
         initializeWebServices();
     }
