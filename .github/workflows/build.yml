@@ -531,6 +531,25 @@ jobs:
           exit $SMOKE_FAIL
       - name: Run RCON in-game tests
         run: python3 test_rcon.py
+      - name: Verify VersionChecker output
+        run: |
+          VC_FAIL=0
+          sleep 3
+          echo "=== VersionChecker log lines ==="
+          grep "\[Aurelium\]" logs/latest.log 2>/dev/null || echo "(no [Aurelium] lines found)"
+          if grep -q "\[Aurelium\].*version" logs/latest.log 2>/dev/null; then
+            echo "PASS: VersionChecker logged a version message"
+          else
+            echo "FAIL: No VersionChecker version message found in logs"
+            VC_FAIL=1
+          fi
+          if grep -qi "Could not check for updates\|could not check" logs/latest.log 2>/dev/null; then
+            echo "FAIL: VersionChecker reported an error"
+            VC_FAIL=1
+          else
+            echo "PASS: No VersionChecker errors"
+          fi
+          exit $VC_FAIL
       - name: Dump server exceptions
         if: always()
         run: |
@@ -805,4 +824,20 @@ jobs:
           PASTE_URL=""
           curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
-          if [ -f url-tmp/paste
+          if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
+            cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
+            PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
+          fi
+          if [ -n "$PASTE_URL" ]; then
+            curl -sS -f -o artifact-tmp/Aurelium.jar "$PASTE_URL" && echo "paste.rs download succeeded" || echo "paste.rs download failed"
+          else
+            echo "No paste.rs URL available"
+          fi
+      - name: Move JAR to plugins folder
+        run: |
+          mkdir -p plugins
+          find artifact-tmp -name "*.jar" -type f -exec mv {} plugins/ \;
+          echo "Contents of plugins/:"
+          ls -la plugins/
+      - name: Download Vault
+        run: curl -sL "${{ env
