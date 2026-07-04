@@ -1,5 +1,13 @@
 # Aurelium - Changelog
 
+## v1.5.4 - Version Checker
+
+### What's New
+
+- **Automatic version check on startup** — Aurelium now checks Modrinth on server startup to see if you are running the latest version for your Minecraft version. If you are behind, it logs a message in the console telling you how many versions behind you are and where to download the latest build. The check runs asynchronously and does not slow down startup.
+
+---
+
 ## v1.5.3 - Paper 26.2 Support & Web Dashboard Overhaul
 
 ### What's New
