@@ -2,9 +2,11 @@ package com.aureleconomy.utils;
 
 import com.aureleconomy.AurelEconomy;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,8 +30,9 @@ public class VersionChecker {
                         .connectTimeout(Duration.ofSeconds(10))
                         .build();
 
-                String gameVersionParam = mcVersion.replace("\"", "\\\"");
-                String url = MODRINTH_API + "?game_versions=[\"" + gameVersionParam + "\"]";
+                String gameVersionsParam = "[\"" + mcVersion + "\"]";
+                String encodedParam = URLEncoder.encode(gameVersionsParam, StandardCharsets.UTF_8);
+                String url = MODRINTH_API + "?game_versions=" + encodedParam;
 
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(url))
