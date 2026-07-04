@@ -534,7 +534,7 @@ jobs:
       - name: Verify VersionChecker output
         run: |
           VC_FAIL=0
-          sleep 3
+          sleep 10
           echo "=== VersionChecker log lines ==="
           grep "\[Aurelium\]" logs/latest.log 2>/dev/null || echo "(no [Aurelium] lines found)"
           if grep -q "\[Aurelium\].*version" logs/latest.log 2>/dev/null; then
