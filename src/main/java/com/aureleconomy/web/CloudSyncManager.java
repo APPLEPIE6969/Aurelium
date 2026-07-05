@@ -43,6 +43,7 @@ public class CloudSyncManager {
     private final String baseUrl;
     private final String serverId;
     private final String apiKey;
+    private final String prevApiKey;
     private final int syncInterval;
 
     private BukkitTask syncTask;
@@ -61,6 +62,7 @@ public class CloudSyncManager {
 
         String id = plugin.getConfig().getString("web.cloud.server-id", "");
         String key = plugin.getConfig().getString("web.cloud.api-key", "");
+        String prevKey = plugin.getConfig().getString("web.cloud.prev-api-key", "");
 
         if (id.isEmpty()) {
             id = UUID.randomUUID().toString().substring(0, 8);
@@ -75,6 +77,7 @@ public class CloudSyncManager {
 
         this.serverId = id;
         this.apiKey = key;
+        this.prevApiKey = prevKey;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────
@@ -261,7 +264,53 @@ public class CloudSyncManager {
                 .append(",\"apiKey\":\"").append(escJson(apiKey)).append("\"")
                 .append(",\"serverName\":\"").append(escJson(serverName)).append("\"}");
 
-        postJson("/api/register", json.toString());
+        String response = postJsonWithCurrentKey("/api/register", json.toString());
+
+        // If re-registered (key rotation), update prev-api-key to current key for future rotations
+        if (response.contains("\"reRegistered\":true")) {
+            plugin.getConfig().set("web.cloud.prev-api-key", apiKey);
+            plugin.saveConfig();
+            this.prevApiKey = apiKey;
+            plugin.getComponentLogger().info("Cloud dashboard: API key rotated, prev-api-key updated");
+        }
+    }
+
+    private String postJsonWithCurrentKey(String endpoint, String json) throws Exception {
+        HttpRequest.Builder req = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + endpoint))
+                .header("Content-Type", "application/json")
+                .header("X-Api-Key", apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+                .timeout(Duration.ofSeconds(60));
+
+        // Send previous API key as proof of ownership for key rotation
+        if (prevApiKey != null && !prevApiKey.isEmpty()) {
+            req.header("X-Current-Api-Key", prevApiKey);
+        }
+
+        HttpResponse<String> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
+        if (resp.statusCode() >= 400) {
+            String body = resp.body();
+            if (resp.statusCode() == 503 && body.contains("\"queued\":true")) {
+                int posIndex = body.indexOf("\"position\":");
+                String pos = "?";
+                if (posIndex != -1) {
+                    int start = posIndex + 11;
+                    int end = body.indexOf("}", start);
+                    if (end != -1)
+                        pos = body.substring(start, end).trim();
+                }
+                throw new RuntimeException("Dashboard Waitlist active. Waiting in queue (Position: " + pos + ").");
+            }
+
+            if (resp.statusCode() == 403 && body.contains("Invalid server ID or API key")) {
+                this.registered = false;
+            }
+
+            String snippet = body.length() > 200 ? body.substring(0, 200) + "..." : body;
+            throw new RuntimeException("HTTP " + resp.statusCode() + " (" + endpoint + "): " + snippet);
+        }
+        return resp.body();
     }
 
     // ── Data Sync ────────────────────────────────────────────────────
