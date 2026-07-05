@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.aureleconomy"
-version = "1.5.4-26.2.x"
+version = "1.5.5-26.2.x"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(25))
