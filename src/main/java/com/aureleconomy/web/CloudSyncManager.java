@@ -43,7 +43,7 @@ public class CloudSyncManager {
     private final String baseUrl;
     private final String serverId;
     private final String apiKey;
-    private final String prevApiKey;
+    private String prevApiKey;
     private final int syncInterval;
 
     private BukkitTask syncTask;
