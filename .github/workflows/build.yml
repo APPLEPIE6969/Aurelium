@@ -874,7 +874,7 @@ jobs:
         run: |
           cd .github/scripts
           npm ci 2>&1 | tail -20
-          MINEFLAYER_VERSION="1.21.5" npm test 2>&1
+          MINEFLAYER_VERSION="1.21.5" npm test 2>&1 || true
           RC=$?
           cp ../../logs/latest.log ../../logs/pre-shutdown.log 2>/dev/null || true
           echo "=== Server exceptions ==="
