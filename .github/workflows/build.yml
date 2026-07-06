@@ -536,8 +536,8 @@ jobs:
           VC_FAIL=0
           sleep 10
           echo "=== VersionChecker log lines ==="
-          grep "\[Aurelium\]" logs/latest.log 2>/dev/null || echo "(no [Aurelium] lines found)"
-          if grep -q "\[Aurelium\].*version" logs/latest.log 2>/dev/null; then
+          grep -i "\[aurelium\]" logs/latest.log 2>/dev/null || echo "(no [Aurelium] lines found)"
+          if grep -qi "\[aurelium\].*version" logs/latest.log 2>/dev/null; then
             echo "PASS: VersionChecker logged a version message"
           else
             echo "FAIL: No VersionChecker version message found in logs"
@@ -548,6 +548,14 @@ jobs:
             VC_FAIL=1
           else
             echo "PASS: No VersionChecker errors"
+          fi
+          if grep -qi "not found on Modrinth" logs/latest.log 2>/dev/null; then
+            echo "FAIL: VersionChecker could not find plugin version on Modrinth"
+            VC_FAIL=1
+          fi
+          if grep -qi "No releases found" logs/latest.log 2>/dev/null; then
+            echo "FAIL: VersionChecker found no releases for MC version"
+            VC_FAIL=1
           fi
           exit $VC_FAIL
       - name: Dump server exceptions
