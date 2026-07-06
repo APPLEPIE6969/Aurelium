@@ -534,7 +534,7 @@ jobs:
       - name: Verify VersionChecker output
         run: |
           VC_FAIL=0
-          sleep 10
+          sleep 30
           echo "=== VersionChecker log lines ==="
           grep -i "\[aurelium\]" logs/latest.log 2>/dev/null || echo "(no [Aurelium] lines found)"
           if grep -qi "\[aurelium\].*version" logs/latest.log 2>/dev/null; then
@@ -875,9 +875,9 @@ jobs:
           fi
       - name: Run mineflayer tests
         run: |
-          cd ci/mineflayer
+          cd .github/scripts
           npm ci 2>&1 | tail -20
-          npm test 2>&1
+          MINEFLAYER_VERSION="1.21.5" npm test 2>&1
           RC=$?
           cp ../../logs/latest.log ../../logs/pre-shutdown.log 2>/dev/null || true
           echo "=== Server exceptions ==="
