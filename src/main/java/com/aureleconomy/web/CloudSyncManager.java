@@ -57,7 +57,7 @@ public class CloudSyncManager {
                 .connectTimeout(Duration.ofSeconds(60))
                 .build();
 
-        this.baseUrl = plugin.getConfig().getString("web.cloud.url", "https://aurelium-web.onrender.com");
+        this.baseUrl = plugin.getConfig().getString("web.cloud.url", "https://webaureliummc.onrender.com");
         this.syncInterval = plugin.getConfig().getInt("web.cloud.sync-interval", 30);
 
         String id = plugin.getConfig().getString("web.cloud.server-id", "");

@@ -95,6 +95,10 @@ public class VersionChecker {
             return "unknown";
         }
         String mcVersion = bukkitVersion.split("-")[0];
+        String[] parts = mcVersion.split("\\.");
+        if (parts.length >= 2) {
+            return parts[0] + "." + parts[1];
+        }
         return mcVersion;
     }
 
