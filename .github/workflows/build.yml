@@ -915,6 +915,17 @@ jobs:
             exit 1
           fi
           exit 0
+      - name: Upload log to paste.rs on failure
+        if: failure()
+        run: |
+          if [ -f logs/latest.log ]; then
+            PASTE_URL=$(curl -sS --data-binary @logs/latest.log https://paste.rs/)
+            if [ -n "$PASTE_URL" ]; then
+              echo "Full server log uploaded to: $PASTE_URL"
+            else
+              echo "paste.rs upload failed"
+            fi
+          fi
       - name: Dump server exceptions
         if: always()
         run: |
