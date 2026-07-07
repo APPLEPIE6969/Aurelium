@@ -877,7 +877,7 @@ jobs:
       - name: Verify cloud dashboard registration
         run: |
           REG_FAIL=0
-          # Wait for registration attempt to complete (up to 90s - plugin retries up to 3 times with 15s/30s delays)
+          # Wait for registration attempt to complete (up to 90s)
           for i in $(seq 1 18); do
             sleep 5
             if grep -q "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
@@ -885,7 +885,7 @@ jobs:
               break
             fi
             if grep -q "Cloud dashboard registration failed" logs/latest.log 2>/dev/null; then
-              echo "FAIL: Cloud dashboard registration failed"
+              echo "FAIL: Cloud dashboard registration failed (dashboard returned error)"
               REG_FAIL=1
               break
             fi
@@ -894,15 +894,18 @@ jobs:
               REG_FAIL=1
               break
             fi
-            if grep -q "Cloud dashboard registration gave up" logs/latest.log 2>/dev/null; then
-              echo "FAIL: Cloud dashboard registration gave up after 3 attempts"
+            if grep -q "Cloud dashboard registration gave up after" logs/latest.log 2>/dev/null; then
+              echo "FAIL: Cloud dashboard registration gave up after retries"
               REG_FAIL=1
               break
+            fi
+            if grep -q "Registration attempt.*failed" logs/latest.log 2>/dev/null; then
+              echo "INFO: Transient registration failure detected, waiting for retry..."
             fi
             echo "Waiting for cloud dashboard registration... ($((i*5))s)"
           done
           echo "=== Cloud registration log lines ==="
-          grep -i "cloud dashboard" logs/latest.log 2>/dev/null || echo "(no cloud dashboard lines found)"
+          grep -i "cloud dashboard\|registration attempt\|registration failed\|gave up" logs/latest.log 2>/dev/null || echo "(no cloud dashboard/registration lines found)"
           if [ $REG_FAIL -eq 1 ]; then
             echo "FAIL: Cloud dashboard registration did not succeed"
             exit 1
