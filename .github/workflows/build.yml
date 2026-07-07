@@ -852,6 +852,17 @@ jobs:
           EOF
           echo "Generated unique server-id: $UNIQUE_ID"
           echo "Generated unique api-key: $UNIQUE_KEY"
+      - name: Warm up cloud dashboard
+        run: |
+          echo "Warming up cloud dashboard..."
+          for i in $(seq 1 10); do
+            if curl -sS -f -o /dev/null --max-time 10 "https://webaureliummc.onrender.com"; then
+              echo "Cloud dashboard is responsive"
+              break
+            fi
+            echo "Dashboard not ready yet, waiting... ($i/10)"
+            sleep 5
+          done
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
       - name: Download Paper 26.1.2
