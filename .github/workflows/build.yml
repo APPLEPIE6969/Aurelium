@@ -801,6 +801,124 @@ jobs:
           path: logs/latest.log
           retention-days: 7
 
+  cloud-registration-test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: "temurin"
+      - name: Download Aurelium 26.1.2
+        uses: actions/download-artifact@v8
+        with:
+          name: aurelium-26-1-2
+          path: artifact-tmp
+      - name: "Fallback: Download from paste.rs"
+        if: failure()
+        run: |
+          mkdir -p artifact-tmp url-tmp
+          echo "GitHub artifact download failed, trying paste.rs..."
+          PASTE_URL=""
+          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
+          if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
+            cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
+            PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
+          fi
+          if [ -n "$PASTE_URL" ]; then
+            curl -sS -f -o artifact-tmp/Aurelium.jar "$PASTE_URL" && echo "paste.rs download succeeded" || echo "paste.rs download failed"
+          else
+            echo "No paste.rs URL available"
+          fi
+      - name: Move JAR to plugins folder
+        run: |
+          mkdir -p plugins
+          find artifact-tmp -name "*.jar" -type f -exec mv {} plugins/ \;
+          echo "Contents of plugins/:"
+          ls -la plugins/
+      - name: Download Vault
+        run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
+      - name: Download Paper 26.1.2
+        run: |
+          PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
+          curl -sL "$PAPER_URL" -o paper.jar
+          if [ ! -s paper.jar ]; then echo "FAIL: paper.jar empty"; exit 1; fi
+      - name: Start server (fresh config - no pre-loaded config)
+        run: |
+          echo "eula=true" > eula.txt
+          cat > server.properties << 'PROPS'
+          online-mode=false
+          server-port=25565
+          enable-rcon=true
+          rcon.port=25575
+          rcon.password=test
+          PROPS
+          java -Xmx2G -jar paper.jar --nogui &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          for i in $(seq 1 90); do
+            if grep -q "Done (" logs/latest.log 2>/dev/null; then echo "Server started!"; break; fi
+            sleep 2
+          done
+          if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
+            echo "Server failed to start"; cat logs/latest.log | tail -40; kill $SERVER_PID 2>/dev/null || true; exit 1
+          fi
+      - name: Verify cloud dashboard registration
+        run: |
+          REG_FAIL=0
+          # Wait for registration attempt to complete (up to 60s)
+          for i in $(seq 1 12); do
+            sleep 5
+            if grep -q "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
+              echo "PASS: Cloud dashboard registration succeeded"
+              break
+            fi
+            if grep -q "Cloud dashboard registration failed" logs/latest.log 2>/dev/null; then
+              echo "FAIL: Cloud dashboard registration failed"
+              REG_FAIL=1
+              break
+            fi
+            if grep -q "Cloud dashboard disabled" logs/latest.log 2>/dev/null; then
+              echo "FAIL: Cloud dashboard disabled after failed registration"
+              REG_FAIL=1
+              break
+            fi
+            echo "Waiting for cloud dashboard registration... ($((i*5))s)"
+          done
+          echo "=== Cloud registration log lines ==="
+          grep -i "cloud dashboard" logs/latest.log 2>/dev/null || echo "(no cloud dashboard lines found)"
+          if [ $REG_FAIL -eq 1 ]; then
+            echo "FAIL: Cloud dashboard registration did not succeed"
+            exit 1
+          fi
+          if ! grep -q "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
+            echo "FAIL: No successful registration message found in logs"
+            exit 1
+          fi
+          exit 0
+      - name: Dump server exceptions
+        if: always()
+        run: |
+          cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
+          if [ -f logs/latest.log ]; then
+            echo "=== Server exceptions ==="
+            grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions found"
+          fi
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
+      - name: Upload server log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cloud-registration-log
+          path: logs/latest.log
+          retention-days: 7
+
   mineflayer-test:
     runs-on: ubuntu-latest
     needs: build
