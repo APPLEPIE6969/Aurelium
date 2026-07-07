@@ -844,12 +844,12 @@ jobs:
           mkdir -p plugins/Aurelium
           UNIQUE_ID="ci-fresh-$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-12)-$(date +%s)"
           UNIQUE_KEY="$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')"
-          cat > plugins/Aurelium/config.yml << EOF
-web:
-  cloud:
-    server-id: "$UNIQUE_ID"
-    api-key: "$UNIQUE_KEY"
-EOF
+          cat > plugins/Aurelium/config.yml << 'EOF'
+          web:
+            cloud:
+              server-id: "$UNIQUE_ID"
+              api-key: "$UNIQUE_KEY"
+          EOF
           echo "Generated unique server-id: $UNIQUE_ID"
           echo "Generated unique api-key: $UNIQUE_KEY"
       - name: Download Vault
