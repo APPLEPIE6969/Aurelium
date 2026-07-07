@@ -866,11 +866,19 @@ jobs:
           if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
             echo "Server failed to start"; cat logs/latest.log | tail -40; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
+      - name: Verify plugin loaded
+        run: |
+          if grep -q "AurelEconomy has been enabled" logs/latest.log 2>/dev/null; then
+            echo "PASS: Plugin loaded"
+          else
+            echo "FAIL: Plugin did not load"
+            exit 1
+          fi
       - name: Verify cloud dashboard registration
         run: |
           REG_FAIL=0
-          # Wait for registration attempt to complete (up to 60s)
-          for i in $(seq 1 12); do
+          # Wait for registration attempt to complete (up to 90s - plugin retries up to 3 times with 15s/30s delays)
+          for i in $(seq 1 18); do
             sleep 5
             if grep -q "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
               echo "PASS: Cloud dashboard registration succeeded"
@@ -883,6 +891,11 @@ jobs:
             fi
             if grep -q "Cloud dashboard disabled" logs/latest.log 2>/dev/null; then
               echo "FAIL: Cloud dashboard disabled after failed registration"
+              REG_FAIL=1
+              break
+            fi
+            if grep -q "Cloud dashboard registration gave up" logs/latest.log 2>/dev/null; then
+              echo "FAIL: Cloud dashboard registration gave up after 3 attempts"
               REG_FAIL=1
               break
             fi
