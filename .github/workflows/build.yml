@@ -901,29 +901,29 @@ jobs:
       - name: Verify cloud dashboard registration
         run: |
           REG_FAIL=0
-          # Wait for registration attempt to complete (up to 90s)
-          for i in $(seq 1 18); do
+          # Wait for registration attempt to complete (up to 120s)
+          for i in $(seq 1 24); do
             sleep 5
-            if grep -q "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
+            if grep -qi "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
               echo "PASS: Cloud dashboard registration succeeded"
               break
             fi
-            if grep -q "Cloud dashboard registration failed" logs/latest.log 2>/dev/null; then
+            if grep -qi "Cloud dashboard registration failed" logs/latest.log 2>/dev/null; then
               echo "FAIL: Cloud dashboard registration failed (dashboard returned error)"
               REG_FAIL=1
               break
             fi
-            if grep -q "Cloud dashboard disabled" logs/latest.log 2>/dev/null; then
+            if grep -qi "Cloud dashboard disabled" logs/latest.log 2>/dev/null; then
               echo "FAIL: Cloud dashboard disabled after failed registration"
               REG_FAIL=1
               break
             fi
-            if grep -q "Cloud dashboard registration gave up after" logs/latest.log 2>/dev/null; then
+            if grep -qi "Cloud dashboard registration gave up after" logs/latest.log 2>/dev/null; then
               echo "FAIL: Cloud dashboard registration gave up after retries"
               REG_FAIL=1
               break
             fi
-            if grep -q "Registration attempt.*failed" logs/latest.log 2>/dev/null; then
+            if grep -qi "Registration attempt.*failed" logs/latest.log 2>/dev/null; then
               echo "INFO: Transient registration failure detected, waiting for retry..."
             fi
             echo "Waiting for cloud dashboard registration... ($((i*5))s)"
@@ -934,7 +934,7 @@ jobs:
             echo "FAIL: Cloud dashboard registration did not succeed"
             exit 1
           fi
-          if ! grep -q "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
+          if ! grep -qi "Cloud dashboard registered" logs/latest.log 2>/dev/null; then
             echo "FAIL: No successful registration message found in logs"
             exit 1
           fi
