@@ -130,6 +130,9 @@ web:
     # Auto-generated on first run, don't share these
     server-id: ""
     api-key: ""
+    # Set this to the same value as REGISTRATION_SECRET on the dashboard server
+    # to allow authorized key rotation across server restarts
+    registration-secret: ""
     sync-interval: 30
 
 

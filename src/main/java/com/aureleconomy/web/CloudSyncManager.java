@@ -44,6 +44,7 @@ public class CloudSyncManager {
     private final String serverId;
     private final String apiKey;
     private String prevApiKey;
+    private final String registrationSecret;
     private final int syncInterval;
 
     private BukkitTask syncTask;
@@ -63,6 +64,7 @@ public class CloudSyncManager {
         String id = plugin.getConfig().getString("web.cloud.server-id", "");
         String key = plugin.getConfig().getString("web.cloud.api-key", "");
         String prevKey = plugin.getConfig().getString("web.cloud.prev-api-key", "");
+        String regSecret = plugin.getConfig().getString("web.cloud.registration-secret", "");
 
         if (id.isEmpty()) {
             id = UUID.randomUUID().toString().substring(0, 8);
@@ -78,6 +80,7 @@ public class CloudSyncManager {
         this.serverId = id;
         this.apiKey = key;
         this.prevApiKey = prevKey;
+        this.registrationSecret = regSecret;
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────
@@ -286,6 +289,11 @@ public class CloudSyncManager {
         // Send previous API key as proof of ownership for key rotation
         if (prevApiKey != null && !prevApiKey.isEmpty()) {
             req.header("X-Current-Api-Key", prevApiKey);
+        }
+
+        // Send registration secret for authorized key rotation
+        if (registrationSecret != null && !registrationSecret.isEmpty()) {
+            req.header("X-Registration-Secret", registrationSecret);
         }
 
         HttpResponse<String> resp = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
