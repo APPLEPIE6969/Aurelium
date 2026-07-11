@@ -1,10 +1,16 @@
 # Aurelium - Changelog
 
-## v1.5.4 - Version Checker
+## v1.5.4 - Version Checker & Cloud Dashboard Hardening
 
 ### What's New
 
 - **Automatic version check on startup** — Aurelium now checks Modrinth on server startup to see if you are running the latest version for your Minecraft version. If you are behind, it logs a message in the console telling you how many versions behind you are and where to download the latest build. The check runs asynchronously and does not slow down startup.
+- **Cloud dashboard key rotation** — when restarting your server with a new API key, the plugin now sends the previous key as proof of ownership, allowing it to re-register automatically without manual intervention. The old key is saved in config for future restarts.
+- **Admin endpoint security** — the web dashboard's admin endpoints now require a `REGISTRATION_SECRET` environment variable to be configured. If the secret is not set, the endpoint returns 403 instead of allowing unauthenticated access.
+
+### Bug Fixes
+
+- **Registration CI test** — added an automated CI job that verifies fresh cloud dashboard registration works correctly with a clean server, catching registration regressions before release.
 
 ---
 
