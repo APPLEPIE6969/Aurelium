@@ -51,6 +51,7 @@ public class CloudSyncManager {
     private BukkitTask purchaseTask;
     private BukkitTask priceHistoryTask;
     private boolean registered = false;
+    private boolean registrationFailed = false;
 
     public CloudSyncManager(AurelEconomy plugin) {
         this.plugin = plugin;
@@ -90,12 +91,18 @@ public class CloudSyncManager {
 
         long syncTicks = syncInterval * 20L;
         syncTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
-            if (!registered) {
+            if (!registered && !registrationFailed) {
                 try {
                     register();
                     registered = true;
                     plugin.getComponentLogger().info("Cloud dashboard registered (late) — server ID: " + serverId);
-                } catch (Exception ignored) {
+                } catch (Exception e) {
+                    String msg = e.getMessage();
+                    if (msg != null && (msg.contains("HTTP 403") || msg.contains("HTTP 401"))) {
+                        registrationFailed = true;
+                        plugin.getComponentLogger().error("Cloud dashboard registration permanently failed (auth error): " + msg);
+                        plugin.getComponentLogger().error("If your server-id changed, delete the old entry from the dashboard or set web.cloud.registration-secret in config.");
+                    }
                     return;
                 }
             }
@@ -162,7 +169,13 @@ public class CloudSyncManager {
                 }
             } catch (Exception e) {
                 String msg = e.getMessage();
-                if (msg != null && (msg.contains("HTTP 4") || msg.contains("HTTP 5") || msg.contains("http 4") || msg.contains("http 5"))) {
+                if (msg != null && (msg.contains("HTTP 403") || msg.contains("HTTP 401"))) {
+                    registrationFailed = true;
+                    plugin.getComponentLogger().error("Cloud dashboard registration failed (auth error): " + msg);
+                    plugin.getComponentLogger().error("Cloud dashboard disabled. Your server-id may have a stale entry with a different API key.");
+                    plugin.getComponentLogger().error("Fix: delete the old server entry from the dashboard, or set web.cloud.registration-secret in config.yml to match the dashboard REGISTRATION_SECRET env var.");
+                } else if (msg != null && (msg.contains("HTTP 4") || msg.contains("HTTP 5") || msg.contains("http 4") || msg.contains("http 5"))) {
+                    registrationFailed = true;
                     plugin.getComponentLogger().error("Cloud dashboard registration failed (dashboard returned error): " + msg);
                     plugin.getComponentLogger().error("Cloud dashboard disabled. Set web.cloud.url in config if you have a dashboard.");
                 } else {
