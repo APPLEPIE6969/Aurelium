@@ -1,6 +1,6 @@
 # Aurelium - Patch Notes
 
-## v1.5.4 - Version Checker
+## v1.5.4 - Version Checker & Cloud Dashboard Hardening
 
 ### Plugin Changes
 
@@ -9,6 +9,13 @@
   - `[Aurelium] Download the latest version at: https://modrinth.com/plugin/aurelium/versions`
   - The check is non-blocking and runs on an async thread, so it does not impact server startup time
   - All log messages are prefixed with `[Aurelium]` so they are clearly identifiable
+- **Cloud Dashboard Key Rotation**: The plugin now sends the previous API key as `X-Current-Api-Key` header during registration, allowing legitimate server restarts with rotated keys to re-register without manual intervention. On successful key rotation, the plugin automatically saves the current key as `prev-api-key` in config for future restarts
+- **REGISTRATION_SECRET Support**: Admin-only endpoints on the web dashboard now require a `REGISTRATION_SECRET` environment variable to be set — rejects with 403 if missing, preventing unauthenticated access when the secret is not configured
+
+### CI Changes
+
+- **Cloud Registration CI Test**: New `cloud-registration-test` CI job that starts a fresh Paper server with a unique server-id/api-key, warms up the Render dashboard, and verifies successful registration by grepping server logs for "Cloud dashboard registered" — catches registration regressions before release
+- **VersionChecker CI Test**: Non-blocking test that verifies the Modrinth version check runs without errors (network failures are non-fatal)
 
 ---
 
@@ -32,9 +39,9 @@
 - **Write-Through Integrity**: Failed Astra DB writes now return 503 to the caller instead of silently succeeding with cache-only data — no more data loss on restart after a failed write
 - **Transport Error Handling**: `astraFetch()` and `astraQuery()` catch timeout/network errors and return structured `{ ok: false }` instead of throwing into route handlers
 - **Session Cache Consistency**: `sessionCache` keyed by `tokenHash(token)` everywhere — startup load, session creation, lookup, and cleanup all use the same HMAC-based key, so persisted sessions survive restarts
-- **Input Validation Hardening**: Buy amounts validated with `Number()` + `Number.isInteger()` (no more NaN bypass); auction/order IDs validated with `Number()` + `Number.isFinite()` + `Number.isInteger()` (no more partial parses like `parseInt(\'12abc\')`)
+- **Input Validation Hardening**: Buy amounts validated with `Number()` + `Number.isInteger()` (no more NaN bypass); auction/order IDs validated with `Number()` + `Number.isFinite()` + `Number.isInteger()` (no more partial parses like `parseInt('12abc')`)
 - **Auction Modal Quantity Selector**: BIN auctions with stacked items now show +/- quantity buttons (1 to remaining), per-unit price, and live total cost calculation
-- **Currency Display**: Uses each item\'s assigned currency instead of hardcoded dollars
+- **Currency Display**: Uses each item's assigned currency instead of hardcoded dollars
 - **Auction Quantity Display**: Listings show available quantity, remaining count, and per-item price
 - **Auction Category Sidebar**: Auction page now has the same sidebar layout as the market page, with filters for All Listings, BIN Listings, and BID Listings
 - **Empty State Messages**: Category filters with no results show "No auctions in this category" with smooth animation instead of falling back to showing all auctions
@@ -61,6 +68,7 @@
 ### Fixes
 
 - **Cloud Dashboard Registration**: Fixed cloud dashboard sometimes not registering.
+
 ---
 
 ## v1.5.0 - Custom Item Scanner & Stability Improvements
@@ -106,8 +114,8 @@
 
 ### Platform
 
-- Targets **Paper 26.1+** (Java 25, api-version: \'26.1\')
-- Uses Paper\'s `RegistryAccess` / `RegistryKey` API for enchantment lookups
+- Targets **Paper 26.1+** (Java 25, api-version: '26.1')
+- Uses Paper's `RegistryAccess` / `RegistryKey` API for enchantment lookups
 - CI tested against Paper 26.1.2
 
 ---
@@ -129,8 +137,8 @@
 
 ### Platform
 
-- Targets **Paper 26.1+** (Java 25, api-version: \'26.1\')
-- Uses Paper\'s `RegistryAccess` / `RegistryKey` API for enchantment lookups
+- Targets **Paper 26.1+** (Java 25, api-version: '26.1')
+- Uses Paper's `RegistryAccess` / `RegistryKey` API for enchantment lookups
 - CI tested against Paper 26.1.2
 
 ---
