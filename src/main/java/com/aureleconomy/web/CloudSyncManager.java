@@ -52,6 +52,8 @@ public class CloudSyncManager {
     private BukkitTask priceHistoryTask;
     private boolean registered = false;
     private boolean registrationFailed = false;
+    private int registrationFailureCount = 0;
+    private static final int MAX_REGISTRATION_FAILURES = 3;
 
     public CloudSyncManager(AurelEconomy plugin) {
         this.plugin = plugin;
@@ -95,13 +97,20 @@ public class CloudSyncManager {
                 try {
                     register();
                     registered = true;
+                    registrationFailureCount = 0; // Reset on success
                     plugin.getComponentLogger().info("Cloud dashboard registered (late) — server ID: " + serverId);
                 } catch (Exception e) {
                     String msg = e.getMessage();
                     if (msg != null && (msg.contains("HTTP 403") || msg.contains("HTTP 401"))) {
-                        registrationFailed = true;
-                        plugin.getComponentLogger().error("Cloud dashboard registration permanently failed (auth error): " + msg);
-                        plugin.getComponentLogger().error("If your server-id changed, delete the old entry from the dashboard or set web.cloud.registration-secret in config.");
+                        registrationFailureCount++;
+                        if (registrationFailureCount >= MAX_REGISTRATION_FAILURES) {
+                            registrationFailed = true;
+                            plugin.getComponentLogger().error("Cloud dashboard registration failed after " + MAX_REGISTRATION_FAILURES + " attempts (auth error): " + msg);
+                            plugin.getComponentLogger().error("Your server-id has a stale entry in the dashboard with a different API key.");
+                            plugin.getComponentLogger().error("Fix: Delete the old server entry from the dashboard at https://webaureliummc.onrender.com, or set web.cloud.registration-secret in config.yml to match the dashboard's REGISTRATION_SECRET env var.");
+                        } else {
+                            plugin.getComponentLogger().warn("Cloud dashboard registration failed (attempt " + registrationFailureCount + "/" + MAX_REGISTRATION_FAILURES + "): " + msg);
+                        }
                     }
                     return;
                 }
@@ -162,6 +171,7 @@ public class CloudSyncManager {
                 plugin.getComponentLogger().info("Cloud dashboard: registering (attempt " + attempt + "/3)...");
                 register();
                 registered = true;
+                registrationFailureCount = 0; // Reset on success
                 plugin.getComponentLogger().info("Cloud dashboard registered — server ID: " + serverId);
                 try {
                     syncMarketData();
@@ -170,10 +180,19 @@ public class CloudSyncManager {
             } catch (Exception e) {
                 String msg = e.getMessage();
                 if (msg != null && (msg.contains("HTTP 403") || msg.contains("HTTP 401"))) {
-                    registrationFailed = true;
-                    plugin.getComponentLogger().error("Cloud dashboard registration failed (auth error): " + msg);
-                    plugin.getComponentLogger().error("Cloud dashboard disabled. Your server-id may have a stale entry with a different API key.");
-                    plugin.getComponentLogger().error("Fix: delete the old server entry from the dashboard, or set web.cloud.registration-secret in config.yml to match the dashboard REGISTRATION_SECRET env var.");
+                    registrationFailureCount++;
+                    if (registrationFailureCount >= MAX_REGISTRATION_FAILURES) {
+                        registrationFailed = true;
+                        plugin.getComponentLogger().error("Cloud dashboard registration failed after " + MAX_REGISTRATION_FAILURES + " attempts (auth error): " + msg);
+                        plugin.getComponentLogger().error("Your server-id has a stale entry in the dashboard with a different API key.");
+                        plugin.getComponentLogger().error("Fix: Delete the old server entry from the dashboard at https://webaureliummc.onrender.com, or set web.cloud.registration-secret in config.yml to match the dashboard's REGISTRATION_SECRET env var.");
+                    } else {
+                        plugin.getComponentLogger().warn("Cloud dashboard registration failed (attempt " + registrationFailureCount + "/" + MAX_REGISTRATION_FAILURES + "): " + msg);
+                        if (attempt < 3) {
+                            long delay = 300L * attempt;
+                            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> attemptRegistration(attempt + 1), delay);
+                        }
+                    }
                 } else if (msg != null && (msg.contains("HTTP 4") || msg.contains("HTTP 5") || msg.contains("http 4") || msg.contains("http 5"))) {
                     registrationFailed = true;
                     plugin.getComponentLogger().error("Cloud dashboard registration failed (dashboard returned error): " + msg);
