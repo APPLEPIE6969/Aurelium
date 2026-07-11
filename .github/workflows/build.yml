@@ -844,7 +844,7 @@ jobs:
           mkdir -p plugins/Aurelium
           UNIQUE_ID="ci-fresh-$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-12)-$(date +%s)"
           UNIQUE_KEY="$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')"
-          cat > plugins/Aurelium/config.yml << 'EOF'
+          cat > plugins/Aurelium/config.yml << EOF
           web:
             cloud:
               server-id: "$UNIQUE_ID"
@@ -970,7 +970,7 @@ jobs:
           path: logs/latest.log
           retention-days: 7
 
-  mineflayer-test:
+  mineflayer-ingame-test:
     runs-on: ubuntu-latest
     needs: build
     timeout-minutes: 30
@@ -981,10 +981,6 @@ jobs:
         with:
           java-version: "25"
           distribution: "temurin"
-      - name: Set up Node.js 24
-        uses: actions/setup-node@v5
-        with:
-          node-version: "24"
       - name: Download Aurelium 26.1.2
         uses: actions/download-artifact@v8
         with:
@@ -996,7 +992,8 @@ jobs:
           mkdir -p artifact-tmp url-tmp
           echo "GitHub artifact download failed, trying paste.rs..."
           PASTE_URL=""
-          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}"             "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
+          curl -sS -f -o url-tmp/paste-url.zip -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?name=paste-url-aurelium-26-1-2" 2>/dev/null || true
           if [ -f url-tmp/paste-url.zip ] && [ -s url-tmp/paste-url.zip ]; then
             cd url-tmp && unzip -o paste-url.zip 2>/dev/null && cd ..
             PASTE_URL=$(cat url-tmp/paste-url.txt 2>/dev/null | head -1 || echo "")
@@ -1039,21 +1036,14 @@ jobs:
           if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
             echo "Server failed to start"; cat logs/latest.log | tail -40; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
-      - name: Run mineflayer tests
+      - name: Run RCON in-game tests
         run: |
-          cd .github/scripts
-          npm ci 2>&1 | tail -20
-          MINEFLAYER_VERSION="1.21.5" npm test 2>&1 || true
+          python3 test_rcon.py
           RC=$?
-          cp ../../logs/latest.log ../../logs/pre-shutdown.log 2>/dev/null || true
+          cp logs/latest.log logs/pre-shutdown.log 2>/dev/null || true
           echo "=== Server exceptions ==="
-          grep -i "exception\|error.*aurel\|severe" ../../logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions"
-          if [ $RC -eq 0 ]; then
-            echo "PASS: Mineflayer tests passed"
-          else
-            echo "WARN: Mineflayer tests failed (known issue: mineflayer doesn't support Paper 26.1.2 version format) - non-blocking"
-          fi
-          exit 0
+          grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions"
+          exit $RC
       - name: Stop server
         if: always()
         run: |
@@ -1062,6 +1052,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: mineflayer-log
+          name: mineflayer-ingame-log
           path: logs/latest.log
           retention-days: 7
