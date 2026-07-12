@@ -303,6 +303,8 @@ public class CloudSyncManager {
     private void register() throws Exception {
         String serverName = plugin.getServer().getName();
 
+        plugin.getComponentLogger().info("Cloud dashboard: registering serverId=" + serverId + " apiKey=" + apiKey.substring(0, 8) + "...");
+
         StringBuilder json = new StringBuilder();
         json.append("{\"serverId\":\"").append(escJson(serverId)).append("\"")
                 .append(",\"apiKey\":\"").append(escJson(apiKey)).append("\"")
@@ -317,6 +319,8 @@ public class CloudSyncManager {
             this.prevApiKey = apiKey;
             if (response.contains("\"reRegistered\":true")) {
                 plugin.getComponentLogger().info("Cloud dashboard: API key rotated, prev-api-key updated");
+            } else {
+                plugin.getComponentLogger().info("Cloud dashboard: registered successfully");
             }
         }
     }
