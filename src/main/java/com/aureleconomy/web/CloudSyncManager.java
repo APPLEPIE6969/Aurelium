@@ -310,12 +310,14 @@ public class CloudSyncManager {
 
         String response = postJsonWithCurrentKey("/api/register", json.toString());
 
-        // If re-registered (key rotation), update prev-api-key to current key for future rotations
-        if (response.contains("\"reRegistered\":true")) {
+        // Update prev-api-key on every successful registration so we always have proof of current key
+        if (response.contains("\"success\":true")) {
             plugin.getConfig().set("web.cloud.prev-api-key", apiKey);
             plugin.saveConfig();
             this.prevApiKey = apiKey;
-            plugin.getComponentLogger().info("Cloud dashboard: API key rotated, prev-api-key updated");
+            if (response.contains("\"reRegistered\":true")) {
+                plugin.getComponentLogger().info("Cloud dashboard: API key rotated, prev-api-key updated");
+            }
         }
     }
 
