@@ -182,6 +182,27 @@ public class CloudSyncManager {
                 String msg = e.getMessage();
                 if (msg != null && (msg.contains("HTTP 403") || msg.contains("HTTP 401"))) {
                     registrationFailureCount++;
+                    // Auto-recover from stale entry: generate fresh serverId + apiKey and retry
+                    if (msg.contains("stale entry") || msg.contains("already registered with different API key")) {
+                        plugin.getComponentLogger().warn("Stale dashboard entry detected — generating fresh server identity and retrying...");
+                        String newServerId = UUID.randomUUID().toString().substring(0, 8);
+                        String newApiKey = UUID.randomUUID().toString().replace("-", "");
+                        plugin.getConfig().set("web.cloud.server-id", newServerId);
+                        plugin.getConfig().set("web.cloud.api-key", newApiKey);
+                        plugin.getConfig().set("web.cloud.prev-api-key", "");
+                        plugin.saveConfig();
+                        this.serverId = newServerId;
+                        this.apiKey = newApiKey;
+                        this.prevApiKey = "";
+                        if (attempt < 3) {
+                            long delay = 300L * attempt;
+                            Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> attemptRegistration(attempt + 1), delay);
+                        } else {
+                            plugin.getComponentLogger().error("Cloud dashboard registration gave up after " + attempt + " attempts even with fresh identity");
+                            registrationFailed = true;
+                        }
+                        return;
+                    }
                     if (registrationFailureCount >= MAX_REGISTRATION_FAILURES) {
                         registrationFailed = true;
                         plugin.getComponentLogger().error("Cloud dashboard registration failed after " + MAX_REGISTRATION_FAILURES + " attempts (auth error): " + msg);
