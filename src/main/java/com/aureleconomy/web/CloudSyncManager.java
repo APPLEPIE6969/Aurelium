@@ -42,8 +42,8 @@ public class CloudSyncManager {
     private final AurelEconomy plugin;
     private final HttpClient http;
     private final String baseUrl;
-    private final String serverId;
-    private final String apiKey;
+    private String serverId;
+    private String apiKey;
     private String prevApiKey;
     private final String registrationSecret;
     private final int syncInterval;
