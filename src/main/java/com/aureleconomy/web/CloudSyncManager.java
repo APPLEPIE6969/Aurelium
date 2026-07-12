@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.security.SecureRandom;
 
 /**
@@ -227,21 +228,29 @@ public class CloudSyncManager {
         return serverId;
     }
 
-    public String createSessionUrl(Player player) {
+    public CompletableFuture<String> createSessionUrl(Player player) {
         byte[] tokenBytes = new byte[32];
         SECURE_RANDOM.nextBytes(tokenBytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                String sessionJson = buildPlayerJson(player, token);
-                postJson("/api/session", sessionJson);
-            } catch (Exception e) {
-                plugin.getComponentLogger().warn("Failed to create cloud session: " + e.getMessage());
+        return CompletableFuture.supplyAsync(() -> {
+            int maxRetries = 3;
+            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    String sessionJson = buildPlayerJson(player, token);
+                    postJson("/api/session", sessionJson);
+                    return baseUrl + "/shop/" + serverId + "?token=" + token;
+                } catch (Exception e) {
+                    if (attempt == maxRetries) {
+                        plugin.getComponentLogger().warn("Failed to create cloud session after " + maxRetries + " attempts: " + e.getMessage());
+                        throw new CompletionException(e);
+                    }
+                    plugin.getComponentLogger().warn("Cloud session creation attempt " + attempt + " failed, retrying: " + e.getMessage());
+                    try { Thread.sleep(500L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); throw new CompletionException(ie); }
+                }
             }
+            throw new IllegalStateException("Unreachable");
         });
-
-        return baseUrl + "/shop/" + serverId + "?token=" + token;
     }
 
     public void updatePlayerBalance(Player player) {

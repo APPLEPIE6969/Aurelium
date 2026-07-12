@@ -42,8 +42,6 @@ public class WebCommand implements TabExecutor {
         }
 
         String webMode = plugin.getConfig().getString("web.mode", "cloud").toLowerCase();
-        String url;
-
         if ("local".equals(webMode)) {
             if (plugin.getWebServer() == null || !plugin.getWebServer().isRunning()) {
                 player.sendMessage(MM.deserialize("<red>Web server failed to start. Check the server console.</red>"));
@@ -52,29 +50,45 @@ public class WebCommand implements TabExecutor {
             String token = plugin.getWebServer().getSessionManager().createSession(player.getUniqueId());
             String host = plugin.getConfig().getString("web.local.host", "localhost");
             int port = plugin.getWebServer().getPort();
-            url = "http://" + host + ":" + port + "/?token=" + token;
+            String url = "http://" + host + ":" + port + "/?token=" + token;
+
+            player.sendMessage(Component.empty());
+            player.sendMessage(
+                    MM.deserialize("<gradient:gold:yellow><bold>  Server Market — Web Dashboard</bold></gradient>"));
+            player.sendMessage(Component.empty());
+            player.sendMessage(Component.text("  ").append(
+                    Component.text("▸ Click here to open the dashboard")
+                            .color(NamedTextColor.GREEN)
+                            .decorate(TextDecoration.UNDERLINED)
+                            .clickEvent(ClickEvent.openUrl(url))));
+            player.sendMessage(Component.empty());
+            player.sendMessage(MM.deserialize("<gray>  Session expires after 1 hour of inactivity.</gray>"));
+            player.sendMessage(Component.empty());
+            return true;
         } else {
             if (plugin.getCloudSync() == null || !plugin.getCloudSync().isRegistered()) {
                 player.sendMessage(MM.deserialize(
                         "<red>Cloud dashboard is not connected yet. Please wait a moment and try again.</red>"));
                 return true;
             }
-            url = plugin.getCloudSync().createSessionUrl(player);
+            plugin.getCloudSync().createSessionUrl(player).thenAccept(url -> {
+                player.sendMessage(Component.empty());
+                player.sendMessage(
+                        MM.deserialize("<gradient:gold:yellow><bold>  Server Market — Web Dashboard</bold></gradient>"));
+                player.sendMessage(Component.empty());
+                player.sendMessage(Component.text("  ").append(
+                        Component.text("▸ Click here to open the dashboard")
+                                .color(NamedTextColor.GREEN)
+                                .decorate(TextDecoration.UNDERLINED)
+                                .clickEvent(ClickEvent.openUrl(url))));
+                player.sendMessage(Component.empty());
+                player.sendMessage(MM.deserialize("<gray>  Session expires after 1 hour of inactivity.</gray>"));
+                player.sendMessage(Component.empty());
+            }).exceptionally(ex -> {
+                player.sendMessage(MM.deserialize("<red>Failed to create dashboard session: " + ex.getMessage() + "</red>"));
+                return null;
+            });
         }
-
-        // Send link immediately — frontend handles loading/retry
-        player.sendMessage(Component.empty());
-        player.sendMessage(
-                MM.deserialize("<gradient:gold:yellow><bold>  Server Market — Web Dashboard</bold></gradient>"));
-        player.sendMessage(Component.empty());
-        player.sendMessage(Component.text("  ").append(
-                Component.text("▸ Click here to open the dashboard")
-                        .color(NamedTextColor.GREEN)
-                        .decorate(TextDecoration.UNDERLINED)
-                        .clickEvent(ClickEvent.openUrl(url))));
-        player.sendMessage(Component.empty());
-        player.sendMessage(MM.deserialize("<gray>  Session expires after 1 hour of inactivity.</gray>"));
-        player.sendMessage(Component.empty());
 
         return true;
     }
