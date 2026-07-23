@@ -20,8 +20,8 @@ import java.util.Base64;
 
 public class AuctionManager {
 
- // Config & Default Constants
- private static final String DEFAULT_CURRENCY = "Aurels";
+ // loaded from config on init, no hardcoded fallback
+   private String defaultCurrency;
  private static final String CONF_TAX_PERCENT = "auction-house.sales-tax-percent";
  private static final BigDecimal DEFAULT_TAX = new BigDecimal("5.0");
  private static final long TICK_MINUTE = 1200L;
@@ -53,10 +53,11 @@ public class AuctionManager {
  private final List<com.aureleconomy.auction.AuctionItem> activeAuctions = new ArrayList<>();
 
  public AuctionManager(AurelEconomy plugin) {
- this.plugin = plugin;
- loadAuctions();
- startExpiryTask();
- }
+   this.plugin = plugin;
+   this.defaultCurrency = plugin.getEconomyManager().getDefaultCurrency();
+   loadAuctions();
+   startExpiryTask();
+   }
 
  private void loadAuctions() {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
@@ -73,7 +74,7 @@ public class AuctionManager {
  private com.aureleconomy.auction.AuctionItem mapResultSet(ResultSet rs) throws SQLException {
  String currency = rs.getString("currency");
  if (currency == null)
- currency = DEFAULT_CURRENCY;
+   currency = defaultCurrency;
 
  BigDecimal price = rs.getBigDecimal("price");
  if (price == null)
@@ -670,7 +671,7 @@ public class AuctionManager {
  ps.setString(1, playerUUID.toString());
  ps.setString(2, itemToBase64(item));
  ps.setBigDecimal(3, BigDecimal.ZERO);
- ps.setString(4, DEFAULT_CURRENCY);
+   ps.setString(4, defaultCurrency);
  ps.setBoolean(5, true);
  ps.setLong(6, System.currentTimeMillis());
  ps.setBigDecimal(7, BigDecimal.ZERO);

@@ -19,15 +19,16 @@ database:
     username: "root"
     password: "password"
 
-# --- Economy ---
+# --- economy ---
 economy:
+  # must match a key in currencies below — if deleted, plugin falls back to first remaining currency
   default-currency: "Aurels"
 
   currencies:
     Aurels:
       symbol: "\u20B3"
       starting-balance: 100.0
-      # Add more currencies here:
+      # add more currencies here:
       # Dollars:
       #   symbol: "$"
       #   starting-balance: 0.0

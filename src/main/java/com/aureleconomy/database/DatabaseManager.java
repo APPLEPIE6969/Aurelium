@@ -292,7 +292,7 @@ public class DatabaseManager {
 
  plugin.getComponentLogger()
  .info("Legacy single-currency database detected. Migrating to multi-currency system...");
- String defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
+ String defaultCurrency = plugin.getEconomyManager().getDefaultCurrency();
 
  statement.execute("INSERT INTO player_balances (uuid, currency, balance) " +
  "SELECT uuid, '" + defaultCurrency + "', balance FROM players " +

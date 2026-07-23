@@ -465,7 +465,8 @@ public class ApiHandler implements HttpHandler {
  json.append(",\"price\":").append(buyPrice.toString());
  json.append(",\"priceFormatted\":").append(jsonStr(plugin.getEconomyManager().getFormattedWithSymbol(buyPrice, currency)));
  json.append(",\"currency\":").append(jsonStr(currency));
- }
+   json.append("}");
+   }
  json.append("]}");
  return json.toString();
  }

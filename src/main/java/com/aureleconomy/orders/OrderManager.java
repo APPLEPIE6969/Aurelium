@@ -42,12 +42,9 @@ public class OrderManager {
                 int requested = rs.getInt("amount_requested");
                 int filled = rs.getInt("amount_filled");
                 BigDecimal price = rs.getBigDecimal("price_per_piece");
-                String currency = "Aurels";
-                try {
-                    currency = rs.getString("currency");
-                    if (currency == null)
-                        currency = "Aurels";
-                } catch (SQLException ignored) {
+                String currency = rs.getString("currency");
+                if (currency == null) {
+                    currency = plugin.getEconomyManager().getDefaultCurrency();
                 }
                 String status = rs.getString("status");
 

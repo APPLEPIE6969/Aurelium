@@ -30,7 +30,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  private boolean isValidCurrency(String currency) {
  org.bukkit.configuration.ConfigurationSection section = plugin.getConfig().getConfigurationSection("economy.currencies");
  if (section == null) {
- // currencies section missing from config - fallback to default currency
+  // currencies section missing - fall back to first available currency
  return currency.equals(plugin.getEconomyManager().getDefaultCurrency());
  }
  return section.contains(currency);
@@ -270,7 +270,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
 
  String targetName = args[1];
 
- // Run all economy operations async to avoid blocking the main thread
+ // run all economy operations async to avoid blocking the main thread
  sender.sendMessage(Component.text("Processing...", NamedTextColor.GRAY));
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {

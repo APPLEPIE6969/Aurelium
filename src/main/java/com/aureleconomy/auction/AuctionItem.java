@@ -128,7 +128,7 @@ public class AuctionItem {
  private UUID seller;
  private ItemStack item;
  private BigDecimal price = BigDecimal.ZERO;
- private String currency = "Aurels";
+ private String currency = null;
  private boolean isBin;
  private long expiration;
  private BigDecimal listingFee = BigDecimal.ZERO;

@@ -26,11 +26,26 @@ public class EconomyManager {
         this.plugin = plugin;
     }
 
+    // get default currency from config, fall back to first available currency
+    // never hardcode "aurels" - if it's deleted from config it stays deleted
     public String getDefaultCurrency() {
-        if (this.defaultCurrency == null) {
-            this.defaultCurrency = plugin.getConfig().getString("economy.default-currency", "Aurels");
+        if (this.defaultCurrency == null || !currencyExists(this.defaultCurrency)) {
+            this.defaultCurrency = plugin.getConfig().getString("economy.default-currency", "");
+            if (!currencyExists(this.defaultCurrency)) {
+                var currencies = plugin.getConfig().getConfigurationSection("economy.currencies");
+                if (currencies != null && currencies.getKeys(false).size() > 0) {
+                    this.defaultCurrency = currencies.getKeys(false).iterator().next();
+                }
+            }
         }
         return this.defaultCurrency;
+    }
+
+    // check if a currency is defined in config
+    public boolean currencyExists(String currency) {
+        if (currency == null || currency.isEmpty()) return false;
+        var currencies = plugin.getConfig().getConfigurationSection("economy.currencies");
+        return currencies != null && currencies.contains(currency);
     }
 
     public BigDecimal getBalance(OfflinePlayer player) {
@@ -39,8 +54,7 @@ public class EconomyManager {
 
     public BigDecimal getBalance(OfflinePlayer player, String currency) {
         UUID uuid = player.getUniqueId();
-        // Thread-safe: use ConcurrentHashMap atomic operations to avoid race
-        // between cache read and DB fallback
+        // thread-safe: use concurrenthashmap atomic operations
         ConcurrentHashMap<String, BigDecimal> userBalances = balanceCache.get(uuid);
         if (userBalances != null) {
             BigDecimal cached = userBalances.get(currency);
@@ -228,10 +242,7 @@ public class EconomyManager {
         return getCurrencySymbol(currency) + format(amount, currency);
     }
 
-    /**
-     * Get balance from cache only (no DB call). Returns ZERO if not cached.
-     * Thread-safe: uses ConcurrentHashMap atomic operations.
-     */
+    // get balance from cache only (no db call), returns zero if not cached
     private BigDecimal getBalanceFromCache(UUID uuid, String currency) {
         ConcurrentHashMap<String, BigDecimal> userBalances = balanceCache.get(uuid);
         if (userBalances != null) {
