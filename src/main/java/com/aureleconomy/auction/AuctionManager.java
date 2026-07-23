@@ -16,7 +16,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
+import java.util.Base64;
 
 public class AuctionManager {
 
@@ -720,10 +720,10 @@ public class AuctionManager {
  }
 
  private String itemToBase64(ItemStack item) {
- return Base64Coder.encodeLines(item.serializeAsBytes());
+ return Base64.getEncoder().encodeToString(item.serializeAsBytes());
  }
 
  private ItemStack itemFromBase64(String data) {
- return ItemStack.deserializeBytes(Base64Coder.decodeLines(data));
+ return ItemStack.deserializeBytes(Base64.getDecoder().decode(data));
  }
 }

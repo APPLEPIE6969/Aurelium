@@ -323,7 +323,7 @@ public class CustomItemRegistry {
  ItemStack itemStack;
  try {
  itemStack = ItemStack.deserializeBytes(
- org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder.decodeLines(itemData));
+ java.util.Base64.getDecoder().decode(itemData));
  } catch (Exception e) {
  plugin.getComponentLogger().warn("[CustomItems] Failed to deserialize item: " + canonicalId);
  continue;
@@ -390,7 +390,7 @@ public class CustomItemRegistry {
 
  private void saveCustomItem(DatabaseManager dbManager, String canonicalId, CustomMarketItem item,
  Set<DiscoveryMethod> methods) throws SQLException {
- String itemData = org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder.encodeLines(
+ String itemData = java.util.Base64.getEncoder().encodeToString(
  item.getItemStack().serializeAsBytes());
  String methodsStr = methods.stream().map(DiscoveryMethod::name).reduce((a, b) -> a + "," + b).orElse("");
 
