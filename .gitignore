@@ -45,6 +45,9 @@ kilo.json
 _aurelium_*/
 recovery_tmp/
 
+# macOS
+.DS_Store
+
 # Misc
 package com.aureleconomy.web;
 hs_err_pid*.log
