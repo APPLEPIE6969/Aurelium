@@ -52,7 +52,8 @@ public class SQLTypes {
 
     /**
      * Epoch milliseconds as declared by the auction, offer, earning and price-history tables.
-     * Both dialects accept this spelling, so there is no override.
+     * SQLite gives {@code LONG} numeric affinity; MySQL aliases it to MEDIUMTEXT, so
+     * {@link MySQLTypes#time()} overrides it with BIGINT.
      */
     public String time() {
         return "LONG";

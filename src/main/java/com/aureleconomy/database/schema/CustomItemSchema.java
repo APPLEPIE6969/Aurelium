@@ -16,7 +16,7 @@ public class CustomItemSchema extends Schema {
     @Override
     public String create() {
         return "CREATE TABLE IF NOT EXISTS " + getTable() + " (" +
-                "canonical_id " + t.identifier(255) + " PRIMARY KEY, " +
+                "canonical_id " + t.identifier(255) + " NOT NULL PRIMARY KEY, " +
                 "source_plugin " + t.identifier(64) + " NOT NULL, " +
                 "display_name " + t.identifier(256) + ", " +
                 "item_data " + t.text() + " NOT NULL, " +

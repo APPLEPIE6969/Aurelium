@@ -30,9 +30,12 @@ public class MySQLDatabase implements Database {
             return;
         }
 
+        // sslMode is configurable (database.mysql.ssl-mode); it defaults to PREFERRED, so the
+        // connection is encrypted whenever the server offers TLS. VERIFY_CA / VERIFY_IDENTITY
+        // additionally validate the server certificate.
         String url = "jdbc:mysql://" + settings.getHost() + ":" + settings.getPort() + "/"
                 + settings.getDatabase()
-                + "?useSSL=false";
+                + "?sslMode=" + settings.getSslMode().name();
         connection = DriverManager.getConnection(url, settings.getUsername(), settings.getPassword());
     }
 

@@ -18,6 +18,13 @@ database:
     database: "aurelium"
     username: "root"
     password: "password"
+    # TLS for the MySQL connection:
+    #   PREFERRED       encrypt if the server supports it (default, no certificate needed)
+    #   REQUIRED        refuse to connect unencrypted
+    #   VERIFY_CA       encrypt and validate the server certificate — use this over the internet
+    #   VERIFY_IDENTITY like VERIFY_CA, plus a hostname check
+    #   DISABLED        no encryption at all (not recommended)
+    ssl-mode: "PREFERRED"
 
 # --- economy ---
 economy:

@@ -191,14 +191,19 @@ A modern, responsive web app with [nearly 100% uptime](https://stats.uptimerobot
 ```yaml
 database:
   type: sqlite          # sqlite or mysql
-  file: "database.db"   # SQLite only
+  file: "database.db"   # SQLite only, relative to the plugin folder
   mysql:                # MySQL only
     host: "localhost"
     port: 3306
     database: "aurelium"
     username: "root"
     password: "password"
+    ssl-mode: "PREFERRED"  # DISABLED | PREFERRED | REQUIRED | VERIFY_CA | VERIFY_IDENTITY
 ```
+
+`ssl-mode` defaults to `PREFERRED`: the connection is encrypted whenever the server offers TLS,
+without needing a truststore. Use `VERIFY_CA` or `VERIFY_IDENTITY` if the database is reached over
+an untrusted network — those also validate the server certificate.
 
 ### Economy
 

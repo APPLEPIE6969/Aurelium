@@ -19,11 +19,11 @@ public class PlayerRepository extends Repository {
         super(database);
     }
 
-    public Optional<String> findName(UUID uuid) {
+    public Optional<String> findName(UUID uuid) throws SQLException {
         return findColumn(uuid, "name");
     }
 
-    public Optional<String> findGuiStyle(UUID uuid) {
+    public Optional<String> findGuiStyle(UUID uuid) throws SQLException {
         return findColumn(uuid, "gui_style");
     }
 
@@ -54,7 +54,12 @@ public class PlayerRepository extends Repository {
         }
     }
 
-    private Optional<String> findColumn(UUID uuid, String column) {
+    /**
+     * Reads a single column of the player's row. An empty Optional means "no row, or a NULL
+     * value" — query failures are propagated so callers can tell an outage apart from missing
+     * data.
+     */
+    private Optional<String> findColumn(UUID uuid, String column) throws SQLException {
         try (PreparedStatement ps = database.getConnection()
                 .prepareStatement("SELECT " + column + " FROM " + Table.PLAYERS + " WHERE uuid = ?")) {
             ps.setString(1, uuid.toString());
@@ -63,8 +68,6 @@ public class PlayerRepository extends Repository {
                     return Optional.ofNullable(rs.getString(column));
                 }
             }
-        } catch (SQLException e) {
-            return Optional.empty();
         }
         return Optional.empty();
     }

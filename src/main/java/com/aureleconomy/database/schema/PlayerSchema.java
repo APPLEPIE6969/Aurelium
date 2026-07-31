@@ -11,7 +11,7 @@ public class PlayerSchema extends Schema {
     @Override
     public String create() {
         return "CREATE TABLE IF NOT EXISTS " + getTable() + " (" +
-                "uuid " + t.uuid() + " PRIMARY KEY, " +
+                "uuid " + t.uuid() + " NOT NULL PRIMARY KEY, " +
                 "name " + t.name() + ", " +
                 "gui_style " + t.varchar(16) + " DEFAULT 'MODERN'" +
                 ")" + t.tableSuffix() + ";";

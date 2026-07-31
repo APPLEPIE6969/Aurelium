@@ -14,8 +14,8 @@ public class PlayerBalanceSchema extends Schema {
     @Override
     public String create() {
         return "CREATE TABLE IF NOT EXISTS " + getTable() + " (" +
-                "uuid " + t.uuid() + ", " +
-                "currency " + t.varchar(32) + ", " +
+                "uuid " + t.uuid() + " NOT NULL, " +
+                "currency " + t.varchar(32) + " NOT NULL, " +
                 "balance " + t.decimal() + " NOT NULL DEFAULT 0.0, " +
                 "PRIMARY KEY (uuid, currency)" +
                 ")" + t.tableSuffix() + ";";

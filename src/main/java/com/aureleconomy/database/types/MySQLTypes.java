@@ -34,4 +34,13 @@ public class MySQLTypes extends SQLTypes {
     public String bigInt() {
         return "BIGINT";
     }
+
+    /**
+     * MySQL/MariaDB treat {@code LONG} as an alias for {@code MEDIUMTEXT}, so the base spelling
+     * would store epoch millis as text. Migration v4 converts columns created that way.
+     */
+    @Override
+    public String time() {
+        return "BIGINT";
+    }
 }

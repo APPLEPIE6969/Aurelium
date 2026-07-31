@@ -35,7 +35,7 @@ import com.aureleconomy.database.types.SQLTypes;
  */
 public class DatabaseManager {
 
-    private static final int LATEST_SCHEMA_VERSION = 3;
+    private static final int LATEST_SCHEMA_VERSION = 4;
 
     private final AurelEconomy plugin;
     private final DatabaseSettings settings;
@@ -72,7 +72,20 @@ public class DatabaseManager {
                 config.getInt("database.mysql.port", 3306),
                 config.getString("database.mysql.database", "aurelium"),
                 config.getString("database.mysql.username", "root"),
-                config.getString("database.mysql.password", ""));
+                config.getString("database.mysql.password", ""),
+                readSslMode(config));
+    }
+
+    private DatabaseSettings.SslMode readSslMode(FileConfiguration config) {
+        String configured = config.getString("database.mysql.ssl-mode", "PREFERRED");
+        DatabaseSettings.SslMode mode = DatabaseSettings.SslMode.fromConfig(configured);
+        if (mode == null) {
+            plugin.getComponentLogger().warn("Unknown database.mysql.ssl-mode '" + configured
+                    + "' — falling back to PREFERRED. Supported values: DISABLED, PREFERRED,"
+                    + " REQUIRED, VERIFY_CA, VERIFY_IDENTITY.");
+            return DatabaseSettings.SslMode.PREFERRED;
+        }
+        return mode;
     }
 
     /** Returns true if the configured database type is MySQL/MariaDB. */
@@ -157,7 +170,13 @@ public class DatabaseManager {
             return;
         }
 
-        File dbFile = new File(plugin.getDataFolder(), settings.getSqliteFile());
+        File dbFile;
+        try {
+            dbFile = SQLiteDatabase.resolveDatabaseFile(plugin.getDataFolder(), settings.getSqliteFile());
+        } catch (SQLException e) {
+            plugin.getComponentLogger().error("Skipping database backup: " + e.getMessage());
+            return;
+        }
         if (!dbFile.exists()) {
             return;
         }
@@ -247,19 +266,21 @@ public class DatabaseManager {
 
     private int getDatabaseVersion() {
         Connection conn = getConnection();
-        if (conn == null) { return 0; }
+        if (conn == null) {
+            return 0;
+        }
         try (Statement statement = conn.createStatement();
                 ResultSet rs = statement.executeQuery("SELECT version FROM database_info LIMIT 1")) {
             if (rs.next())
                 return rs.getInt("version");
         } catch (SQLException e) {
+            // database_info is missing or empty — treat the database as pre-versioning (v0).
         }
         return 0;
     }
 
     private void updateDatabaseVersion(int version) throws SQLException {
-      Connection conn = getConnection();
-      if (conn == null) { return; }
+        Connection conn = requireConnection("the schema version update");
         try (Statement statement = conn.createStatement()) {
             statement.execute("DELETE FROM database_info;");
             statement.execute("INSERT INTO database_info (version) VALUES (" + version + ");");
@@ -271,7 +292,7 @@ public class DatabaseManager {
             case 1:
                 addColumnIfNotExists("players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
                 addColumnIfNotExists("auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
-                addColumnIfNotExists("auctions", "start_time", "LONG");
+                addColumnIfNotExists("auctions", "start_time", database.getTypes().time());
                 addColumnIfNotExists("auctions", "currency", "VARCHAR(32)");
                 addColumnIfNotExists("offline_earnings", "currency", "VARCHAR(32)");
                 addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
@@ -284,39 +305,80 @@ public class DatabaseManager {
             case 3:
                 addColumnIfNotExists("auctions", "purchase_mode", "VARCHAR(16) DEFAULT 'STACK'");
                 break;
+            case 4:
+                // MySQL/MariaDB alias LONG to MEDIUMTEXT, so timestamp columns written by
+                // earlier versions hold epoch millis as text. Convert them to BIGINT.
+                convertTimeColumnToBigInt("auctions", "expiration");
+                convertTimeColumnToBigInt("auctions", "start_time");
+                convertTimeColumnToBigInt("auction_offers", "timestamp");
+                convertTimeColumnToBigInt("offline_earnings", "timestamp");
+                convertTimeColumnToBigInt("price_history", "timestamp");
+                break;
         }
     }
 
     private void addColumnIfNotExists(String table, String column, String type) throws SQLException {
-        Connection conn = getConnection();
-        if (conn == null) { return; }
+        Connection conn = requireConnection("migration");
         try (Statement statement = conn.createStatement()) {
-            try (ResultSet ignored = statement.executeQuery("SELECT " + column + " FROM " + table + " LIMIT 1")) {
+            if (columnExists(statement, table, column)) {
                 return;
-            } catch (SQLException e) {
-                // Column (or table) missing — fall through and add it.
             }
             statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         }
     }
 
     /**
+     * Retypes a timestamp column to BIGINT on MySQL/MariaDB. A no-op on SQLite, where
+     * {@code LONG} already carries numeric affinity, and on columns that do not exist.
+     */
+    private void convertTimeColumnToBigInt(String table, String column) throws SQLException {
+        if (settings.getType() != DatabaseType.MYSQL) {
+            return;
+        }
+        Connection conn = requireConnection("migration");
+        try (Statement statement = conn.createStatement()) {
+            if (!columnExists(statement, table, column)) {
+                return;
+            }
+            statement.execute("ALTER TABLE " + table + " MODIFY COLUMN " + column + " BIGINT");
+        }
+    }
+
+    private static boolean columnExists(Statement statement, String table, String column) {
+        try (ResultSet ignored = statement.executeQuery("SELECT " + column + " FROM " + table + " LIMIT 1")) {
+            return true;
+        } catch (SQLException e) {
+            // Column (or table) missing.
+            return false;
+        }
+    }
+
+    /** {@link #getConnection()} has already logged the cause; turn the null into a failure. */
+    private Connection requireConnection(String what) throws SQLException {
+        Connection conn = getConnection();
+        if (conn == null) {
+            throw new SQLException("No " + settings.getType().getValue()
+                    + " database connection available for " + what + ".");
+        }
+        return conn;
+    }
+
+    /**
      * Moves balances from the pre-multi-currency {@code players.balance} column into
      * {@code player_balances}. A no-op on databases that never had that column.
      */
-    private void migrateLegacyBalances() {
+    private void migrateLegacyBalances() throws SQLException {
         if (legacyBalancesChecked)
             return;
         legacyBalancesChecked = true;
 
-        Connection conn = getConnection();
-        if (conn == null) {
-          return;
-        }
+        Connection conn = requireConnection("the legacy balance migration");
 
         try (Statement statement = conn.createStatement()) {
-            try (ResultSet ignored = statement.executeQuery("SELECT balance FROM players LIMIT 1")) {
-                // Legacy column present — migrate below.
+            // Only the probe may fail silently: a missing balance column means there is nothing
+            // to migrate. Everything after it is a real migration step whose failure must surface.
+            if (!columnExists(statement, "players", "balance")) {
+                return;
             }
 
             plugin.getComponentLogger()
@@ -340,7 +402,10 @@ public class DatabaseManager {
 
             plugin.getComponentLogger().info("Multi-currency database migration completed successfully.");
         } catch (SQLException e) {
-            // No legacy balance column — nothing to migrate.
+            plugin.getComponentLogger().error(
+                    "Migrating legacy single-currency balances FAILED — aborting startup so no "
+                            + "balances are lost.", e);
+            throw e;
         }
     }
 

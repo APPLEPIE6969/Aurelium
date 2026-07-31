@@ -169,15 +169,52 @@ class SchemaDdlTest {
         String auctions = new AuctionSchema(new MySQLTypes()).create();
         assertTrue(auctions.contains("id INT AUTO_INCREMENT PRIMARY KEY"), auctions);
         assertTrue(auctions.contains("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"), auctions);
-        // BOOLEAN and LONG were spelled the same in both dialects before this refactor.
+        // BOOLEAN is spelled the same in both dialects.
         assertTrue(auctions.contains("is_bin BOOLEAN"), auctions);
-        assertTrue(auctions.contains("expiration LONG"), auctions);
 
         String customItems = new CustomItemSchema(new MySQLTypes()).create();
-        assertTrue(customItems.contains("canonical_id VARCHAR(255) PRIMARY KEY"), customItems);
+        assertTrue(customItems.contains("canonical_id VARCHAR(255) NOT NULL PRIMARY KEY"), customItems);
         assertTrue(customItems.contains("buy_price DOUBLE DEFAULT -1"), customItems);
         assertTrue(customItems.contains("enabled TINYINT(1) DEFAULT 1"), customItems);
         assertTrue(customItems.contains("first_discovered BIGINT NOT NULL"), customItems);
+    }
+
+    @Test
+    @DisplayName("Timestamp columns are BIGINT on MySQL — LONG there means MEDIUMTEXT")
+    void mySqlTimestampsAreBigInt() {
+        assertEquals("BIGINT", new MySQLTypes().time());
+        assertEquals("LONG", new SQLiteTypes().time());
+
+        assertTrue(new AuctionSchema(new MySQLTypes()).create().contains("expiration BIGINT"));
+        assertTrue(new AuctionSchema(new MySQLTypes()).create().contains("start_time BIGINT"));
+        assertTrue(new AuctionOfferSchema(new MySQLTypes()).create().contains("timestamp BIGINT"));
+        assertTrue(new OfflineEarningSchema(new MySQLTypes()).create().contains("timestamp BIGINT"));
+        assertTrue(new PriceHistorySchema(new MySQLTypes()).create().contains("timestamp BIGINT"));
+
+        // SQLite keeps the spelling earlier versions wrote — LONG has numeric affinity there.
+        assertTrue(new AuctionSchema(new SQLiteTypes()).create().contains("expiration LONG"));
+    }
+
+    @Test
+    @DisplayName("Identity columns are NOT NULL — SQLite would otherwise allow NULL keys")
+    void identityColumnsRejectNull() throws Exception {
+        try (Connection conn = openSqlite("not_null.db"); Statement stmt = conn.createStatement()) {
+            for (Schema schema : schemas(new SQLiteTypes())) {
+                stmt.execute(schema.create());
+            }
+
+            assertThrows(SQLException.class,
+                    () -> stmt.execute("INSERT INTO players (uuid, name) VALUES (NULL, 'Void')"));
+            assertThrows(SQLException.class,
+                    () -> stmt.execute("INSERT INTO player_balances (uuid, currency, balance) "
+                            + "VALUES (NULL, 'Aurels', 1.0)"));
+            assertThrows(SQLException.class,
+                    () -> stmt.execute("INSERT INTO player_balances (uuid, currency, balance) "
+                            + "VALUES ('u1', NULL, 1.0)"));
+            assertThrows(SQLException.class,
+                    () -> stmt.execute("INSERT INTO custom_items (canonical_id, source_plugin, "
+                            + "item_data, first_discovered, last_seen) VALUES (NULL, 'p', '{}', 1, 1)"));
+        }
     }
 
     // -------------------- DatabaseManager end-to-end --------------------
@@ -215,7 +252,7 @@ class SchemaDdlTest {
             try (Statement stmt = conn.createStatement();
                     ResultSet rs = stmt.executeQuery("SELECT version FROM database_info")) {
                 assertTrue(rs.next());
-                assertEquals(3, rs.getInt("version"));
+                assertEquals(4, rs.getInt("version"));
             }
         }
         manager.close();
@@ -272,7 +309,7 @@ class SchemaDdlTest {
 
             try (ResultSet rs = stmt.executeQuery("SELECT version FROM database_info")) {
                 assertTrue(rs.next());
-                assertEquals(3, rs.getInt("version"));
+                assertEquals(4, rs.getInt("version"));
             }
         }
         manager.close();
@@ -310,6 +347,34 @@ class SchemaDdlTest {
         assertEquals(DatabaseType.MYSQL, DatabaseType.fromConfig(" mysql "));
         assertEquals(DatabaseType.SQLITE, DatabaseType.fromConfig("postgres"));
         assertEquals(DatabaseType.SQLITE, DatabaseType.fromConfig(null));
+    }
+
+    @Test
+    @DisplayName("database.file may not point outside the plugin folder")
+    void sqliteFileStaysInsideDataFolder() throws Exception {
+        File dataFolder = tempDir.resolve("escape").toFile();
+        assertTrue(dataFolder.mkdirs());
+
+        for (String hostile : List.of("../outside.db", "sub/../../outside.db",
+                new File(tempDir.toFile(), "absolute.db").getAbsolutePath())) {
+            AurelEconomy plugin = mockPlugin(dataFolder);
+            plugin.getConfig().set("database.file", hostile);
+
+            DatabaseManager manager = new DatabaseManager(plugin);
+            assertFalse(manager.initialize(), "initialize() must reject database.file " + hostile);
+            assertFalse(new File(tempDir.toFile(), "outside.db").exists(),
+                    "Database was created outside the plugin folder for " + hostile);
+            assertFalse(new File(tempDir.toFile(), "absolute.db").exists(),
+                    "Database was created outside the plugin folder for " + hostile);
+        }
+
+        // A relative path in a subdirectory of the data folder is still fine.
+        AurelEconomy plugin = mockPlugin(dataFolder);
+        plugin.getConfig().set("database.file", "data/database.db");
+        DatabaseManager manager = new DatabaseManager(plugin);
+        assertTrue(manager.initialize(), "A path inside the data folder must be accepted");
+        assertTrue(new File(dataFolder, "data/database.db").exists());
+        manager.close();
     }
 
     @Test
