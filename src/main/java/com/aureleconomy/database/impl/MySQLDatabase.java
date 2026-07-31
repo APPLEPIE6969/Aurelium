@@ -32,7 +32,7 @@ public class MySQLDatabase implements Database {
 
         String url = "jdbc:mysql://" + settings.getHost() + ":" + settings.getPort() + "/"
                 + settings.getDatabase()
-                + "?autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true";
+                + "?useSSL=false";
         connection = DriverManager.getConnection(url, settings.getUsername(), settings.getPassword());
     }
 

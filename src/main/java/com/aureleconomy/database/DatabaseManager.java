@@ -246,7 +246,9 @@ public class DatabaseManager {
     }
 
     private int getDatabaseVersion() {
-        try (Statement statement = getConnection().createStatement();
+        Connection conn = getConnection();
+        if (conn == null) { return 0; }
+        try (Statement statement = conn.createStatement();
                 ResultSet rs = statement.executeQuery("SELECT version FROM database_info LIMIT 1")) {
             if (rs.next())
                 return rs.getInt("version");
@@ -256,7 +258,9 @@ public class DatabaseManager {
     }
 
     private void updateDatabaseVersion(int version) throws SQLException {
-        try (Statement statement = getConnection().createStatement()) {
+      Connection conn = getConnection();
+      if (conn == null) { return; }
+        try (Statement statement = conn.createStatement()) {
             statement.execute("DELETE FROM database_info;");
             statement.execute("INSERT INTO database_info (version) VALUES (" + version + ");");
         }
@@ -284,7 +288,9 @@ public class DatabaseManager {
     }
 
     private void addColumnIfNotExists(String table, String column, String type) throws SQLException {
-        try (Statement statement = getConnection().createStatement()) {
+        Connection conn = getConnection();
+        if (conn == null) { return; }
+        try (Statement statement = conn.createStatement()) {
             try (ResultSet ignored = statement.executeQuery("SELECT " + column + " FROM " + table + " LIMIT 1")) {
                 return;
             } catch (SQLException e) {
@@ -303,7 +309,12 @@ public class DatabaseManager {
             return;
         legacyBalancesChecked = true;
 
-        try (Statement statement = getConnection().createStatement()) {
+        Connection conn = getConnection();
+        if (conn == null) {
+          return;
+        }
+
+        try (Statement statement = conn.createStatement()) {
             try (ResultSet ignored = statement.executeQuery("SELECT balance FROM players LIMIT 1")) {
                 // Legacy column present — migrate below.
             }
@@ -312,7 +323,7 @@ public class DatabaseManager {
                     .info("Legacy single-currency database detected. Migrating to multi-currency system...");
             String defaultCurrency = resolveDefaultCurrency();
 
-            try (PreparedStatement ps = getConnection().prepareStatement(
+            try (PreparedStatement ps = conn.prepareStatement(
                     "INSERT INTO player_balances (uuid, currency, balance) " +
                             "SELECT uuid, ?, balance FROM players " +
                             "WHERE uuid NOT IN (SELECT uuid FROM player_balances WHERE currency = ?);")) {

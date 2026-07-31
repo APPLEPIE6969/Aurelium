@@ -1,5 +1,7 @@
 package com.aureleconomy.database;
 
+import java.util.Locale;
+
 public enum DatabaseType {
     SQLITE("sqlite", null),
     MYSQL("mysql", 3306);
@@ -29,7 +31,7 @@ public enum DatabaseType {
         if (value == null) {
             return SQLITE;
         }
-        return switch (value.trim().toLowerCase()) {
+        return switch (value.trim().toLowerCase(Locale.ROOT)) {
             case "mysql", "mariadb" -> MYSQL;
             default -> SQLITE;
         };
