@@ -6,6 +6,12 @@ import com.aureleconomy.scanner.UnifiedItemScanner;
 import com.aureleconomy.scanner.ItemDiscoveryListener;
 import com.aureleconomy.economy.EconomyManager;
 import com.aureleconomy.economy.VaultEconomy;
+import com.aureleconomy.web.WebPurchaseExecutor;
+import com.aureleconomy.webstore.InMemoryPurchaseQueue;
+import com.aureleconomy.webstore.PurchaseQueue;
+import com.aureleconomy.webstore.SqlitePurchaseQueue;
+import com.aureleconomy.webstore.WebSnapshot;
+import com.aureleconomy.webstore.WebSnapshotCache;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -208,15 +214,81 @@ public class AurelEconomy extends JavaPlugin {
     }
 
     private void initializeWebServices() {
-        if (getConfig().getBoolean(CONF_DB_ENABLED, false)) {
-            String webMode = getConfig().getString(CONF_WEB_MODE, WEB_MODE_CLOUD).toLowerCase();
-            if (WEB_MODE_LOCAL.equals(webMode)) {
-                webServer = new com.aureleconomy.web.WebServer(this);
-                if (!webServer.start()) webServer = null;
-            } else {
-                cloudSync = new com.aureleconomy.web.CloudSyncManager(this);
-                cloudSync.start();
+        if (!getConfig().getBoolean(CONF_DB_ENABLED, false)) {
+            return;
+        }
+
+        String webMode = getConfig().getString(CONF_WEB_MODE, WEB_MODE_CLOUD).toLowerCase();
+        if (!WEB_MODE_LOCAL.equals(webMode)) {
+            cloudSync = new com.aureleconomy.web.CloudSyncManager(this);
+            cloudSync.start();
+            return;
+        }
+
+        // Local mode: serve the dashboard frontend and API from this process.
+        // The read snapshot is always in memory and re-derived; only the purchase
+        // queue has a durability choice.
+        String serverId = getConfig().getString("web.local.server-id", "local");
+        WebSnapshotCache cache = new WebSnapshotCache();
+        PurchaseQueue queue = createPurchaseQueue();
+        if (queue == null) {
+            return;
+        }
+
+        WebSnapshot snapshot = new WebSnapshot(this);
+        WebPurchaseExecutor executor = new WebPurchaseExecutor(this, queue);
+
+        webServer = new com.aureleconomy.web.WebServer(this, cache, queue, executor, serverId);
+        if (!webServer.start()) {
+            queue.close();
+            webServer = null;
+            return;
+        }
+
+        // Publish on the main thread (it reads Bukkit state) and republish on an
+        // interval, so a request never touches the managers.
+        publishSnapshot(snapshot, cache);
+        int interval = Math.max(5, getConfig().getInt("web.local.snapshot-interval-seconds", 30));
+        getServer().getScheduler().runTaskTimer(this,
+                () -> publishSnapshot(snapshot, cache), 20L * interval, 20L * interval);
+
+        startPriceHistoryRecorder(snapshot);
+    }
+
+    /**
+     * Records a price point per tradeable item so the dashboard chart has data.
+     * Cloud mode does this inside CloudSyncManager (gated on a successful
+     * registration); local mode has no such gate, so it is scheduled here.
+     */
+    private void startPriceHistoryRecorder(WebSnapshot snapshot) {
+        int minutes = Math.max(1, getConfig().getInt("web.local.price-history-interval-minutes", 10));
+        getServer().getScheduler().runTaskTimerAsynchronously(this,
+                snapshot::recordPriceSnapshot, 200L, 20L * 60L * minutes);
+    }
+
+    private PurchaseQueue createPurchaseQueue() {
+        String type = getConfig().getString("web-queue.type", "memory").toLowerCase();
+        if ("sqlite".equals(type)) {
+            String file = getConfig().getString("web-queue.file", "web-queue.db");
+            SqlitePurchaseQueue queue = new SqlitePurchaseQueue(this, file);
+            queue.open();
+            if (queue.isOpen()) {
+                return queue;
             }
+            getComponentLogger().warn("Falling back to the in-memory purchase queue.");
+        } else {
+            getComponentLogger().info("Web purchase queue: in-memory "
+                    + "(queued browser purchases are lost on restart; nothing is charged, "
+                    + "so nothing is at risk — set web-queue.type to 'sqlite' to keep them)");
+        }
+        return new InMemoryPurchaseQueue();
+    }
+
+    private void publishSnapshot(WebSnapshot snapshot, WebSnapshotCache cache) {
+        try {
+            cache.publish(snapshot.capture());
+        } catch (Exception e) {
+            getComponentLogger().error("Failed to publish web dashboard snapshot", e);
         }
     }
 
