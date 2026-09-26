@@ -129,7 +129,15 @@ web:
   local:
     host: "localhost"
     port: 8585
-    session-timeout-minutes: 10
+    # Identifier this server is addressed by in dashboard URLs:
+    # http://<host>:<port>/shop/<server-id>
+    server-id: "local"
+    # How often the dashboard snapshot is republished (seconds). Price history is
+    # cached separately, so this does not scale with the history table size.
+    snapshot-interval-seconds: 30
+    # How often a price point is recorded per item for the dashboard chart.
+    price-history-interval-minutes: 10
+    session-timeout-minutes: 60
     cors-allowed-origins: []
 
   # Only used when mode is "cloud"
@@ -142,6 +150,17 @@ web:
     # to allow authorized key rotation across server restarts
     registration-secret: ""
     sync-interval: 30
+
+# --- Web dashboard purchase queue (mode: local) ---
+# The dashboard's read snapshot is always in memory and re-derived on boot, so
+# there is nothing to configure there. This only controls whether purchases
+# queued from the browser survive a restart.
+web-queue:
+  # memory - lost on restart. Nothing is charged until a purchase completes, so
+  #          nothing is at risk; the player's click just does not go through.
+  # sqlite - kept in a local database file next to this one.
+  type: memory
+  file: "web-queue.db"
 
 
 # --- Custom Item Scanner ---
