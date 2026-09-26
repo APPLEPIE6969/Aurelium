@@ -1,6 +1,8 @@
 package com.aureleconomy.web;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.webstore.PurchaseQueue;
+import com.aureleconomy.webstore.WebSnapshotCache;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -13,13 +15,17 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 
 /**
- * Embedded HTTP server that serves the web dashboard frontend
- * and routes API calls to ApiHandler.
+ * Embedded HTTP server: serves the dashboard frontend and routes API calls to
+ * {@link DashboardApiHandler}.
  */
 public class WebServer {
 
     private final AurelEconomy plugin;
     private final WebSessionManager sessionManager;
+    private final WebSnapshotCache cache;
+    private final PurchaseQueue queue;
+    private final WebPurchaseExecutor executor;
+    private final String serverId;
     private HttpServer server;
     private final int port;
     private boolean started = false;
@@ -33,10 +39,16 @@ public class WebServer {
             "ico", "image/x-icon",
             "json", "application/json; charset=utf-8");
 
-    public WebServer(AurelEconomy plugin) {
+    public WebServer(AurelEconomy plugin, WebSnapshotCache cache, PurchaseQueue queue,
+                     WebPurchaseExecutor executor, String serverId) {
         this.plugin = plugin;
         this.port = plugin.getConfig().getInt("web.local.port", 8585);
-        this.sessionManager = new WebSessionManager(plugin, 60);
+        this.serverId = serverId;
+        this.cache = cache;
+    this.queue = queue;
+        this.executor = executor;
+        int minutes = plugin.getConfig().getInt("web.local.session-timeout-minutes", 60);
+        this.sessionManager = new WebSessionManager(plugin, minutes);
     }
 
     public boolean start() {
@@ -44,23 +56,54 @@ public class WebServer {
             server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
             server.setExecutor(Executors.newFixedThreadPool(4));
 
-            ApiHandler apiHandler = new ApiHandler(plugin, sessionManager);
-            server.createContext("/api/", apiHandler);
+            server.createContext("/api/",
+                    new DashboardApiHandler(plugin, sessionManager, cache, queue, serverId));
+
+            // The dashboard frontend resolves its server id from the URL path
+            // (/shop/<serverId>), so that is where index.html is served.
+            server.createContext("/shop", exchange -> {
+                String path = exchange.getRequestURI().getPath();
+                if (path.equals("/shop") || path.equals("/shop/") || path.isEmpty()) {
+                    redirect(exchange, "/shop/" + serverId);
+                    return;
+                }
+                String[] parts = path.split("/");
+                String requested = parts.length >= 3 ? parts[2] : serverId;
+                if (!serverId.equals(requested)) {
+                    byte[] nf = "<!DOCTYPE html><html><body><h1>404 Not Found</h1></body></html>"
+                            .getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                    exchange.sendResponseHeaders(404, nf.length);
+                    try (OutputStream os = exchange.getResponseBody()) {
+                        os.write(nf);
+                    }
+                    return;
+                }
+                serveStaticFile(exchange, "/index.html");
+            });
+
+            // The frontend references its assets as /static/app.js and /static/style.css.
+            server.createContext("/static", exchange -> {
+                String path = exchange.getRequestURI().getPath();
+                serveStaticFile(exchange, path.startsWith("/static") ? path.substring(7) : path);
+            });
 
             server.createContext("/", exchange -> {
                 String path = exchange.getRequestURI().getPath();
-
                 if (path.equals("/") || path.isEmpty()) {
-                    path = "/index.html";
+                    redirect(exchange, "/shop/" + serverId);
+                    return;
                 }
-
                 serveStaticFile(exchange, path);
             });
 
             server.start();
             started = true;
-            plugin.getComponentLogger().info("Web dashboard started successfully on port " + port
-                    + " — open http://localhost:" + port + " in your browser");
+            executor.start();
+            plugin.getComponentLogger().info("Web dashboard started on port " + port
+                    + " (server id '" + serverId + "', queue: " + queue.getClass().getSimpleName() + ")");
+            plugin.getComponentLogger().info("Open http://localhost:" + port
+                    + "/shop/" + serverId + " in your browser");
 
             return true;
         } catch (Exception e) {
@@ -72,6 +115,9 @@ public class WebServer {
     }
 
     public void stop() {
+        if (executor != null) {
+            executor.stop();
+        }
         if (server != null) {
             server.stop(0);
             started = false;
@@ -81,6 +127,10 @@ public class WebServer {
         if (sessionManager != null) {
             sessionManager.shutdown();
         }
+    }
+
+    public String getServerId() {
+        return serverId;
     }
 
     public boolean isRunning() {
@@ -93,6 +143,12 @@ public class WebServer {
 
     public int getPort() {
         return port;
+    }
+
+    private static void redirect(HttpExchange exchange, String location) throws IOException {
+        exchange.getResponseHeaders().set("Location", location);
+        exchange.sendResponseHeaders(302, -1);
+        exchange.close();
     }
 
     /** Serve a file from src/main/resources/web/ inside the JAR. */

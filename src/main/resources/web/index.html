@@ -1,165 +1,334 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <title>Server Market</title>
- <link rel="preconnect" href="https://fonts.googleapis.com">
- <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
- <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Market</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Google Analytics 4 (GA4) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', 'G-XXXXXXXXXX');
+    </script>
 </head>
+
 <body>
- <!-- Toast container -->
- <div id="toast-container"></div>
+    <!-- Toast container -->
+    <div id="toast-container"></div>
 
- <!-- Loading overlay -->
- <div id="loading-overlay">
- <div class="loader"></div>
- <p>Connecting to server...</p>
- </div>
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="loader"></div>
+        <p>Connecting to server...</p>
+    </div>
 
- <!-- Header -->
- <header>
- <div class="header-left">
- <div class="logo">
- <span class="logo-icon">⛏</span>
- <span class="logo-text">Server Market</span>
- </div>
- </div>
- <div class="header-center">
- <div class="search-bar">
- <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
- <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
- </svg>
- <input type="text" id="search-input" placeholder="Search items..." autocomplete="off">
- <kbd class="search-kbd">ESC</kbd>
- </div>
- </div>
- <div class="header-right">
- <div class="balance-display" id="balance-display">
- <span class="balance-label">Balance</span>
- <span class="balance-amount" id="balance-amount">Loading...</span>
- </div>
- <div class="player-info" id="player-info">
- <div class="player-avatar" id="player-avatar"></div>
- <span class="player-name" id="player-name">...</span>
- </div>
- </div>
- </header>
+    <!-- Header -->
+    <header>
+        <div class="header-left">
+            <div class="logo">
+                <span class="logo-icon">
+                    <svg class="icon" style="width:24px;height:24px;color:#f59e0b" viewBox="0 0 24 24">
+                        <path d="M14.5 2l7.5 7.5-7 7-7.5-7.5z" />
+                        <path d="M2 22l7-7" />
+                        <path d="M11 13l3.5-3.5" />
+                    </svg>
+                </span>
+                <span class="logo-text">Server Market</span>
+            </div>
+        </div>
+        <div class="header-center">
+            <!-- Navigation Tabs -->
+            <nav class="nav-tabs" id="nav-tabs">
+                <button class="nav-tab active" data-page="market">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <circle cx="8" cy="21" r="1" />
+                        <circle cx="19" cy="21" r="1" />
+                        <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.56-7.43H5.12" />
+                    </svg>
+                    Market
+                </button>
+                <button class="nav-tab" data-page="auction">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+                        <path d="M7 7h.01" />
+                    </svg>
+                    Auction
+                </button>
+                <button class="nav-tab" data-page="orders">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <line x1="8" y1="6" x2="21" y2="6" />
+                        <line x1="8" y1="12" x2="21" y2="12" />
+                        <line x1="8" y1="18" x2="21" y2="18" />
+                        <line x1="3" y1="6" x2="3.01" y2="6" />
+                        <line x1="3" y1="12" x2="3.01" y2="12" />
+                        <line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                    Orders
+                </button>
+                <button class="nav-tab" data-page="stocks">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                        <polyline points="17 6 23 6 23 12" />
+                    </svg>
+                    Stocks
+                </button>
+            </nav>
+        </div>
+        <div class="header-right">
+            <div class="refresh-timer" id="refresh-info" title="Data updates automatically">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span id="refresh-countdown">20s</span>
+            </div>
+            <div class="balance-display" id="balance-display">
+                <span class="balance-label">Balance</span>
+                <span class="balance-amount" id="balance-amount">Loading...</span>
+            </div>
+            <div class="player-info" id="player-info">
+                <div class="player-avatar" id="player-avatar"></div>
+                <span class="player-name" id="player-name">...</span>
+            </div>
+        </div>
+    </header>
 
- <!-- Main layout -->
- <div class="layout">
- <!-- Sidebar -->
- <nav class="sidebar" id="sidebar">
- <div class="sidebar-header">Categories</div>
- <div class="sidebar-items" id="sidebar-categories">
- <!-- Filled by JS -->
- </div>
- <div class="sidebar-divider"></div>
- <div class="sidebar-header">Trading</div>
- <div class="sidebar-items" id="sidebar-trading">
- <div class="sidebar-item" data-page="auctions">
- <span>🔨</span>
- <span>Auctions</span>
- <span class="item-count" id="auction-count">0</span>
- </div>
- </div>
- </nav>
+    <!-- ═══════ PAGE: MARKET ═══════ -->
+    <div class="page-content" id="page-market">
+        <div class="layout">
+            <!-- Sidebar -->
+            <nav class="sidebar" id="sidebar">
+                <div class="sidebar-header">Categories</div>
+                <div class="sidebar-items" id="sidebar-categories"></div>
+            </nav>
 
- <!-- Content area -->
- <main class="content">
- <!-- Breadcrumb -->
- <div class="breadcrumb" id="breadcrumb">
- <span class="breadcrumb-item active">All Categories</span>
- </div>
+            <!-- Content area -->
+            <main class="content">
+                <div id="breadcrumb" class="breadcrumb"></div>
+                <div class="market-search-bar">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input type="text" id="search-input" placeholder="Search items..." autocomplete="off">
+                </div>
+                <div class="items-grid" id="items-grid"></div>
+                <div class="pagination" id="pagination"></div>
+            </main>
+        </div>
+    </div>
 
- <!-- Items grid -->
- <div class="items-grid" id="items-grid">
- <!-- Filled by JS -->
- </div>
+    <!-- ═══════ PAGE: AUCTION ═══════ -->
+    <div class="page-content" id="page-auction">
+        <div class="layout">
+            <!-- Sidebar -->
+            <nav class="sidebar" id="auction-sidebar">
+                <div class="sidebar-header">Filters</div>
+                <div class="sidebar-items" id="auction-categories"></div>
+            </nav>
 
- <!-- Auctions grid (hidden by default) -->
- <div class="items-grid" id="auctions-grid" style="display:none;">
- <!-- Filled by JS with auction cards -->
- </div>
+            <!-- Content area -->
+            <main class="content">
+                <div class="auction-search-bar">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input type="text" id="auction-search" placeholder="Search auctions..." autocomplete="off">
+                </div>
+                <div class="auctions-grid" id="auctions-grid"></div>
+            </main>
+        </div>
+    </div>
 
- <!-- Pagination -->
- <div class="pagination" id="pagination" style="display:none;">
- <button class="page-btn" id="prev-page" disabled>← Previous</button>
- <span class="page-info" id="page-info">Page 1 / 1</span>
- <button class="page-btn" id="next-page" disabled>Next →</button>
- </div>
+    <!-- ═══════ PAGE: ORDERS ═══════ -->
+    <div class="page-content" id="page-orders">
+        <main class="content full-width">
+            <div class="orders-controls">
+                <h2>Active Buy Orders</h2>
+            </div>
+            <div class="orders-table-wrap" id="orders-table"></div>
+        </main>
+    </div>
 
- <!-- Empty state -->
- <div class="empty-state" id="empty-state" style="display:none;">
- <div class="empty-icon">🔍</div>
- <h3>No items found</h3>
- <p>Try a different search or category.</p>
- </div>
- </main>
- </div>
+    <!-- ═══════ PAGE: STOCKS ═══════ -->
+    <div class="page-content" id="page-stocks">
+        <main class="content full-width">
+            <div class="stocks-controls">
+                <h2>Market Stocks</h2>
+                <div class="stocks-search-wrap">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input type="text" id="stocks-search" placeholder="Search stocks..." oninput="handleStocksSearch(this)">
+                </div>
+                <!-- Custom Select Dropdown for Sorting -->
+                <div class="custom-select" role="combobox" aria-label="Sort stocks by">
+                    <button class="custom-select-trigger" aria-expanded="false" aria-haspopup="listbox" role="button">
+                        <span class="custom-select-value">Name</span>
+                        <svg class="custom-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                    </button>
+                    <ul class="custom-select-options" role="listbox" aria-label="Sort options">
+                        <li role="option" data-value="name" class="selected" aria-selected="true" tabindex="-1">Name</li>
+                        <li role="option" data-value="price" aria-selected="false" tabindex="-1">Price</li>
+                        <li role="option" data-value="volume" aria-selected="false" tabindex="-1">Volume</li>
+                        <li role="option" data-value="change" aria-selected="false" tabindex="-1">24h Change</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="stocks-table-wrap">
+                <table class="stocks-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Price</th>
+                            <th>Volume</th>
+                            <th>24h Change</th>
+                            <th>Chart</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stocks-body"></tbody>
+                </table>
+            </div>
+            <div class="stock-chart-wrap">
+                <h3 id="chart-title">Price History</h3>
+                <canvas id="stock-chart" width="800" height="300"></canvas>
+            </div>
+        </main>
+    </div>
 
- <!-- Custom Items page -->
- <div class="page-content hidden" id="page-custom">
- <div class="page-header-bar">
- <h2>
- <svg class="icon" style="width:24px;height:24px;margin-bottom:-4px;margin-right:8px;color:var(--accent)"
- viewBox="0 0 24 24">
- <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
- <path d="m3.3 7 8.7 5 8.7-5"/>
- <path d="M12 22V12"/>
- </svg>
- Custom Items
- </h2>
- <p class="page-subtitle">Server-specific custom items</p>
- </div>
- <div class="items-grid" id="custom-items-grid"></div>
- <div class="empty-state" id="custom-items-empty" style="display:none;">
- <div class="empty-icon">✨</div>
- <h3>No custom items</h3>
- <p>Coming soon.</p>
- </div>
- </div>
+    <!-- ═══════ MODALS ═══════ -->
+    <!-- Buy Modal -->
+    <div class="modal-overlay" id="buy-modal" role="dialog" aria-modal="true" aria-labelledby="buy-modal-title">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="buy-modal-title">Buy Item</h3>
+                <button class="modal-close" onclick="closeModal('buy-modal')" aria-label="Close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-item">
+                    <img id="buy-item-icon" class="modal-item-icon" alt="">
+                    <span id="buy-item-name" class="modal-item-name"></span>
+                </div>
+                <div class="modal-qty">
+                    <label>Quantity</label>
+                    <div class="qty-input-group">
+                        <button id="amount-minus" class="qty-btn" aria-label="Decrease">−</button>
+                        <input type="number" id="amount-input" value="1" min="1" max="64" aria-label="Quantity">
+                        <button id="amount-plus" class="qty-btn" aria-label="Increase">+</button>
+                    </div>
+                </div>
+                <div class="modal-total">
+                    <span>Total</span>
+                    <span id="buy-total" class="total-price">₳0.00</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('buy-modal')">Cancel</button>
+                <button class="btn-confirm" onclick="confirmBuy()">Confirm Purchase</button>
+            </div>
+        </div>
+    </div>
 
- <!-- Buy modal -->
- <div class="modal-overlay" id="buy-modal" style="display:none;">
- <div class="modal">
- <div class="modal-header">
- <h3 id="modal-title">Buy Item</h3>
- <button class="modal-close" id="modal-close">✕</button>
- </div>
- <div class="modal-body">
- <div class="modal-item-preview">
- <div class="modal-item-icon" id="modal-icon"></div>
- <div class="modal-item-info">
- <div class="modal-item-name" id="modal-item-name">Diamond</div>
- <div class="modal-item-price" id="modal-item-price">$500.00</div>
- <div class="modal-item-quantity-hint" id="modal-quantity-hint" style="display:none;color:var(--text-muted);font-size:13px;margin-top:4px;"></div>
- </div>
- </div>
- <div class="amount-selector">
- <label>Amount</label>
- <div class="amount-controls">
- <button class="amount-btn" id="amount-minus">−</button>
- <input type="number" id="amount-input" value="1" min="1" max="64">
- <button class="amount-btn" id="amount-plus">+</button>
- </div>
- </div>
- <div class="modal-total">
- <span>Total:</span>
- <span class="total-price" id="modal-total">$500.00</span>
- </div>
- </div>
- <div class="modal-footer">
- <button class="btn-cancel" id="modal-cancel">Cancel</button>
- <button class="btn-buy" id="modal-buy">
- <span class="btn-buy-text">Purchase</span>
- </button>
- </div>
- </div>
- </div>
+    <!-- Bid Modal -->
+    <div class="modal-overlay" id="bid-modal" role="dialog" aria-modal="true" aria-labelledby="bid-modal-title">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="bid-modal-title">Place Bid</h3>
+                <button class="modal-close" onclick="closeModal('bid-modal')" aria-label="Close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-item">
+                    <img id="bid-item-icon" class="modal-item-icon" alt="">
+                    <span id="bid-item-name" class="modal-item-name"></span>
+                </div>
+                <div class="modal-qty">
+                    <label>Your Bid (per item)</label>
+                    <input type="number" id="bid-amount-input" value="1" min="0.01" step="0.01" aria-label="Bid amount">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('bid-modal')">Cancel</button>
+                <button class="btn-confirm" onclick="confirmBid()">Place Bid</button>
+            </div>
+        </div>
+    </div>
 
- <script src="app.js"></script>
+    <!-- Order Fill Modal -->
+    <div class="modal-overlay" id="order-fill-modal" role="dialog" aria-modal="true" aria-labelledby="fill-modal-title">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="fill-modal-title">Fill Buy Order</h3>
+                <button class="modal-close" onclick="closeModal('order-fill-modal')" aria-label="Close">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-item">
+                    <img id="fill-item-icon" class="modal-item-icon" alt="">
+                    <span id="fill-item-name" class="modal-item-name"></span>
+                </div>
+                <div class="modal-qty">
+                    <label>Quantity to Fill</label>
+                    <div class="qty-input-group">
+                        <button id="order-fill-amount-minus" class="qty-btn" aria-label="Decrease">−</button>
+                        <input type="number" id="order-fill-amount-input" value="1" min="1" aria-label="Fill quantity">
+                        <button id="order-fill-amount-plus" class="qty-btn" aria-label="Increase">+</button>
+                    </div>
+                </div>
+                <div class="modal-total">
+                    <span>Total</span>
+                    <span id="fill-total" class="total-price">₳0.00</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('order-fill-modal')">Cancel</button>
+                <button class="btn-confirm" onclick="confirmOrderFill()">Confirm Fill</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Chart Modal -->
+    <div class="modal-overlay" id="chart-modal" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title">
+        <div class="modal modal-large">
+            <div class="modal-header">
+                <h3 id="chart-modal-title">Price History</h3>
+                <button class="modal-close" onclick="closeModal('chart-modal')" aria-label="Close">×</button>
+            </div>
+            <div class="modal-body">
+                <canvas id="chart-modal-canvas" width="800" height="400"></canvas>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('chart-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Overlay -->
+    <div class="modal-overlay" id="error-overlay" role="alertdialog" aria-modal="true" aria-labelledby="error-title">
+        <div class="modal modal-error">
+            <div class="modal-header">
+                <h3 id="error-title">Error</h3>
+            </div>
+            <div class="modal-body">
+                <p id="error-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-confirm" onclick="closeModal('error-overlay')">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/app.js"></script>
 </body>
+
 </html>

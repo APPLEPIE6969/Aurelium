@@ -50,7 +50,9 @@ public class WebCommand implements TabExecutor {
             String token = plugin.getWebServer().getSessionManager().createSession(player.getUniqueId());
             String host = plugin.getConfig().getString("web.local.host", "localhost");
             int port = plugin.getWebServer().getPort();
-            String url = "http://" + host + ":" + port + "/?token=" + token;
+            String serverId = plugin.getWebServer().getServerId();
+            // The frontend reads its server id from the path, so it must be in the URL.
+            String url = "http://" + host + ":" + port + "/shop/" + serverId + "?token=" + token;
 
             player.sendMessage(Component.empty());
             player.sendMessage(
