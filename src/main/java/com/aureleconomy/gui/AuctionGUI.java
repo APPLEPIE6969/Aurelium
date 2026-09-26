@@ -4,6 +4,7 @@ import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
 import com.aureleconomy.utils.ItemBuilder;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -51,13 +52,25 @@ public class AuctionGUI extends GUIHolder {
  refresh();
  }
 
- public static void refreshAllViewers() {
+ /**
+  * Rebuilds every open Auction House GUI. Callers run on both the main thread and
+  * async database tasks, so the rebuild is bounced onto the main thread first:
+  * mutating a viewed inventory off-thread is not pushed to the client reliably.
+  */
+ public static void refreshAllViewers(AurelEconomy plugin) {
+ if (!Bukkit.isPrimaryThread()) {
+  if (plugin.isEnabled()) {
+   Bukkit.getScheduler().runTask(plugin, () -> refreshAllViewers(plugin));
+  }
+  return;
+ }
+
  for (Player p : Bukkit.getOnlinePlayers()) {
- if (p.getOpenInventory().getTopInventory().getHolder() instanceof AuctionGUI gui) {
- if (!gui.isCollectionBin) {
- gui.refresh();
- }
- }
+  if (p.getOpenInventory().getTopInventory().getHolder() instanceof AuctionGUI gui) {
+   if (!gui.isCollectionBin) {
+    gui.refresh();
+   }
+  }
  }
  }
 
@@ -242,44 +255,95 @@ public class AuctionGUI extends GUIHolder {
 
  plugin.getChatPromptManager().prompt(player, (input) -> {
  if (input.equalsIgnoreCase("cancel")) {
- open();
- return;
+  open();
+  return;
  }
+
+ BigDecimal price;
  try {
- BigDecimal price = new BigDecimal(input);
- if (price.compareTo(BigDecimal.ZERO) <= 0)
- throw new NumberFormatException();
+  price = new BigDecimal(input);
+ } catch (NumberFormatException e) {
+  player.sendMessage(Component.text("Invalid price.", NamedTextColor.RED));
+  open();
+  return;
+ }
+ if (price.compareTo(BigDecimal.ZERO) <= 0) {
+  player.sendMessage(Component.text("Invalid price.", NamedTextColor.RED));
+  open();
+  return;
+ }
 
  ItemStack hand = player.getInventory().getItemInMainHand();
- if (hand.getType() == Material.AIR) {
- player.sendMessage(Component.text("You must hold an item to sell it!", NamedTextColor.RED));
- open();
- return;
+ if (hand == null || hand.getType() == Material.AIR) {
+  player.sendMessage(Component.text("You must hold an item to sell it!", NamedTextColor.RED));
+  open();
+  return;
  }
 
- BigDecimal fee = BigDecimal.valueOf(plugin.getConfig().getDouble("auction.listing-fee", 10.0));
- AuctionItem.PurchaseMode mode = AuctionItem.PurchaseMode.valueOf(
- plugin.getConfig().getString("auction-house.purchase-mode", "STACK").toUpperCase());
- if (plugin.getEconomyManager().has(player, fee)) {
- plugin.getEconomyManager().withdraw(player, fee);
- plugin.getAuctionManager().listAuction(player.getUniqueId(), hand.clone(), price,
- plugin.getEconomyManager().getDefaultCurrency(), true, WEEK_MILLIS, fee, mode);
- player.getInventory().setItemInMainHand(null);
- player.sendMessage(
- Component.text("Item listed for " + plugin.getEconomyManager().getFormattedWithSymbol(price,
- plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.GREEN));
+ if (plugin.getMarketManager().isBlacklisted(hand.getType())) {
+  player.sendMessage(Component.text("This item is blacklisted.", NamedTextColor.RED));
+  open();
+  return;
+ }
+
+ String currency = plugin.getEconomyManager().getDefaultCurrency();
+ BigDecimal fee = calculateListingFee(price, WEEK_MILLIS);
+
+ if (!plugin.getEconomyManager().has(player, fee, currency)) {
+  player.sendMessage(Component.text(
+  "You cannot afford the " + plugin.getEconomyManager().getFormattedWithSymbol(fee, currency) + " listing fee.",
+  NamedTextColor.RED));
+  open();
+  return;
+ }
+
+ AuctionItem.PurchaseMode mode;
+ try {
+  mode = AuctionItem.PurchaseMode.valueOf(
+  plugin.getConfig().getString("auction-house.purchase-mode", "STACK").toUpperCase());
+ } catch (IllegalArgumentException e) {
+  player.sendMessage(Component.text("Invalid auction-house.purchase-mode in config.", NamedTextColor.RED));
+  open();
+  return;
+ }
+
+ plugin.getEconomyManager().withdraw(player, fee, currency);
+
+ // listAuction persists on an async task, so the listing only reaches activeAuctions
+ // (and therefore the GUI) later. Reopen from the completion callback instead of
+ // rebuilding the inventory now, otherwise the new listing is missing from the slots.
+ plugin.getAuctionManager().listAuction(player.getUniqueId(), hand.clone(), price, currency, true,
+ WEEK_MILLIS, fee, mode, (listed) -> {
+ if (listed == null) {
+  plugin.getEconomyManager().deposit(player, fee, currency);
+  player.sendMessage(
+  Component.text("Could not list the item. Your listing fee has been refunded.", NamedTextColor.RED));
  } else {
- player.sendMessage(Component.text(
- "You cannot afford the " + plugin.getEconomyManager().getFormattedWithSymbol(fee,
- plugin.getEconomyManager().getDefaultCurrency()) + " listing fee.",
- NamedTextColor.RED));
+  player.sendMessage(Component.text("Item listed for "
+  + plugin.getEconomyManager().getFormattedWithSymbol(price, currency)
+  + " (Fee: " + plugin.getEconomyManager().getFormattedWithSymbol(fee, currency) + ")",
+  NamedTextColor.GREEN));
  }
+ refresh();
  open();
- } catch (Exception e) {
- player.sendMessage(Component.text("Invalid price.", NamedTextColor.RED));
- open();
- }
  });
+
+ player.getInventory().setItemInMainHand(null);
+ });
+ }
+
+ /**
+  * Listing fee for a given price and duration, matching the {@code /ah sell} command:
+  * a percentage of the price, scaled up 5% per day beyond the first.
+  */
+ private BigDecimal calculateListingFee(BigDecimal price, long durationMillis) {
+ BigDecimal feeRate = BigDecimal.valueOf(plugin.getConfig().getDouble("auction-house.listing-fee-percent", 2.0))
+ .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
+ BigDecimal days = BigDecimal.valueOf(durationMillis)
+ .divide(BigDecimal.valueOf(86400000L), 4, RoundingMode.HALF_UP);
+ BigDecimal scalingMultiplier = BigDecimal.ONE
+ .add(days.subtract(BigDecimal.ONE).max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(0.05)));
+ return price.multiply(feeRate).multiply(scalingMultiplier).setScale(2, RoundingMode.HALF_UP);
  }
 
  private void handleCollection(Player player, ItemStack clicked, int slot) {

@@ -111,10 +111,21 @@ public class AuctionManager {
 
  public void listAuction(UUID seller, ItemStack item, BigDecimal price, String currency, boolean isBin,
  long durationMillis, BigDecimal listingFee, AuctionItem.PurchaseMode purchaseMode) {
+ listAuction(seller, item, price, currency, isBin, durationMillis, listingFee, purchaseMode, null);
+ }
+
+ /**
+  * Persists a listing on an async task.
+  *
+  * <p>{@code onListed} is invoked back on the main thread once the listing is in
+  * {@link #activeAuctions} (success) or the insert failed (null), so callers can
+  * rebuild GUI state that depends on the new listing existing in memory.
+  */
+ public void listAuction(UUID seller, ItemStack item, BigDecimal price, String currency, boolean isBin,
+ long durationMillis, BigDecimal listingFee, AuctionItem.PurchaseMode purchaseMode,
+ Consumer<com.aureleconomy.auction.AuctionItem> onListed) {
  long now = System.currentTimeMillis();
  long expiration = now + durationMillis;
-
- final String cachedDisplayName = getItemDisplayName(item);
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
@@ -132,7 +143,10 @@ public class AuctionManager {
  ps.executeUpdate();
 
  ResultSet rs = ps.getGeneratedKeys();
- if (rs.next()) {
+ if (!rs.next()) {
+  throw new SQLException("No generated key returned for the new auction");
+ }
+
  int id = rs.getInt(1);
  com.aureleconomy.auction.AuctionItem ai = new com.aureleconomy.auction.AuctionItem.Builder()
  .id(id).seller(seller).item(item).price(price).currency(currency)
@@ -142,11 +156,22 @@ public class AuctionManager {
  synchronized (activeAuctions) {
  activeAuctions.add(ai);
  }
- com.aureleconomy.gui.AuctionGUI.refreshAllViewers();
- }
+ runOnMainThread(ai, onListed);
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error while listing auction", e);
+ runOnMainThread(null, onListed);
  }
+ });
+ }
+
+ /** Bounces a {@link #listAuction} completion callback back onto the main thread. */
+ private void runOnMainThread(com.aureleconomy.auction.AuctionItem listed,
+ Consumer<com.aureleconomy.auction.AuctionItem> onListed) {
+ if (!plugin.isEnabled())
+  return;
+ Bukkit.getScheduler().runTask(plugin, () -> {
+ if (onListed != null) onListed.accept(listed);
+ com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
  });
  }
 
@@ -181,7 +206,7 @@ public class AuctionManager {
  }
  }
  }
- com.aureleconomy.gui.AuctionGUI.refreshAllViewers();
+ com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
  } else {
  Player p = Bukkit.getPlayer(bidder);
  if (p != null) {
@@ -299,7 +324,7 @@ public class AuctionManager {
  if (remaining <= 0) {
  endAuction(auction);
  } else {
- com.aureleconomy.gui.AuctionGUI.refreshAllViewers();
+ com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
  }
  }
  } catch (SQLException e) {
@@ -364,7 +389,7 @@ public class AuctionManager {
  } else {
  player.sendMessage(Component.text(MSG_INV_FULL, NamedTextColor.YELLOW));
  }
- com.aureleconomy.gui.AuctionGUI.refreshAllViewers();
+ com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
  });
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error during cancellation", e);
@@ -385,7 +410,7 @@ public class AuctionManager {
  .prepareStatement("UPDATE auctions SET ended = 1 WHERE id = ?")) {
  ps.setInt(1, auction.getId());
  ps.executeUpdate();
- com.aureleconomy.gui.AuctionGUI.refreshAllViewers();
+ com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Failed to end auction in database", e);
  }
@@ -679,7 +704,7 @@ public class AuctionManager {
  ps.setBoolean(9, true);
  ps.setBoolean(10, false);
  ps.executeUpdate();
- com.aureleconomy.gui.AuctionGUI.refreshAllViewers();
+ com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error sending item to collection bin", e);
  }
