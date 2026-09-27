@@ -124,6 +124,7 @@ public class WebPurchaseExecutor {
         try {
             ok = switch (purchase.type()) {
                 case BUY -> buy(player, purchase, result);
+                case SELL -> sell(player, purchase, result);
                 case BID -> bid(player, purchase, result);
                 case FILL_ORDER -> startFillOrder(player, purchase, result);
             };
@@ -199,6 +200,86 @@ public class WebPurchaseExecutor {
                         + material.name().replace("_", " ") + "</white> for <gold>" + spent
                         + "</gold></green>"));
         return true;
+    }
+
+    /**
+     * The mirror of {@link #buy}: the player hands over items and is credited at
+     * the market's sell price. Items are only removed after every check passes,
+     * so a rejected sell can never eat stock.
+     */
+    private boolean sell(Player seller, PurchaseQueue.Purchase purchase, JsonObject result) {
+        String itemKey = purchase.itemKey();
+        int amount = purchase.amount();
+
+        Material material;
+        BigDecimal sellPrice;
+        String currency;
+        try {
+            material = Material.valueOf(itemKey.toUpperCase());
+            sellPrice = plugin.getMarketManager().getSellPrice(material);
+            currency = plugin.getMarketManager().getCurrency(material);
+        } catch (IllegalArgumentException e) {
+            // Custom spawner key rather than a material name.
+            sellPrice = plugin.getMarketManager().getSellPrice(itemKey);
+            currency = plugin.getMarketManager().getCurrency(itemKey);
+            material = Material.SPAWNER;
+        }
+
+        if (plugin.getMarketManager().isBlacklisted(material)) {
+            return fail(result, "This item cannot be sold from the web");
+        }
+        if (sellPrice == null || sellPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return fail(result, "The market is not buying this item");
+        }
+
+        int held = countInInventory(seller, material);
+        if (held < amount) {
+            return fail(result, "You only have " + held + "x "
+                    + material.name().replace("_", " "));
+        }
+
+        BigDecimal payout = sellPrice.multiply(BigDecimal.valueOf(amount));
+        removeFromInventory(seller, material, amount);
+        plugin.getEconomyManager().deposit(seller, payout, currency);
+        // Records the volume and moves the price, exactly like the in-game sell.
+        plugin.getMarketManager().onTransaction(itemKey, false, amount);
+
+        BigDecimal newBalance = plugin.getEconomyManager().getBalance(seller, currency);
+        String earned = plugin.getEconomyManager().getFormattedWithSymbol(payout, currency);
+
+        result.addProperty("success", true);
+        result.addProperty("amount", amount);
+        result.addProperty("earned", earned);
+        result.addProperty("newBalance", newBalance.doubleValue());
+        result.addProperty("newBalanceFormatted",
+                plugin.getEconomyManager().getFormattedWithSymbol(newBalance, currency));
+        result.addProperty("currency", currency);
+
+        seller.sendMessage(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(
+                "<green><bold>✔</bold> Web sale: <white>" + amount + "x "
+                        + material.name().replace("_", " ") + "</white> for <gold>" + earned
+                        + "</gold></green>"));
+        return true;
+    }
+
+    /** Remove {@code amount} of {@code material} from the player's inventory. */
+    private void removeFromInventory(Player player, Material material, int amount) {
+        int left = amount;
+        var contents = player.getInventory().getStorageContents();
+        for (int slot = 0; slot < contents.length && left > 0; slot++) {
+            ItemStack stack = contents[slot];
+            if (stack == null || stack.getType() != material) {
+                continue;
+            }
+            int take = Math.min(left, stack.getAmount());
+            left -= take;
+            if (stack.getAmount() == take) {
+                player.getInventory().setItem(slot, null);
+            } else {
+                stack.setAmount(stack.getAmount() - take);
+                player.getInventory().setItem(slot, stack);
+            }
+        }
     }
 
     // ── auction house ─────────────────────────────────────────────────

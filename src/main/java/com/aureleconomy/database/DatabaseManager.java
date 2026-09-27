@@ -25,6 +25,7 @@ import com.aureleconomy.database.schema.PlayerBalanceSchema;
 import com.aureleconomy.database.schema.PlayerSchema;
 import com.aureleconomy.database.schema.PriceHistorySchema;
 import com.aureleconomy.database.schema.Schema;
+import com.aureleconomy.database.schema.TradeVolumeSchema;
 import com.aureleconomy.database.types.SQLTypes;
 
 /**
@@ -35,7 +36,7 @@ import com.aureleconomy.database.types.SQLTypes;
  */
 public class DatabaseManager {
 
-    private static final int LATEST_SCHEMA_VERSION = 4;
+    private static final int LATEST_SCHEMA_VERSION = 6;
 
     private final AurelEconomy plugin;
     private final DatabaseSettings settings;
@@ -129,6 +130,7 @@ public class DatabaseManager {
                     new OfflineEarningSchema(t),
                     new BuyOrderSchema(t),
                     new PriceHistorySchema(t),
+                    new TradeVolumeSchema(t),
                     new CustomItemSchema(t));
 
             createTables();
@@ -314,6 +316,18 @@ public class DatabaseManager {
                 convertTimeColumnToBigInt("offline_earnings", "timestamp");
                 convertTimeColumnToBigInt("price_history", "timestamp");
                 break;
+            case 5:
+                // Per-trade log backing the dashboard's volume column and sort.
+                database.execute(new TradeVolumeSchema(database.getTypes()).create());
+                break;
+            case 6:
+                // The dashboard reads the price as it was 24h ago, and both of
+                // these tables are pruned by time. Without these indexes each is
+                // a full table scan, and price_history grows by one row per
+                // tradeable item on every snapshot.
+                addIndexIfNotExists("price_history", "idx_price_history_timestamp", "timestamp");
+                addIndexIfNotExists("trade_volume", "idx_trade_volume_trade_at", "trade_at");
+                break;
         }
     }
 
@@ -342,6 +356,38 @@ public class DatabaseManager {
             }
             statement.execute("ALTER TABLE " + table + " MODIFY COLUMN " + column + " BIGINT");
         }
+    }
+
+    /**
+     * Adds an index when it is missing.
+     *
+     * <p>Cannot use {@code CREATE INDEX IF NOT EXISTS}: SQLite accepts it but
+     * MySQL rejects the syntax outright, so the index list is probed instead.
+     */
+    private void addIndexIfNotExists(String table, String index, String columns) throws SQLException {
+        Connection conn = requireConnection("migration");
+        try (Statement statement = conn.createStatement()) {
+            if (indexExists(statement, table, index)) {
+                return;
+            }
+            statement.execute("CREATE INDEX " + index + " ON " + table + " (" + columns + ")");
+        }
+    }
+
+    private boolean indexExists(Statement statement, String table, String index) throws SQLException {
+        boolean mysql = settings.getType() == DatabaseType.MYSQL;
+        String sql = mysql
+                ? "SHOW INDEX FROM " + table + " WHERE Key_name = '" + index + "'"
+                : "PRAGMA index_list(" + table + ")";
+        try (ResultSet rs = statement.executeQuery(sql)) {
+            while (rs.next()) {
+                String name = mysql ? rs.getString("Key_name") : rs.getString("name");
+                if (index.equals(name)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean columnExists(Statement statement, String table, String column) {

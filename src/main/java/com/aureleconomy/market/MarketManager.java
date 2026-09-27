@@ -141,10 +141,14 @@ public class MarketManager {
  itemCurrencies.put(key, config.getString(curPath, plugin.getEconomyManager().getDefaultCurrency()));
  }
 
- public void onTransaction(String materialName, boolean isBuy, int amount) {
- if (!dynamicPricing) {
- return;
- }
+  public void onTransaction(String materialName, boolean isBuy, int amount) {
+  // Volume is a real trade regardless of whether prices move, so record it
+  // before the dynamic-pricing guard.
+  plugin.getTradeVolumeTracker().record(materialName, amount, isBuy);
+
+  if (!dynamicPricing) {
+  return;
+  }
 
  buyPrices.compute(materialName, (key, currentBuy) -> {
  if (currentBuy == null) currentBuy = BigDecimal.ZERO;

@@ -1,5 +1,8 @@
 package com.aureleconomy.webstore;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
+
 /**
  * In-memory view of the economy for the dashboard.
  *
@@ -20,6 +23,14 @@ public class WebSnapshotCache {
     private volatile boolean hasCustomItems = false;
     private volatile long publishedAt = 0;
 
+    // Parsed views of the three collections the API pages over. Auctions, orders
+    // and stocks each run to thousands of rows, so the handler needs them as
+    // arrays to search, sort and slice; parsing once per publish keeps that off
+    // the request path.
+    private volatile JsonArray auctionsArray;
+    private volatile JsonArray ordersArray;
+    private volatile JsonArray stocksArray;
+
     /** Replaces every document at once so a reader never sees a half-updated view. */
     public void publish(WebSnapshot.Snapshot s) {
         this.categories = s.categoriesJson;
@@ -31,6 +42,45 @@ public class WebSnapshotCache {
         this.customItems = s.customItemsJson;
         this.hasCustomItems = s.hasCustomItems;
         this.publishedAt = System.currentTimeMillis();
+        // The parsed views describe the previous publish, so drop them.
+        this.auctionsArray = null;
+        this.ordersArray = null;
+        this.stocksArray = null;
+    }
+
+    public JsonArray auctionsArray() {
+        JsonArray local = auctionsArray;
+        if (local == null) {
+            local = parseArray(auctions);
+            auctionsArray = local;
+        }
+        return local;
+    }
+
+    public JsonArray ordersArray() {
+        JsonArray local = ordersArray;
+        if (local == null) {
+            local = parseArray(orders);
+            ordersArray = local;
+        }
+        return local;
+    }
+
+    public JsonArray stocksArray() {
+        JsonArray local = stocksArray;
+        if (local == null) {
+            local = parseArray(stocks);
+            stocksArray = local;
+        }
+        return local;
+    }
+
+    private static JsonArray parseArray(String json) {
+        try {
+            return JsonParser.parseString(json).getAsJsonArray();
+        } catch (Exception e) {
+            return new JsonArray();
+        }
     }
 
     public String categoriesJson() {

@@ -13,8 +13,11 @@ import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -45,6 +48,7 @@ import java.util.UUID;
 public class DashboardApiHandler implements HttpHandler {
 
     private static final int ITEMS_PER_PAGE = 28;
+    private static final int MAX_PAGE_SIZE = 200;
     private static final int MAX_AMOUNT = 64;
 
     private final AurelEconomy plugin;
@@ -130,14 +134,21 @@ public class DashboardApiHandler implements HttpHandler {
                     send(exchange, 200, searchItems(q, params));
                 }
             }
-            case "auctions" -> send(exchange, 200, cache.auctionsJson());
-            case "orders" -> send(exchange, 200, cache.ordersJson());
-            case "stocks" -> send(exchange, 200, cache.stocksJson());
+            case "auctions" -> send(exchange, 200, page(cache.auctionsArray(), params, AUCTION_SPEC));
+            case "orders" -> send(exchange, 200, ordersPage(params));
+            case "stocks" -> send(exchange, 200, stocksPage(params));
             case "price-history" -> send(exchange, 200, cache.priceHistoryJson());
             case "purchase-status" -> purchaseStatus(exchange, params, player);
             case "buy" -> {
                 if (post) {
                     enqueue(exchange, PurchaseQueue.Type.BUY, player);
+                } else {
+                    send(exchange, 405, "{\"error\":\"POST required\"}");
+                }
+            }
+            case "sell" -> {
+                if (post) {
+                    enqueue(exchange, PurchaseQueue.Type.SELL, player);
                 } else {
                     send(exchange, 405, "{\"error\":\"POST required\"}");
                 }
@@ -162,6 +173,54 @@ public class DashboardApiHandler implements HttpHandler {
 
     // ── GET payloads ──────────────────────────────────────────────────
 
+    /**
+     * Avatar image URL for a player name, or an empty string when avatars are off.
+     *
+     * <p>Keyed on the name rather than the uuid on purpose: an offline-mode
+     * server's uuid is one it derived from the name, so it will never match a
+     * Mojang profile. The name is the only handle that can work there, and the
+     * providers accept either.
+     *
+     * <p>Both services are used rather than resolved by us: Mojang retired
+     * {@code sessionserver/.../profile/{name}} and {@code api.mojang.com/users/...},
+     * so there is no first-party way to go from a name to a skin any more.
+     */
+    String avatarUrl(String name) {
+        String provider = plugin.getConfig().getString("web.local.avatar.provider", "mc-heads")
+                .toLowerCase();
+        int size = plugin.getConfig().getInt("web.local.avatar.size", 64);
+        return avatarUrl(provider, size, name);
+    }
+
+    /**
+     * Builds the avatar url. Static and package visible so it can be tested
+     * without a plugin instance.
+     *
+     * <p>Both services are used rather than resolved by us: Mojang retired
+     * {@code sessionserver/.../profile/{name}} and {@code api.mojang.com/users/...},
+     * so there is no first-party way to go from a name to a skin any more.
+     */
+    static String avatarUrl(String provider, int size, String name) {
+        if (name == null || name.isBlank()) {
+            return "";
+        }
+        String key = provider == null ? "" : provider.toLowerCase();
+        if (key.equals("none")) {
+            return "";
+        }
+        int px = switch (size) {
+            case 16, 32 -> size;
+            default -> 64;
+        };
+        String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8);
+        return switch (key) {
+            case "minotar" -> "https://minotar.net/helm/" + encoded + "/" + px + ".png";
+            case "mc-heads" -> "https://mc-heads.net/avatar/" + encoded + "/" + px;
+            // An unrecognised provider must not send the player's name anywhere.
+            default -> "";
+        };
+    }
+
     private String playerJson(UUID uuid) {
         String defaultCurrency = plugin.getEconomyManager().getDefaultCurrency();
         var offline = org.bukkit.Bukkit.getOfflinePlayer(uuid);
@@ -171,6 +230,7 @@ public class DashboardApiHandler implements HttpHandler {
         json.append("{\"name\":\"").append(WebSnapshot.esc(name)).append("\"");
         json.append(",\"uuid\":\"").append(uuid).append("\"");
         json.append(",\"defaultCurrency\":\"").append(WebSnapshot.esc(defaultCurrency)).append("\"");
+        json.append(",\"avatarUrl\":\"").append(WebSnapshot.esc(avatarUrl(name))).append("\"");
         json.append(",\"balances\":{");
         int i = 0;
         json.append("\"").append(WebSnapshot.esc(defaultCurrency)).append("\":")
@@ -237,25 +297,187 @@ public class DashboardApiHandler implements HttpHandler {
         return page(hits, params);
     }
 
-    private String page(JsonArray source, Map<String, String> params) {
-        int pageNo = parseInt(params.get("page"), 0);
-        if (pageNo < 0) {
-            pageNo = 0;
+    /**
+     * The stocks page shows a summary strip alongside the table. Those figures
+     * describe the whole market, so they are computed over every row rather than
+     * over the page the browser happens to be looking at.
+     */
+    private String stocksPage(Map<String, String> params) {
+        JsonArray all = cache.stocksArray();
+        JsonObject out = CollectionPager.page(all,
+                Math.max(0, parseInt(params.get("page"), 0)),
+                parseInt(params.get("size"), ITEMS_PER_PAGE), MAX_PAGE_SIZE,
+                params.get("q"), params.get("sort"),
+                !"desc".equalsIgnoreCase(params.get("dir")), STOCK_SPEC);
+
+        long total = all.size();
+        long volume = 0;
+        String gainer = null;
+        String loser = null;
+        double topChange = 0;
+        double bottomChange = 0;
+        for (JsonElement el : all) {
+            if (!el.isJsonObject()) {
+                continue;
+            }
+            JsonObject o = el.getAsJsonObject();
+            volume += num(o, "volume");
+            double change = num(o, "change");
+            if (change > topChange) {
+                topChange = change;
+                gainer = str(o, "name") + " +" + String.format("%.1f", change) + "%";
+            }
+            if (change < bottomChange) {
+                bottomChange = change;
+                loser = str(o, "name") + " " + String.format("%.1f", change) + "%";
+            }
         }
-        int total = source.size();
-        int totalPages = Math.max(1, (int) Math.ceil(total / (double) ITEMS_PER_PAGE));
-        int start = pageNo * ITEMS_PER_PAGE;
-        JsonArray slice = new JsonArray();
-        for (int i = start; i < Math.min(start + ITEMS_PER_PAGE, total); i++) {
-            slice.add(source.get(i));
-        }
-        JsonObject out = new JsonObject();
-        out.addProperty("page", pageNo);
-        out.addProperty("totalPages", totalPages);
-        out.addProperty("totalItems", total);
-        out.add("items", slice);
+
+        JsonObject stats = new JsonObject();
+        stats.addProperty("markets", total);
+        stats.addProperty("volume", volume);
+        stats.addProperty("gainer", gainer);
+        stats.addProperty("loser", loser);
+        out.add("stats", stats);
         return out.toString();
     }
+
+    /**
+     * Orders carry a fill state, which is the only thing a fulfiller actually
+     * wants to filter by, so it is applied before paging. The summary strip
+     * describes every open order rather than the filtered slice, matching how
+     * the stocks page reports market-wide figures.
+     */
+    private String ordersPage(Map<String, String> params) {
+        JsonArray all = cache.ordersArray();
+        JsonArray filtered = filterOrders(all, params.get("filter"));
+
+        JsonObject out = CollectionPager.page(filtered,
+                Math.max(0, parseInt(params.get("page"), 0)),
+                parseInt(params.get("size"), ITEMS_PER_PAGE), MAX_PAGE_SIZE,
+                params.get("q"), params.get("sort"),
+                !"desc".equalsIgnoreCase(params.get("dir")), ORDER_SPEC);
+
+        double escrow = 0;
+        double best = 0;
+        String bestName = null;
+        int biggest = 0;
+        String biggestName = null;
+        for (JsonElement el : all) {
+            if (!el.isJsonObject()) {
+                continue;
+            }
+            JsonObject o = el.getAsJsonObject();
+            double price = num(o, "pricePerPiece");
+            int wanted = (int) num(o, "amountRequested");
+            escrow += price * Math.max(0, wanted - (int) num(o, "amountFilled"));
+            if (price > best) {
+                best = price;
+                bestName = str(o, "itemName") + " " + money(price, o);
+            }
+            if (wanted > biggest) {
+                biggest = wanted;
+                biggestName = str(o, "itemName") + " x" + wanted;
+            }
+        }
+
+        JsonObject stats = new JsonObject();
+        stats.addProperty("orders", all.size());
+        stats.addProperty("escrow", escrow);
+        stats.addProperty("best", bestName);
+        stats.addProperty("biggest", biggestName);
+        out.add("stats", stats);
+        return out.toString();
+    }
+
+    private static String money(double amount, JsonObject row) {
+        String symbol = str(row, "currencySymbol");
+        String text = String.format("%,.2f", amount);
+        return symbol.isEmpty() ? text : symbol + text;
+    }
+
+    /**
+     * {@code filter} is one of all / unfilled / partial / filled. Unknown values
+     * are treated as {@code all} rather than hiding everything.
+     *
+     * <p>Package visible so it can be unit tested without an HTTP exchange.
+     */
+    static JsonArray filterOrders(JsonArray rows, String filter) {
+        if (filter == null || filter.isBlank() || filter.equalsIgnoreCase("all")) {
+            return rows;
+        }
+        JsonArray out = new JsonArray();
+        for (JsonElement el : rows) {
+            if (!el.isJsonObject()) {
+                continue;
+            }
+            JsonObject o = el.getAsJsonObject();
+            int wanted = (int) num(o, "amountRequested");
+            int filled = (int) num(o, "amountFilled");
+            boolean unfilled = filled <= 0;
+            boolean complete = wanted > 0 && filled >= wanted;
+            boolean partial = !unfilled && !complete;
+            boolean keep = switch (filter.toLowerCase()) {
+                case "unfilled" -> unfilled;
+                case "partial" -> partial;
+                case "filled" -> complete;
+                default -> true;
+            };
+            if (keep) {
+                out.add(el);
+            }
+        }
+        return out;
+    }
+
+    private static double num(JsonObject o, String field) {
+        try {
+            return o.has(field) && o.get(field).isJsonPrimitive() ? o.get(field).getAsDouble() : 0d;
+        } catch (Exception e) {
+            return 0d;
+        }
+    }
+
+    private static String str(JsonObject o, String field) {
+        try {
+            return o.has(field) && o.get(field).isJsonPrimitive() ? o.get(field).getAsString() : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String page(JsonArray source, Map<String, String> params) {
+        return page(source, params, null);
+    }
+
+    /**
+     * Shared search / sort / page over any collection, so the market, auctions,
+     * orders and stocks endpoints all answer with the same shape and the
+     * dashboard can drive one paginator against all of them.
+     */
+    private String page(JsonArray source, Map<String, String> params, CollectionPager.Spec spec) {
+        int pageNo = Math.max(0, parseInt(params.get("page"), 0));
+        int size = parseInt(params.get("size"), ITEMS_PER_PAGE);
+        return CollectionPager.page(source, pageNo, size, MAX_PAGE_SIZE,
+                params.get("q"), params.get("sort"),
+                !"desc".equalsIgnoreCase(params.get("dir")), spec).toString();
+    }
+
+    private static final CollectionPager.Spec AUCTION_SPEC = new CollectionPager.Spec(
+            List.of("itemName", "seller"),
+            List.of("itemName", "price", "remaining", "expiration", "seller"),
+            List.of("price", "remaining", "expiration"));
+
+    private static final CollectionPager.Spec ORDER_SPEC = new CollectionPager.Spec(
+            List.of("itemName", "buyer"),
+            List.of("itemName", "pricePerPiece", "amountRequested", "amountFilled", "buyer"),
+            List.of("pricePerPiece", "amountRequested", "amountFilled"));
+
+    private static final CollectionPager.Spec STOCK_SPEC = new CollectionPager.Spec(
+            List.of("name", "key"),
+            List.of("name", "buyPrice", "sellPrice", "volume", "trades", "change"),
+            List.of("buyPrice", "sellPrice", "volume", "trades", "change"));
+
 
     private void purchaseStatus(HttpExchange exchange, Map<String, String> params, UUID player)
             throws IOException {
@@ -301,6 +523,13 @@ public class DashboardApiHandler implements HttpHandler {
                     return;
                 }
                 message = "Purchase queued - delivering in-game...";
+            }
+            case SELL -> {
+                if (itemKey == null || !isWholeInRange(amount)) {
+                    send(exchange, 400, "{\"error\":\"Invalid item or amount\"}");
+                    return;
+                }
+                message = "Sale queued - confirming in-game...";
             }
             case BID -> {
                 double bidAmount = optDouble(body, "amount", Double.NaN);

@@ -44,6 +44,7 @@ class SchemaDdlTest {
                 new OfflineEarningSchema(t),
                 new BuyOrderSchema(t),
                 new PriceHistorySchema(t),
+        new TradeVolumeSchema(t),
                 new CustomItemSchema(t));
     }
 
@@ -252,7 +253,7 @@ class SchemaDdlTest {
             try (Statement stmt = conn.createStatement();
                     ResultSet rs = stmt.executeQuery("SELECT version FROM database_info")) {
                 assertTrue(rs.next());
-                assertEquals(4, rs.getInt("version"));
+                assertEquals(6, rs.getInt("version"));
             }
         }
         manager.close();
@@ -309,7 +310,7 @@ class SchemaDdlTest {
 
             try (ResultSet rs = stmt.executeQuery("SELECT version FROM database_info")) {
                 assertTrue(rs.next());
-                assertEquals(4, rs.getInt("version"));
+                assertEquals(6, rs.getInt("version"));
             }
         }
         manager.close();

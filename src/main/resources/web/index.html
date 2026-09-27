@@ -112,7 +112,7 @@
             <!-- Content area -->
             <main class="content">
                 <div id="breadcrumb" class="breadcrumb"></div>
-                <div class="market-search-bar">
+                <div class="search-bar">
                     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8" />
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -126,7 +126,7 @@
     </div>
 
     <!-- ═══════ PAGE: AUCTION ═══════ -->
-    <div class="page-content" id="page-auction">
+    <div class="page-content hidden" id="page-auction">
         <div class="layout">
             <!-- Sidebar -->
             <nav class="sidebar" id="auction-sidebar">
@@ -136,7 +136,7 @@
 
             <!-- Content area -->
             <main class="content">
-                <div class="auction-search-bar">
+                <div class="search-bar">
                     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8" />
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -144,66 +144,108 @@
                     <input type="text" id="auction-search" placeholder="Search auctions..." autocomplete="off">
                 </div>
                 <div class="auctions-grid" id="auctions-grid"></div>
+                <div class="pagination" id="auctions-pagination"></div>
             </main>
         </div>
     </div>
 
     <!-- ═══════ PAGE: ORDERS ═══════ -->
-    <div class="page-content" id="page-orders">
+    <div class="page-content hidden" id="page-orders">
         <main class="content full-width">
-            <div class="orders-controls">
+            <div class="page-toolbar">
                 <h2>Active Buy Orders</h2>
-            </div>
-            <div class="orders-table-wrap" id="orders-table"></div>
-        </main>
-    </div>
-
-    <!-- ═══════ PAGE: STOCKS ═══════ -->
-    <div class="page-content" id="page-stocks">
-        <main class="content full-width">
-            <div class="stocks-controls">
-                <h2>Market Stocks</h2>
-                <div class="stocks-search-wrap">
+                <div class="search-bar">
                     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8" />
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
-                    <input type="text" id="stocks-search" placeholder="Search stocks..." oninput="handleStocksSearch(this)">
-                </div>
-                <!-- Custom Select Dropdown for Sorting -->
-                <div class="custom-select" role="combobox" aria-label="Sort stocks by">
-                    <button class="custom-select-trigger" aria-expanded="false" aria-haspopup="listbox" role="button">
-                        <span class="custom-select-value">Name</span>
-                        <svg class="custom-select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9" />
-                        </svg>
-                    </button>
-                    <ul class="custom-select-options" role="listbox" aria-label="Sort options">
-                        <li role="option" data-value="name" class="selected" aria-selected="true" tabindex="-1">Name</li>
-                        <li role="option" data-value="price" aria-selected="false" tabindex="-1">Price</li>
-                        <li role="option" data-value="volume" aria-selected="false" tabindex="-1">Volume</li>
-                        <li role="option" data-value="change" aria-selected="false" tabindex="-1">24h Change</li>
-                    </ul>
+                    <input type="text" id="orders-search" placeholder="Search by item or buyer..."
+                           autocomplete="off" oninput="handleOrdersSearch(this)">
                 </div>
             </div>
+
+            <div class="market-stats" id="orders-stats">
+                <button class="stat-tile" data-sort="all" type="button">
+                    <span class="stat-label">Open orders</span>
+                    <span class="stat-value" id="ostat-orders">-</span>
+                </button>
+                <button class="stat-tile stat-up" data-sort="pricePerPiece" type="button">
+                    <span class="stat-label">Best price</span>
+                    <span class="stat-value" id="ostat-best">-</span>
+                </button>
+                <button class="stat-tile" data-sort="amountRequested" type="button">
+                    <span class="stat-label">Biggest ask</span>
+                    <span class="stat-value" id="ostat-biggest">-</span>
+                </button>
+                <button class="stat-tile" data-sort="escrow" type="button">
+                    <span class="stat-label">In escrow</span>
+                    <span class="stat-value" id="ostat-escrow">-</span>
+                </button>
+            </div>
+
+            <div class="filter-chips" id="orders-filters" role="group" aria-label="Filter orders by fill state">
+                <button class="chip active" data-filter="all" type="button">All</button>
+                <button class="chip" data-filter="unfilled" type="button">Needs items</button>
+                <button class="chip" data-filter="partial" type="button">Part filled</button>
+                <button class="chip" data-filter="filled" type="button">Fully filled</button>
+            </div>
+
+            <div class="orders-table-wrap" id="orders-table"></div>
+            <div class="pagination" id="orders-pagination"></div>
+        </main>
+    </div>
+
+    <!-- ═══════ PAGE: STOCKS ═══════ -->
+    <div class="page-content hidden" id="page-stocks">
+        <main class="content full-width">
+            <div class="page-toolbar">
+                <h2>Market</h2>
+                <div class="search-bar">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input type="text" id="stocks-search" placeholder="Search markets..." oninput="handleStocksSearch(this)">
+                </div>
+            </div>
+
+            <!-- Summary strip: click a tile to sort by that measure. -->
+            <div class="market-stats" id="market-stats">
+                <button class="stat-tile" data-sort="all" type="button">
+                    <span class="stat-label">Markets</span>
+                    <span class="stat-value" id="stat-markets">-</span>
+                </button>
+                <button class="stat-tile stat-up" data-sort="change" type="button">
+                    <span class="stat-label">Top gainer</span>
+                    <span class="stat-value" id="stat-gainer">-</span>
+                </button>
+                <button class="stat-tile stat-down" data-sort="change" type="button">
+                    <span class="stat-label">Top loser</span>
+                    <span class="stat-value" id="stat-loser">-</span>
+                </button>
+                <button class="stat-tile" data-sort="volume" type="button">
+                    <span class="stat-label">24h volume</span>
+                    <span class="stat-value" id="stat-volume">-</span>
+                </button>
+            </div>
+
             <div class="stocks-table-wrap">
                 <table class="stocks-table">
                     <thead>
                         <tr>
-                            <th>Item</th>
-                            <th>Price</th>
-                            <th>Volume</th>
-                            <th>24h Change</th>
-                            <th>Chart</th>
+                            <th class="col-sort" data-sort="name">Item</th>
+                            <th class="col-sort col-num" data-sort="buyPrice">Buy</th>
+                            <th class="col-sort col-num" data-sort="sellPrice">Sell</th>
+                            <th class="col-sort col-num" data-sort="volume">24h Vol</th>
+                            <th class="col-sort col-num" data-sort="change">24h Change</th>
+                            <th class="col-trend">7-day trend</th>
+                            <th class="col-actions">Trade</th>
                         </tr>
                     </thead>
                     <tbody id="stocks-body"></tbody>
                 </table>
             </div>
-            <div class="stock-chart-wrap">
-                <h3 id="chart-title">Price History</h3>
-                <canvas id="stock-chart" width="800" height="300"></canvas>
-            </div>
+            <div class="pagination" id="stocks-pagination"></div>
         </main>
     </div>
 
@@ -236,6 +278,38 @@
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="closeModal('buy-modal')">Cancel</button>
                 <button class="btn-confirm" onclick="confirmBuy()">Confirm Purchase</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sell Modal -->
+    <div class="modal-overlay" id="sell-modal" role="dialog" aria-modal="true" aria-labelledby="sell-modal-title">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="sell-modal-title">Sell Item</h3>
+                <button class="modal-close" onclick="closeModal('sell-modal')" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-item">
+                    <img id="sell-item-icon" class="modal-item-icon" alt="">
+                    <span id="sell-item-name" class="modal-item-name"></span>
+                </div>
+                <div class="modal-qty">
+                    <label>Quantity <span id="sell-hint" class="qty-hint"></span></label>
+                    <div class="qty-input-group">
+                        <button id="sell-amount-minus" class="qty-btn" aria-label="Decrease">&minus;</button>
+                        <input type="number" id="sell-amount-input" value="1" min="1" max="64" aria-label="Quantity">
+                        <button id="sell-amount-plus" class="qty-btn" aria-label="Increase">+</button>
+                    </div>
+                </div>
+                <div class="modal-total">
+                    <span>You receive</span>
+                    <span id="sell-total" class="total-price">?0.00</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('sell-modal')">Cancel</button>
+                <button class="btn-confirm" onclick="confirmSell()">Confirm Sale</button>
             </div>
         </div>
     </div>
@@ -277,12 +351,12 @@
                     <span id="fill-item-name" class="modal-item-name"></span>
                 </div>
                 <div class="modal-qty">
-                    <label>Quantity to Fill</label>
-                    <div class="qty-input-group">
-                        <button id="order-fill-amount-minus" class="qty-btn" aria-label="Decrease">−</button>
-                        <input type="number" id="order-fill-amount-input" value="1" min="1" aria-label="Fill quantity">
-                        <button id="order-fill-amount-plus" class="qty-btn" aria-label="Increase">+</button>
-                    </div>
+                <label>Quantity to Fill <span id="fill-hint" class="qty-hint"></span></label>
+                <div class="qty-input-group">
+                    <button id="order-fill-amount-minus" class="qty-btn" aria-label="Decrease">-</button>
+                    <input type="number" id="order-fill-amount-input" value="1" min="1" aria-label="Fill quantity">
+                    <button id="order-fill-amount-plus" class="qty-btn" aria-label="Increase">+</button>
+                </div>
                 </div>
                 <div class="modal-total">
                     <span>Total</span>

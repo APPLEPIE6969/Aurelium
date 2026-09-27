@@ -9,6 +9,7 @@ public enum Table {
     OFFLINE_EARNINGS("offline_earnings"),
     BUY_ORDERS("buy_orders"),
     PRICE_HISTORY("price_history"),
+    TRADE_VOLUME("trade_volume"),
     CUSTOM_ITEMS("custom_items");
 
     private final String table;

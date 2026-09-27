@@ -274,6 +274,11 @@ public class OrderManager {
                 plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(seller.getUniqueId()), finalPayout,
                         currency);
 
+                // Fulfilling a buy order is a real market trade: the seller hands
+                // over stock and is paid. fillOrder is never reached from
+                // MarketManager.onTransaction, so this cannot double count.
+                plugin.getTradeVolumeTracker().record(order.getMaterial().name(), finalFilled, false);
+
                 order.setAmountFilled(order.getAmountFilled() + finalFilled);
                 if (order.getAmountRemaining() <= 0) {
                     order.setStatus("COMPLETED");

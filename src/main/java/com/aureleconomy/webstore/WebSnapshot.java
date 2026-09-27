@@ -95,6 +95,7 @@ public class WebSnapshot {
     /** Invalidate the cached history so the next capture rebuilds it. */
     public void invalidatePriceHistory() {
         priceHistoryBuiltAt = 0L;
+        dayAgoBuiltAt = 0L;
     }
 
     private boolean hasCustomItems() {
@@ -237,9 +238,12 @@ public class WebSnapshot {
 
     // ── stocks / price tracker ────────────────────────────────────────
 
-    private String buildStocks() {
+        private String buildStocks() {
         StringBuilder json = new StringBuilder("[");
         boolean first = true;
+        // One grouped query for the whole page instead of one per item.
+        Map<String, long[]> volume = plugin.getTradeVolumeTracker().volumeSince(24L * 60 * 60 * 1000);
+        Map<String, BigDecimal> dayAgoPrices = buyPrices24hAgo();
         for (MarketEntry entry : new ArrayList<>(plugin.getMarketManager().getEntryCache().values())) {
             if (plugin.getMarketManager().isBlacklisted(entry.material)) {
                 continue;
@@ -268,12 +272,22 @@ public class WebSnapshot {
                 }
             }
 
+            // A real 24h change: compare against the last recorded price at or
+            // before the cutoff. Falls back to the listing price for items with
+            // no history that old, and says so in changeBasis so the dashboard
+            // can label it honestly.
+            BigDecimal dayAgo = dayAgoPrices.get(priceKey);
+            boolean haveDayAgo = dayAgo != null && dayAgo.compareTo(BigDecimal.ZERO) > 0;
+            BigDecimal reference = haveDayAgo ? dayAgo : basePrice;
+            boolean comparable = haveDayAgo
+                    || (basePrice.compareTo(BigDecimal.ZERO) > 0 && basePrice.compareTo(BigDecimal.ONE) != 0);
+
             BigDecimal change = BigDecimal.ZERO;
-            if (basePrice.compareTo(BigDecimal.ZERO) > 0 && buyPrice.compareTo(BigDecimal.ZERO) > 0
-                    && basePrice.compareTo(BigDecimal.ONE) != 0) {
-                change = buyPrice.subtract(basePrice).multiply(BigDecimal.valueOf(100))
-                        .divide(basePrice, 4, RoundingMode.HALF_UP);
+            if (comparable && buyPrice.compareTo(BigDecimal.ZERO) > 0) {
+                change = buyPrice.subtract(reference).multiply(BigDecimal.valueOf(100))
+                        .divide(reference, 4, RoundingMode.HALF_UP);
             }
+            String changeBasis = haveDayAgo ? "24h" : "listing";
 
             String currency = (entry.material == Material.SPAWNER && entry.customName != null)
                     ? plugin.getMarketManager().getCurrency(entry.customName)
@@ -285,6 +299,10 @@ public class WebSnapshot {
             json.append(",\"buyPrice\":").append(buyPrice.doubleValue());
             json.append(",\"sellPrice\":").append(sellPrice.doubleValue());
             json.append(",\"change\":").append(change.doubleValue());
+            json.append(",\"changeBasis\":\"").append(changeBasis).append("\"");
+            long[] vol = volume.get(priceKey);
+            json.append(",\"volume\":").append(vol == null ? 0 : vol[0]);
+            json.append(",\"trades\":").append(vol == null ? 0 : vol[1]);
             json.append(",\"currency\":\"").append(esc(currency)).append("\"");
             json.append(",\"currencySymbol\":\"")
                     .append(esc(plugin.getEconomyManager().getCurrencySymbol(currency))).append("\"");
@@ -323,6 +341,62 @@ public class WebSnapshot {
     }
 
     // ── price history ─────────────────────────────────────────────────
+
+    /** How far back the stocks page's change column looks. */
+    private static final long CHANGE_WINDOW_MS = 24L * 60 * 60 * 1000;
+
+    private volatile Map<String, BigDecimal> dayAgoPrices = new LinkedHashMap<>();
+    private volatile long dayAgoBuiltAt = 0L;
+
+    /**
+     * Buy price per item as of roughly 24 hours ago, for the stocks page's change
+     * column.
+     * <p>
+     * Two queries rather than one correlated join: find the newest snapshot at or
+     * before the cutoff, then read that snapshot. Every item is written in a
+     * single batch per snapshot, so a whole snapshot shares one timestamp and
+     * this returns a consistent set. Both queries are served by
+     * {@code idx_price_history_timestamp}.
+     * <p>
+     * Cached on the same cadence as the price history JSON, since it comes from
+     * the same table and cannot change between snapshots.
+     */
+    private Map<String, BigDecimal> buyPrices24hAgo() {
+        long now = System.currentTimeMillis();
+        if (dayAgoBuiltAt > 0 && now - dayAgoBuiltAt < PRICE_HISTORY_CACHE_MS) {
+            return dayAgoPrices;
+        }
+        Map<String, BigDecimal> out = new LinkedHashMap<>();
+        long cutoff = now - CHANGE_WINDOW_MS;
+        try (var conn = plugin.getDatabaseManager().getConnection()) {
+            long at = -1;
+            try (PreparedStatement ps = conn.prepareStatement(
+                    "SELECT MAX(timestamp) FROM price_history WHERE timestamp <= ?")) {
+                ps.setLong(1, cutoff);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        at = rs.getLong(1);
+                    }
+                }
+            }
+            if (at > 0) {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT item_key, buy_price FROM price_history WHERE timestamp = ?")) {
+                    ps.setLong(1, at);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            out.put(rs.getString(1), rs.getBigDecimal(2));
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            plugin.getComponentLogger().warn("24h price lookup failed: " + e.getMessage());
+        }
+        dayAgoPrices = out;
+        dayAgoBuiltAt = now;
+        return out;
+    }
 
     /**
      * Cached accessor: rebuilds at most once per {@code maxAgeMs}.

@@ -37,6 +37,7 @@ public class AurelEconomy extends JavaPlugin {
     private DatabaseManager databaseManager;
     private EconomyManager economyManager;
     private com.aureleconomy.market.MarketManager marketManager;
+private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
     private com.aureleconomy.auction.AuctionManager auctionManager;
     private com.aureleconomy.utils.ChatPromptManager chatPromptManager;
     private com.aureleconomy.orders.OrderManager orderManager;
@@ -84,6 +85,7 @@ public class AurelEconomy extends JavaPlugin {
 
         economyManager = new EconomyManager(this);
         marketManager = new com.aureleconomy.market.MarketManager(this);
+        tradeVolumeTracker = new com.aureleconomy.market.TradeVolumeTracker(this);
         auctionManager = new com.aureleconomy.auction.AuctionManager(this);
         chatPromptManager = new com.aureleconomy.utils.ChatPromptManager(this);
         orderManager = new com.aureleconomy.orders.OrderManager(this);
@@ -159,6 +161,11 @@ public class AurelEconomy extends JavaPlugin {
 
         // Check for version updates (async, logs to console)
         com.aureleconomy.utils.VersionChecker.checkVersion(this);
+
+        // Trade volume is recorded for in-game trades too, so the log needs
+        // pruning regardless of which web mode is active.
+        getServer().getScheduler().runTaskTimerAsynchronously(this,
+                tradeVolumeTracker::prune, 600L, 60L * 60L);
 
         // Start Web Services
         initializeWebServices();
@@ -306,6 +313,7 @@ public class AurelEconomy extends JavaPlugin {
     public DatabaseManager getDatabaseManager() { return databaseManager; }
     public EconomyManager getEconomyManager() { return economyManager; }
     public com.aureleconomy.market.MarketManager getMarketManager() { return marketManager; }
+    public com.aureleconomy.market.TradeVolumeTracker getTradeVolumeTracker() { return tradeVolumeTracker; }
     public com.aureleconomy.auction.AuctionManager getAuctionManager() { return auctionManager; }
     public com.aureleconomy.utils.ChatPromptManager getChatPromptManager() { return chatPromptManager; }
     public com.aureleconomy.orders.OrderManager getOrderManager() { return orderManager; }

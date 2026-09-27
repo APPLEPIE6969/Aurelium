@@ -23,6 +23,11 @@ public interface PurchaseQueue {
     enum Type {
         /** Buy {@code amount} of {@code itemKey} from the server market. */
         BUY,
+        /**
+         * Sell {@code amount} of {@code itemKey} into the server market. The
+         * mirror image of {@link #BUY}: items leave the player, balance arrives.
+         */
+        SELL,
         /** Place a bid on {@code auctionId}. */
         BID,
         /** Fulfill buy order {@code orderId} with {@code amount} items. */

@@ -138,6 +138,17 @@ web:
     # How often a price point is recorded per item for the dashboard chart.
     price-history-interval-minutes: 10
     session-timeout-minutes: 60
+    # Avatar shown next to the player name in the dashboard header.
+    #
+    # Mojang removed both official name -> uuid endpoints, so a skin can only be
+    # fetched from a third-party avatar service, and those cannot tell a real
+    # account from a fake one: they return a generated placeholder for any name.
+    # Set to "none" to always show the player's initial instead.
+    avatar:
+      # one of: mc-heads, minotar, none
+      provider: "mc-heads"
+      # 16, 32 or 64; rendered at 28px so 64 stays crisp on hidpi screens.
+      size: 64
     cors-allowed-origins: []
 
   # Only used when mode is "cloud"

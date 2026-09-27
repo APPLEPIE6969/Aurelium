@@ -269,13 +269,37 @@ header {
 }
 
 .player-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    background: var(--bg-card);
-    image-rendering: pixelated;
-    background-size: cover;
+   width: 28px;
+   height: 28px;
+   flex: 0 0 28px;
+   border-radius: 4px;
+   background-color: var(--bg-card);
+   image-rendering: pixelated;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   font-size: 14px;
+   font-weight: 700;
+   color: var(--text-secondary);
+   overflow: hidden;
+   background-size: cover;
+   background-position: center;
 }
+
+/* A real avatar image replaces the initial once it has loaded. */
+.player-avatar.has-skin {
+   font-size: 0;
+   background-size: 100% 100%;
+}
+
+.player-avatar img {
+   width: 100%;
+   height: 100%;
+   object-fit: cover;
+   display: block;
+   image-rendering: pixelated;
+}
+
 
 .player-name {
     font-size: 14px;
@@ -316,9 +340,64 @@ header {
 /* ── Layout (Market page) ────────────────────────────────────────── */
 
 .layout {
-    display: flex;
-    min-height: calc(100vh - var(--header-height));
+   display: flex;
+   min-height: calc(100vh - var(--header-height));
 }
+
+/* Pages without a sidebar (orders, stocks) still sit inside .page-content, so
+   they need the content column without the sidebar offset. */
+.content.full-width {
+   margin-left: 0;
+   width: 100%;
+}
+
+.sidebar-items {
+   display: flex;
+   flex-direction: column;
+   gap: 2px;
+}
+
+.stocks-controls,
+.orders-controls {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 16px;
+   flex-wrap: wrap;
+   margin-bottom: 20px;
+}
+
+.stocks-controls h2,
+.orders-controls h2 {
+   font-size: 20px;
+   font-weight: 700;
+   color: var(--text-primary);
+   margin: 0;
+}
+
+/* The stocks search bar is the same control as the market/auction ones. */
+.auctions-grid {
+   display: grid;
+   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+   gap: 16px;
+}
+
+.modal-item {
+   display: flex;
+   align-items: center;
+   gap: 12px;
+   margin-bottom: 16px;
+}
+
+.modal-large {
+   max-width: 720px;
+   width: 100%;
+}
+
+.modal-error {
+   border-color: var(--danger, #ef4444);
+}
+
 
 /* ── Sidebar ─────────────────────────────────────────────────────── */
 
@@ -347,8 +426,7 @@ header {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
-    border-radius: var(--radius);
+    padding: 10px 12px;    border-radius: var(--radius);
     cursor: pointer;
     transition: background var(--transition), color var(--transition);
     color: var(--text-secondary);
@@ -393,15 +471,24 @@ header {
 
 /* ── Market Search Bar ───────────────────────────────────────────── */
 
-.market-search-bar {
-    position: relative;
-    width: 100%;
-    max-width: 480px;
-    margin-bottom: 20px;
+/* One search control, used by the market, auctions, orders and stocks toolbars.
+   The old per-page variants (.market-search-bar, .auction-search-bar,
+   .stocks-search-wrap) each carried a copy of these rules. */
+.search-bar {
+   position: relative;
+   flex: 0 1 320px;
+   max-width: 320px;
 }
 
-.market-search-bar .search-icon,
-.auction-search-bar .search-icon {
+/* On the market and auction pages the search bar sits directly above the results
+   with no toolbar wrapper, so it needs its own spacing. Inside .page-toolbar the
+   toolbar already provides the margin, hence the child selector. */
+.content > .search-bar {
+   margin-bottom: 20px;
+}
+
+
+.search-bar .search-icon {
     position: absolute;
     left: 14px;
     top: 50%;
@@ -409,10 +496,10 @@ header {
     width: 16px;
     height: 16px;
     color: var(--text-muted);
+    pointer-events: none;
 }
 
-.market-search-bar input,
-.auction-search-bar input {
+.search-bar input {
     width: 100%;
     padding: 10px 14px 10px 40px;
     background: var(--bg-input);
@@ -425,15 +512,30 @@ header {
     transition: border var(--transition), box-shadow var(--transition);
 }
 
-.market-search-bar input:focus,
-.auction-search-bar input:focus {
+.search-bar input:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
-.market-search-bar input::placeholder,
-.auction-search-bar input::placeholder {
+.search-bar input::placeholder {
     color: var(--text-muted);
+}
+
+/* Shared page header: title on the left, controls on the right. */
+.page-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.page-toolbar h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
 }
 
 .breadcrumb {
@@ -550,16 +652,22 @@ header {
 /* ── Pagination ──────────────────────────────────────────────────── */
 
 .pagination {
+    margin-top: 24px;
+    padding: 8px 0;
+}
+
+.pager {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 16px;
-    margin-top: 32px;
-    padding: 16px 0;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
 .page-btn {
-    padding: 8px 20px;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 10px;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -568,7 +676,8 @@ header {
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: all var(--transition);
+    transition: background var(--transition), border-color var(--transition),
+        color var(--transition);
 }
 
 .page-btn:hover:not(:disabled) {
@@ -576,14 +685,29 @@ header {
     border-color: var(--accent);
 }
 
+.page-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #111;
+}
+
 .page-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }
 
+.page-gap {
+    min-width: 20px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
 .page-info {
-    font-size: 13px;
+    flex-basis: 100%;
+    text-align: center;
+    font-size: 12px;
     color: var(--text-secondary);
+    margin-top: 4px;
 }
 
 /* ── Empty State ─────────────────────────────────────────────────── */
@@ -593,9 +717,59 @@ header {
     padding: 80px 20px;
 }
 
+/* Filter chips: the compact alternative to a fixed sidebar. Four filters do not
+   justify 240px of mostly-empty column, so the same choices sit in a row that
+   costs only as much width as the labels need. */
+.filter-chips {
+   display: flex;
+   gap: 8px;
+   flex-wrap: wrap;
+   margin-bottom: 16px;
+}
+
+.chip {
+   padding: 6px 14px;
+   background: var(--bg-elevated);
+   border: 1px solid var(--border);
+   border-radius: 999px;
+   color: var(--text-secondary);
+   font-family: inherit;
+   font-size: 13px;
+   font-weight: 600;
+   cursor: pointer;
+   transition: background var(--transition), border-color var(--transition),
+       color var(--transition);
+}
+
+.chip:hover {
+   background: var(--bg-card-hover);
+   color: var(--text-primary);
+}
+
+.chip.active {
+   background: var(--accent-glow);
+   border-color: var(--accent);
+   color: var(--accent);
+}
+
+/* Small inline icons drawn from the same stroke set as the larger ones, so
+   they line up with the 14px text beside them. */
+.inline-icon {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    display: inline-block;
+    vertical-align: -3px;
+    color: var(--text-muted);
+}
+
 .empty-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+   width: 48px;
+   height: 48px;
+   margin: 0 auto 16px;
+   display: block;
+   color: var(--text-muted);
+   opacity: 0.7;
 }
 
 .empty-state h3 {
@@ -621,12 +795,6 @@ header {
     display: flex;
     gap: 12px;
     padding: 0 0 16px;
-}
-
-.auction-search-bar {
-    position: relative;
-    flex: 1;
-    max-width: 480px;
 }
 
 .auction-grid {
@@ -921,104 +1089,6 @@ header {
 }
 
 /* Custom Select Dropdown */
-.custom-select {
-    position: relative;
-    min-width: 180px;
-}
-
-.custom-select-trigger {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 10px 16px;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text-primary);
-    font-family: inherit;
-    font-size: 14px;
-    cursor: pointer;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.custom-select-trigger:hover {
-    border-color: var(--accent);
-}
-
-.custom-select-trigger:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-.custom-select-trigger[aria-expanded="true"] {
-    border-color: var(--accent);
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-}
-
-.custom-select-arrow {
-    margin-left: 4px;
-    color: var(--text-muted);
-    transition: transform 0.2s ease;
-    flex-shrink: 0;
-}
-
-.custom-select-trigger[aria-expanded="true"] .custom-select-arrow {
-    transform: rotate(180deg);
-}
-
-.custom-select-options {
-    position: absolute;
-    top: calc(100% - 1px);
-    left: 0;
-    right: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-top: none;
-    border-radius: 0 0 var(--radius) var(--radius);
-    list-style: none;
-    margin: 0;
-    padding: 4px 0;
-    z-index: 100;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-8px);
-    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
-    box-shadow: var(--shadow-lg);
-}
-
-.custom-select-options.open {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.custom-select-options li {
-    padding: 10px 16px;
-    color: var(--text-primary);
-    font-size: 14px;
-    cursor: pointer;
-    transition: background 0.1s ease;
-}
-
-.custom-select-options li:hover,
-.custom-select-options li:focus {
-    background: var(--bg-card-hover);
-    outline: none;
-}
-
-.custom-select-options li.selected {
-    color: var(--accent);
-    font-weight: 500;
-}
-
-.custom-select-options li.selected::before {
-    content: "\2713 ";
-    margin-right: 8px;
-}
-
 .stocks-table-wrap {
     padding: 0;
     overflow-x: auto;
@@ -1038,25 +1108,72 @@ header {
 }
 
 .stocks-table th {
-    padding: 14px 20px;
+    padding: 12px 16px;
     text-align: left;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    transition: color var(--transition);
-    user-select: none;
+    white-space: nowrap;
 }
 
-.stocks-table th:hover {
-    color: var(--text-secondary);
+.stocks-table th.col-num,
+.stocks-table td.col-num {
+    text-align: right;
+}
+
+/* Sortable headers replace the old dropdown: the caret shows the live state. */
+.stocks-table th.col-sort {
+    cursor: pointer;
+    user-select: none;
+    transition: color var(--transition);
+}
+
+.stocks-table th.col-sort:hover {
+    color: var(--text-primary);
+}
+
+.stocks-table th.col-sort::after {
+    content: '\2195';
+    display: inline-block;
+    margin-left: 6px;
+    opacity: 0.3;
+    font-size: 10px;
+}
+
+.stocks-table th.col-sort[data-dir='asc']::after {
+    content: '\2191';
+    opacity: 1;
+    color: var(--accent);
+}
+
+.stocks-table th.col-sort[data-dir='desc']::after {
+    content: '\2193';
+    opacity: 1;
+    color: var(--accent);
+}
+
+.stocks-table th.col-sort.sorted {
+    color: var(--text-primary);
+}
+
+.stocks-table th.col-actions,
+.stocks-table td.col-actions {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* The trend column holds a fixed-width sparkline, so the column does not
+   resize as the numbers change. */
+.stocks-table th.col-trend,
+.stocks-table td.col-trend {
+    width: 120px;
 }
 
 .stocks-table td {
-    padding: 14px 20px;
+    padding: 10px 16px;
     font-size: 14px;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
@@ -1064,7 +1181,6 @@ header {
 
 .stocks-table tbody tr {
     transition: background var(--transition);
-    cursor: pointer;
     content-visibility: auto;
     contain-intrinsic-size: 0 54px; /* Estimated height of a row */
 }
@@ -1083,10 +1199,31 @@ header {
     gap: 10px;
 }
 
+.stock-item-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+    min-width: 0;
+}
+
+.stock-item-name {
+    font-weight: 600;
+}
+
+.stock-item-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
 .stock-item-icon {
     width: 28px;
     height: 28px;
+    flex: 0 0 28px;
     image-rendering: pixelated;
+}
+
+.stock-sell-price {
+    color: var(--text-secondary);
 }
 
 .stock-change {
@@ -1106,9 +1243,192 @@ header {
     color: var(--text-muted);
 }
 
-.stock-mini-chart {
-    width: 80px;
-    height: 32px;
+/* Marks a change figure that fell back to "since listed" because there is no
+   price from 24h ago to compare against. */
+.basis-tag {
+   display: inline-block;
+   margin-left: 6px;
+   padding: 0 6px;
+   border: 1px solid var(--border);
+   border-radius: 8px;
+   font-size: 10px;
+   font-weight: 700;
+   text-transform: uppercase;
+   letter-spacing: 0.3px;
+   color: var(--text-muted);
+   vertical-align: 1px;
+}
+
+/* Marks a buy order the viewer placed themselves, which they cannot fill. */
+.order-own {
+   display: inline-block;
+   padding: 4px 10px;
+   border: 1px solid var(--border);
+   border-radius: 999px;
+   font-size: 11px;
+   font-weight: 700;
+   text-transform: uppercase;
+   letter-spacing: 0.3px;
+   color: var(--text-muted);
+   background: var(--bg-elevated);
+   cursor: help;
+}
+
+.muted {
+    color: var(--text-muted);
+}
+
+/* Inline trend line drawn from the cached price history. */
+.sparkline {
+    width: 96px;
+    height: 24px;
+    display: block;
+}
+
+.sparkline.up {
+    color: var(--accent);
+}
+
+.sparkline.down {
+    color: var(--red);
+}
+
+.trend-flat {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.btn-trade {
+   padding: 6px 14px;
+   border-radius: var(--radius);
+   border: 1px solid var(--border);
+   background: var(--bg-elevated);
+   color: var(--text-primary);
+   font-family: inherit;
+   font-size: 12px;
+   font-weight: 700;
+   cursor: pointer;
+   /* One width for every trade button, so "Buy", "Sell", "Fill", "Buy now" and
+      "Place bid" all read as the same control. The longest label is
+      "Place bid"; the rest centre inside it. */
+   flex: 0 0 auto;
+   min-width: 76px;
+   text-align: center;
+   transition: background var(--transition), border-color var(--transition);
+}
+
+.btn-trade + .btn-trade {
+    margin-left: 6px;
+}
+
+.btn-trade.trade-buy:hover:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #111;
+}
+
+.btn-trade.trade-sell:hover:not(:disabled) {
+    background: var(--bg-card-hover);
+    border-color: var(--red);
+    color: var(--red);
+}
+
+.btn-trade:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* The explicit action on a card. The whole card stays clickable, but the button
+   is what tells you the card is actionable at all, so it is always visible
+   rather than only on hover (hover-only hides it on touch). */
+.item-card-price {
+   display: flex;
+   align-items: baseline;
+   gap: 6px;
+   /* Absorbs the slack so a long price never resizes the button beside it. */
+   flex: 1 1 auto;
+   min-width: 0;
+   overflow: hidden;
+}
+
+.item-card-price .item-price {
+   white-space: nowrap;
+}
+
+.card-action {
+   padding: 7px 16px;
+   font-size: 13px;
+   /* Fixed so every card's action button is the same size. Without this the
+      button stretches to whatever the price text leaves behind, so a 3-digit
+      price gets a visibly different button from a 4-digit one. */
+   flex: 0 0 auto;
+   width: 92px;
+   text-align: center;
+}
+
+.auction-card-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+/* Summary strip above the market table. */
+.market-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.stat-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+.stat-tile:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent);
+}
+
+.stat-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.stat-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stat-tile.stat-up .stat-value {
+    color: var(--accent);
+}
+
+.stat-tile.stat-down .stat-value {
+    color: var(--red);
+}
+
+.qty-hint {
+    font-weight: 500;
+    color: var(--text-muted);
 }
 
 /* ── Stock Chart Modal ───────────────────────────────────────────── */
@@ -1258,16 +1578,18 @@ header {
 /* ── Modal ────────────────────────────────────────────────────────── */
 
 .modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-    animation: fadeIn 0.2s ease;
-}
+   position: fixed;
+   inset: 0;
+   background: rgba(0, 0, 0, 0.6);
+   backdrop-filter: blur(4px);
+   /* Hidden until openModal() sets display:flex. Without this default every
+      modal in the document paints over the page on first load. */
+   display: none;
+   align-items: center;
+   justify-content: center;
+   z-index: 200;
+   animation: fadeIn 0.2s ease;
+   }
 
 @keyframes fadeIn {
     from {
@@ -1424,14 +1746,107 @@ header {
 
 .amount-btn:disabled,
 .amount-btn.at-limit {
-    opacity: 0.35;
-    cursor: not-allowed;
-    background: var(--bg-elevated);
+   opacity: 0.35;
+   cursor: not-allowed;
+   background: var(--bg-elevated);
 }
 
 .amount-btn.at-limit:hover {
-    background: var(--bg-elevated);
+   background: var(--bg-elevated);
 }
+
+/* The quantity stepper in the modals. The markup is
+   .modal-qty > .qty-input-group > .qty-btn, which is the same control as
+   .amount-controls > .amount-btn, so the two are styled as aliases. */
+.modal-qty {
+   margin-bottom: 16px;
+}
+
+.modal-qty label {
+   display: block;
+   font-size: 13px;
+   font-weight: 600;
+   color: var(--text-secondary);
+   margin-bottom: 8px;
+}
+
+.qty-input-group,
+.amount-controls {
+   display: flex;
+   gap: 0;
+   border: 1px solid var(--border);
+   border-radius: var(--radius);
+   overflow: hidden;
+   background: var(--bg-elevated);
+}
+
+.qty-btn,
+.amount-btn {
+   width: 44px;
+   background: var(--bg-elevated);
+   border: none;
+   color: var(--text-primary);
+   font-family: inherit;
+   font-size: 18px;
+   line-height: 1;
+   cursor: pointer;
+   transition: background var(--transition);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   /* Holding the button repeats, so the label must not get selected and a
+      touch drag must not scroll the modal instead. */
+   user-select: none;
+   -webkit-user-select: none;
+   -webkit-touch-callout: none;
+   touch-action: none;
+}
+
+.qty-btn:hover,
+.amount-btn:hover {
+   background: var(--bg-card-hover);
+}
+
+.qty-btn:disabled,
+.qty-btn.at-limit,
+.amount-btn:disabled,
+.amount-btn.at-limit {
+   opacity: 0.35;
+   cursor: not-allowed;
+   background: var(--bg-elevated);
+}
+
+.qty-input-group input,
+.amount-controls input {
+   flex: 1;
+   min-width: 0;
+   text-align: center;
+   background: var(--bg-input);
+   border: none;
+   border-left: 1px solid var(--border);
+   border-right: 1px solid var(--border);
+   color: var(--text-primary);
+   font-family: inherit;
+   font-size: 16px;
+   font-weight: 600;
+   outline: none;
+   padding: 10px;
+}
+
+.qty-input-group input::-webkit-inner-spin-button,
+.qty-input-group input::-webkit-outer-spin-button,
+.amount-controls input::-webkit-inner-spin-button,
+.amount-controls input::-webkit-outer-spin-button {
+   -webkit-appearance: none;
+   margin: 0;
+}
+
+.qty-input-group input[type=number],
+.amount-controls input[type=number] {
+   -moz-appearance: textfield;
+   appearance: textfield;
+}
+
 
 .amount-controls input {
     flex: 1;
@@ -1499,30 +1914,32 @@ header {
     background: var(--bg-card-hover);
 }
 
-.btn-buy {
-    flex: 1;
-    padding: 10px;
-    background: var(--accent);
-    border: none;
-    border-radius: var(--radius);
-    color: #111;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all var(--transition);
+/* The tabbed layout renamed the primary modal action to .btn-confirm. The old
+   .btn-buy selector is gone: it collided with the trade buttons' colour modifier
+   of the same name, which made Buy render taller than Sell on the market table. */
+.btn-confirm {
+   flex: 1;
+   padding: 10px;
+   background: var(--accent);
+   border: none;
+   border-radius: var(--radius);
+   color: #111;
+   font-family: inherit;
+   font-size: 14px;
+   font-weight: 700;
+   cursor: pointer;
+   transition: background var(--transition), box-shadow var(--transition);
 }
 
-.btn-buy:hover {
-    background: var(--accent-hover);
-    box-shadow: 0 0 16px var(--accent-glow);
+.btn-confirm:hover {
+   background: var(--accent-hover);
+   box-shadow: 0 0 16px var(--accent-glow);
 }
 
-.btn-buy:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+.btn-confirm:disabled {
+   opacity: 0.5;
+   cursor: not-allowed;
 }
-
 /* ── Toast ────────────────────────────────────────────────────────── */
 
 #toast-container {
@@ -1660,13 +2077,15 @@ header {
         padding: 16px;
     }
 
-    .auction-search-bar {
-        margin: 0 16px 16px;
+    .search-bar {
+        flex: 1 1 100%;
+        max-width: 100%;
     }
 
-    .stocks-controls {
+    .page-toolbar {
         padding: 0 16px 12px;
         flex-direction: column;
+        align-items: stretch;
     }
 
     .chart-modal {
