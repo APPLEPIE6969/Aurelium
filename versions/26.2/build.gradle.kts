@@ -97,6 +97,18 @@ tasks.withType<ProcessResources>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+
+    // The test JVM needs writable scratch space for two things that fail
+    // cryptically without it: SQLite's WAL maps a shared memory segment, and the
+    // Byte Buddy agent unpacks itself at startup. When TEMP points at a full
+    // system drive the suite reports dozens of unrelated failures
+    // (SQLITE_IOERR_SHMSIZE, "Could not initialize plugin: MockMaker") rather
+    // than anything about the code under test. Honour an explicit AURELIUM_TEST_TMP,
+    // otherwise fall back to a directory beside the build output.
+    val testTmp: File = System.getenv("AURELIUM_TEST_TMP")?.let { File(it) }
+        ?: layout.buildDirectory.dir("test-tmp").get().asFile.also { it.mkdirs() }
+    jvmArgs("-Djava.io.tmpdir=" + testTmp.absolutePath)
+
     jvmArgs(
         "--enable-preview",
         "-Dnet.bytebuddy.experimental=true",
