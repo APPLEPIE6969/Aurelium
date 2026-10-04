@@ -309,31 +309,33 @@ public class AuctionGUI extends GUIHolder {
 
  plugin.getEconomyManager().withdraw(player, fee, currency);
 
- // listAuction persists on an async task, so the listing only reaches activeAuctions
- // (and therefore the GUI) later. Reopen from the completion callback instead of
- // rebuilding the inventory now, otherwise the new listing is missing from the slots.
- plugin.getAuctionManager().listAuction(player.getUniqueId(), hand.clone(), price, currency, true,
- WEEK_MILLIS, fee, mode, (listed) -> {
- if (listed == null) {
-  plugin.getEconomyManager().deposit(player, fee, currency);
-  player.sendMessage(
-  Component.text("Could not list the item. Your listing fee has been refunded.", NamedTextColor.RED));
- } else {
-  player.sendMessage(Component.text("Item listed for "
-  + plugin.getEconomyManager().getFormattedWithSymbol(price, currency)
-  + " (Fee: " + plugin.getEconomyManager().getFormattedWithSymbol(fee, currency) + ")",
-  NamedTextColor.GREEN));
- }
- refresh();
- open();
- });
+// listAuction persists on an async task, so the listing only reaches activeAuctions
+  // (and therefore the GUI) later. Reopen from the completion callback instead of
+  // rebuilding the inventory now, otherwise the new listing is missing from the slots.
+  ItemStack toList = hand.clone();
+  plugin.getAuctionManager().listAuction(player.getUniqueId(), toList, price, currency, true,
+  WEEK_MILLIS, fee, mode, (listed) -> {
+  if (listed == null) {
+   plugin.getEconomyManager().deposit(player, fee, currency);
+   player.sendMessage(
+   Component.text("Could not list the item. Your item was not taken and your listing fee has been refunded.", NamedTextColor.RED));
+  } else {
+   // Clear the hand only now that the listing is durable. Clearing it before the
+   // insert lost the item outright whenever the insert failed (issue #33).
+   com.aureleconomy.utils.InventoryUtils.clearMainHandIfSimilar(player, toList);
+   player.sendMessage(Component.text("Item listed for "
+   + plugin.getEconomyManager().getFormattedWithSymbol(price, currency)
+   + " (Fee: " + plugin.getEconomyManager().getFormattedWithSymbol(fee, currency) + ")",
+   NamedTextColor.GREEN));
+  }
+refresh();
+   open();
+   });
+  });
+  }
 
- player.getInventory().setItemInMainHand(null);
- });
- }
-
- /**
-  * Listing fee for a given price and duration, matching the {@code /ah sell} command:
+  /**
+   * Listing fee for a given price and duration, matching the {@code /ah sell} command:
   * a percentage of the price, scaled up 5% per day beyond the first.
   */
  private BigDecimal calculateListingFee(BigDecimal price, long durationMillis) {

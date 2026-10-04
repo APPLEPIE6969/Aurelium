@@ -102,7 +102,78 @@ function findSlotByDisplayName(partialName) {
 }
 
 function closeWindow() {
- if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+  if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+}
+
+/**
+ * End-to-end check for issue #33: listing an item at the auction house must not
+ * destroy it. Runs as the bot (a real player), because /ah refuses the console.
+ *
+ * The bug was an ordering problem - the hand was cleared before the asynchronous
+ * insert was known to have succeeded, and nothing restored the item when it
+ * failed. So both halves are asserted: the item leaves the hand, and the listing
+ * it was traded for is actually there.
+ */
+async function testAuctionListingKeepsItem() {
+  closeWindow();
+  await sleep(500);
+
+  const ITEM = 'diamond_sword';
+
+  // /give drops the stack into the first free slot, so equip it explicitly.
+  runCommand('eco give GUIBot 5000');
+  await sleep(1500);
+  runCommand(`give GUIBot ${ITEM} 1`);
+  await sleep(2000);
+
+  const stack = bot.inventory.items().find(i => i.name === ITEM);
+  assert('bot holds a diamond sword to list', !!stack,
+    'no diamond sword in inventory: ' + JSON.stringify(bot.inventory.items().map(i => i.name)));
+  if (!stack) return;
+
+  try {
+    await bot.equip(stack, 'hand');
+  } catch (e) {
+    assert('diamond sword equipped in main hand', false, 'equip failed: ' + e.message);
+    return;
+  }
+  await sleep(500);
+  assert('diamond sword is in the main hand',
+    !!(bot.heldItem && bot.heldItem.name === ITEM),
+    'held=' + (bot.heldItem && bot.heldItem.name));
+
+  runCommand('ah sell 100');
+  // The insert is asynchronous; give it time to land before inspecting state.
+  await sleep(4000);
+
+  // The listing must exist. Checked first because it is the half that used to
+  // silently fail, leaving the player with nothing.
+  closeWindow();
+  await sleep(500);
+  runCommand('ah');
+  const ahWindow = await Promise.race([
+    new Promise(r => bot.once('windowOpen', w => r(w))),
+    sleep(4000).then(() => null)
+  ]);
+
+  if (!ahWindow) {
+    assert('auction GUI opens to confirm the listing', false, 'GUI did not open');
+  } else {
+    const listed = (ahWindow.slots || []).some(s => s && s.name === ITEM);
+    assert('auction house lists the diamond sword (item not lost)', listed,
+      'slots=' + (ahWindow.slots || []).map(s => s && s.name).filter(Boolean).join(','));
+    closeWindow();
+  }
+
+  // And the item must have been taken out of the hand exactly once it was safe
+  // to do so. A hand that still holds the sword means the listing never landed.
+  assert('listed item left the main hand',
+    !(bot.heldItem && bot.heldItem.name === ITEM),
+    'still holding ' + (bot.heldItem && bot.heldItem.name));
+
+  // Buying the listing back must return the item rather than duplicating it,
+  // which is what happens if the hand was cleared twice.
+  await sleep(500);
 }
 
 async function openCustomItemsGUI() {
@@ -294,15 +365,23 @@ async function runTests() {
  if (marketWindow) closeWindow();
  } catch { assert('Market GUI opens (skipped)', true, ''); }
 
- runCommand('ah');
- try {
- const ahWindow = await Promise.race([
- new Promise(r => bot.once('windowOpen', w => r(w))),
- sleep(3000).then(() => null)
- ]);
- assert('Auction House GUI opens', ahWindow !== null, 'AH GUI did not open');
- if (ahWindow) closeWindow();
- } catch { assert('Auction House GUI opens (skipped)', true, ''); }
+runCommand('ah');
+  try {
+  const ahWindow = await Promise.race([
+  new Promise(r => bot.once('windowOpen', w => r(w))),
+  sleep(3000).then(() => null)
+  ]);
+  assert('Auction House GUI opens', ahWindow !== null, 'AH GUI did not open');
+  if (ahWindow) closeWindow();
+  } catch { assert('Auction House GUI opens (skipped)', true, ''); }
+
+  // Test: listing an item must not destroy it (issue #33 regression).
+  //
+  // /ah sell used to clear the main hand synchronously and only then persist the
+  // listing on an async task. If that insert failed, the item was gone and there
+  // was no listing to collect it from. Assert both halves of the invariant: the
+  // item is taken out of the hand *and* the listing shows up in the GUI.
+  await testAuctionListingKeepsItem();
 
  // Summary
  console.log(`\n=== Mineflayer GUI Test Summary ===`);

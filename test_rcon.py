@@ -550,8 +550,25 @@ def sec_schema(t):
 
     version = t.db.scalar('SELECT version FROM database_info LIMIT 1')
     t.check(version is not None, 'database_info records a schema version')
-    t.check(str(version) in ('4', '3', '2', 'v4', 'v3', 'v2'),
-            'schema version is a known value', f'version={version!r}')
+
+    # Compare against LATEST_SCHEMA_VERSION in DatabaseManager rather than a
+    # hardcoded allowlist. The allowlist went stale at schema 5 and failed every
+    # run from then on, including the run that introduced the bump.
+    expected = None
+    try:
+        db_manager = os.path.join(SERVER_DIR, 'src', 'main', 'java', 'com',
+                                  'aureleconomy', 'database', 'DatabaseManager.java')
+        with open(db_manager, encoding='utf-8') as fh:
+            m = re.search(r'LATEST_SCHEMA_VERSION\s*=\s*(\d+)', fh.read())
+        expected = m.group(1) if m else None
+    except OSError:
+        pass
+    t.check(expected is not None,
+            'LATEST_SCHEMA_VERSION is readable from DatabaseManager.java')
+    if expected is not None:
+        t.check(str(version).lstrip('v') == expected,
+                'database schema matches LATEST_SCHEMA_VERSION',
+                f'found={version!r} expected={expected!r}')
 
     t.check(t.db.journal_mode() is not None, 'journal mode readable',
             f'journal_mode={t.db.journal_mode()!r}')

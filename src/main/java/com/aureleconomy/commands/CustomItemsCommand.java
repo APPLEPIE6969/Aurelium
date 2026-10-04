@@ -76,23 +76,41 @@ public class CustomItemsCommand implements TabExecutor {
  return;
  }
 
- sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>Starting full rescan...</gray>"));
+sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>Starting full rescan...</gray>"));
 
- // Run scan on next tick to ensure we're on main thread where needed
- plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
- int before = registry.getTotalItems();
- scanner.scanAllPluginAPIs();
- scanner.scanPlayerInventories();
- int after = registry.getTotalItems();
+  // Run scan on next tick to ensure we're on main thread where needed
+  plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+  int before = registry.getTotalItems();
+  scanner.scanAllPluginAPIs();
+  scanner.scanPlayerInventories();
+  // Config entries are applied here too, otherwise a scan started from the
+  // console could never register items defined in config.yml.
+  registry.loadConfigOverrides();
+  int after = registry.getTotalItems();
 
- sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <green>Scan complete!</green> <gray>" +
- after + " unique items, " + registry.getDuplicatesPrevented() + " duplicates prevented" +
- (after > before ? " (" + (after - before) + " new)" : "") + "</gray>"));
+  sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <green>Scan complete!</green> <gray>" +
+  after + " unique items, " + registry.getDuplicatesPrevented() + " duplicates prevented" +
+  (after > before ? " (" + (after - before) + " new)" : "") + "</gray>"));
 
- // Persist to database
- registry.saveToDatabase(plugin.getDatabaseManager());
- }, 1L);
- }
+  if (after == 0) {
+  // A zero result used to be reported with no explanation at all, which is what
+  // issue #34 reported. Say plainly what this scanner does and does not read.
+  sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>" +
+  "Nothing found. This scanner only reads items owned by other item plugins</gray>"));
+  sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>" +
+  "(ItemsAdder, Oraxen, MMOItems, MythicMobs, ExecutableItems, Nexo, SX-Item) plus custom items</gray>"));
+  sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>" +
+  "held by online players. Plain Minecraft items are never scanned - to trade those, use</gray>"));
+  sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>" +
+  "the built-in catalogue (/market, /shop) or add an entry with a <yellow>material:</yellow> key under</gray>"));
+  sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>" +
+  "<yellow>discovered-items</yellow> in config.yml, then run <yellow>/customitems reload</yellow>.</gray>"));
+  }
+
+  // Persist to database
+  registry.saveToDatabase(plugin.getDatabaseManager());
+  }, 1L);
+  }
 
  private void handleList(CommandSender sender, CustomItemRegistry registry, String[] args) {
  if (registry.isEmpty()) {
@@ -166,25 +184,37 @@ public class CustomItemsCommand implements TabExecutor {
  methods.stream().map(DiscoveryMethod::getDisplayName).reduce((a, b) -> a + ", " + b).orElse("None") + "</aqua>"));
  }
 
- private void handleReload(CommandSender sender, CustomItemRegistry registry) {
- sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>Reloading from database...</gray>"));
+private void handleReload(CommandSender sender, CustomItemRegistry registry) {
+  sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <gray>Reloading from database and config...</gray>"));
 
- // Clear registry and reload
- plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
- registry.clear();
- registry.loadFromDatabase(plugin.getDatabaseManager());
+  // Re-read config from disk first: excluded-namespaces, discovery methods and
+  // hand-written discovered-items entries are all config-driven, and the scanner
+  // caches them in its constructor (issue #34).
+  plugin.reloadConfig();
+  UnifiedItemScanner rescan = plugin.getUnifiedScanner();
+  if (rescan != null) {
+  rescan.reloadSettingsFromConfig();
+  }
 
- plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
- UnifiedItemScanner scanner = plugin.getUnifiedScanner();
- if (scanner != null) {
- scanner.scanAllPluginAPIs();
- scanner.scanPlayerInventories();
- }
- sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <green>Reload complete! " +
- registry.getTotalItems() + " items loaded.</green>"));
- }, 20L);
- });
- }
+  // Clear registry and reload
+  plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+  registry.clear();
+  registry.loadFromDatabase(plugin.getDatabaseManager());
+
+  plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+  UnifiedItemScanner scanner = plugin.getUnifiedScanner();
+  if (scanner != null) {
+  scanner.scanAllPluginAPIs();
+  scanner.scanPlayerInventories();
+  }
+  // Config entries were previously only applied on startup, so
+  // `/customitems reload` silently ignored every change made to config.yml.
+  registry.loadConfigOverrides();
+  sender.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <green>Reload complete! " +
+  registry.getTotalItems() + " items loaded.</green>"));
+  }, 20L);
+  });
+  }
 
  private void handleToggle(CommandSender sender, CustomItemRegistry registry, String[] args) {
  if (args.length < 2) {

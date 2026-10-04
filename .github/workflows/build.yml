@@ -41,6 +41,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Static contract checks
+        run: |
+          # Source-level contracts that need no server. These guard wiring that
+          # unit tests cannot reach, such as the auction listing only taking the
+          # player's item once the insert is confirmed (issue #33).
+          for check in ci/check_web_ui.py ci/check_css_classes.py ci/check_issue_fixes.py; do
+            echo "=== $check ==="
+            python3 "$check"
+          done
       - name: Set up JDK ${{ matrix.jdk }}
         uses: actions/setup-java@v5
         with:
@@ -1051,6 +1060,16 @@ jobs:
           echo "=== Server exceptions ==="
           grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions"
           exit $RC
+      - name: Install mineflayer deps
+        run: |
+          cd .github/scripts
+          npm install --no-audit --no-fund
+      - name: Run mineflayer GUI tests
+        run: |
+          # Drives a real player, so /ah and the GUI paths are reachable at all.
+          # test_rcon.py only exercises the console, which /ah refuses.
+          cd .github/scripts
+          node test_gui_mineflayer.js
       - name: Stop server
         if: always()
         run: |

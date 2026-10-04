@@ -26,31 +26,66 @@ public class UnifiedItemScanner {
     private final CustomItemRegistry registry;
 
     // Config flags
-    private final boolean methodPluginApi;
-    private final boolean methodPdcScan;
-    private final boolean methodCustomModelData;
-    private final boolean methodLorePattern;
-    private final boolean methodInventoryScan;
-    private final boolean methodInteractionDetect;
-    private final Set<String> excludedNamespaces;
-    private final double defaultPriceMultiplier;
+    private boolean methodPluginApi;
+    private boolean methodPdcScan;
+    private boolean methodCustomModelData;
+    private boolean methodLorePattern;
+    private boolean methodInventoryScan;
+    private boolean methodInteractionDetect;
+    private Set<String> excludedNamespaces;
+    private double defaultPriceMultiplier;
 
     public UnifiedItemScanner(AurelEconomy plugin, CustomItemRegistry registry) {
         this.plugin = plugin;
         this.registry = registry;
+        reloadSettingsFromConfig();
+    }
 
+    /**
+     * Re-reads every {@code custom-items.*} setting from the live config.
+     *
+     * <p>These values used to be read once in the constructor, so editing
+     * {@code excluded-namespaces} or the discovery-method toggles had no effect
+     * until a full server restart, which made {@code /customitems reload}
+     * misleading (issue #34).
+     */
+    public void reloadSettingsFromConfig() {
         this.methodPluginApi = plugin.getConfig().getBoolean("custom-items.discovery-methods.plugin-api", true);
         this.methodPdcScan = plugin.getConfig().getBoolean("custom-items.discovery-methods.pdc-scan", true);
         this.methodCustomModelData = plugin.getConfig().getBoolean("custom-items.discovery-methods.custom-model-data", true);
         this.methodLorePattern = plugin.getConfig().getBoolean("custom-items.discovery-methods.lore-pattern", true);
         this.methodInventoryScan = plugin.getConfig().getBoolean("custom-items.discovery-methods.inventory-scan", true);
         this.methodInteractionDetect = plugin.getConfig().getBoolean("custom-items.discovery-methods.interaction-detect", true);
-        this.excludedNamespaces = new HashSet<>(plugin.getConfig().getStringList("custom-items.excluded-namespaces"));
-        if (excludedNamespaces.isEmpty()) {
-            excludedNamespaces.add("minecraft");
-            excludedNamespaces.add("aureleconomy");
+        // An explicit empty list must be honoured: admins set
+        // `excluded-namespaces: []` to stop the scanner ignoring every vanilla
+        // namespace. getStringList() returns an empty list both when the key is
+        // absent and when it is deliberately empty, so only fall back to the
+        // defaults when the key is missing entirely.
+        if (plugin.getConfig().contains("custom-items.excluded-namespaces")) {
+            this.excludedNamespaces = resolveExcludedNamespaces(
+                    true, plugin.getConfig().getStringList("custom-items.excluded-namespaces"));
+        } else {
+            this.excludedNamespaces = resolveExcludedNamespaces(false, java.util.Collections.emptyList());
         }
         this.defaultPriceMultiplier = plugin.getConfig().getDouble("custom-items.default-price-multiplier", 1.5);
+    }
+
+    /**
+     * Resolves the PDC namespaces the scanner ignores.
+     *
+     * <p>{@code keyPresent} distinguishes a key the admin deliberately set to
+     * {@code []} from one they never set. Treating both as "empty" and then
+     * re-adding {@code minecraft}/{@code aureleconomy} silently discarded the
+     * admin's explicit choice (issue #34).
+     *
+     * @param keyPresent whether {@code custom-items.excluded-namespaces} exists in config
+     * @param configured the configured list, possibly empty
+     */
+    static Set<String> resolveExcludedNamespaces(boolean keyPresent, java.util.List<String> configured) {
+        if (!keyPresent) {
+            return new HashSet<>(java.util.Arrays.asList("minecraft", "aureleconomy"));
+        }
+        return new HashSet<>(configured);
     }
 
     /**
@@ -77,6 +112,10 @@ public class UnifiedItemScanner {
             return;
         }
         plugin.getLogger().info("[CustomItems] Starting plugin API scan...");
+        // Report the namespaces actually in force. Issue #34 asked why a scan
+        // found nothing, and the effective value of this setting is the answer.
+        plugin.getLogger().info("[CustomItems] Ignored PDC namespaces: "
+                + (excludedNamespaces.isEmpty() ? "(none)" : excludedNamespaces));
         scanItemsAdder();
         scanOraxen();
         scanMMOItems();

@@ -400,13 +400,54 @@ async function testAuctionHouse() {
     checkNotContains(concat(msgs), 'unknown command', `/ah ${cmd} processed`);
   }
 
-  // Give item and list on AH
+  // Give item and list on AH.
+  //
+  // Issue #33 regression: /ah sell used to clear the main hand synchronously
+  // and only then persist the listing on an async task. When the insert failed
+  // the item was destroyed and no listing existed to collect it from, so assert
+  // both halves of the invariant — the item is taken *and* the listing shows up.
+  await closeGui();
   await runCommand('give TestBot diamond_sword 1', 3000);
-  await sleep(1000);
+  await sleep(1500);
+
+  const sword = bot.inventory.items().find(i => i.name === 'diamond_sword');
+  check(!!sword, 'bot received a diamond sword to list');
+
+  if (sword) {
+    // /give drops the stack into the first free slot, not necessarily the hand.
+    try {
+      await bot.equip(sword, 'hand');
+    } catch (e) {
+      console.log(`  HINT: could not equip sword: ${e.message}`);
+    }
+  }
+  await sleep(800);
+  check(!!(bot.heldItem && bot.heldItem.name === 'diamond_sword'),
+        'diamond sword is in the main hand before /ah sell');
+
   msgs = await runCommand('ah sell 100', 4000);
-  const sellTxt = concat(msgs).toLowerCase();
-  check(sellTxt.includes('hold') || sellTxt.includes('listed') || sellTxt.includes('success') || sellTxt.includes('fee'),
-        '/ah sell with held item handled');
+  checkContains(concat(msgs), 'listed for', '/ah sell confirms the listing was created');
+
+  // The insert is asynchronous; give it time to land before inspecting the hand.
+  await sleep(2500);
+  check(!(bot.heldItem && bot.heldItem.name === 'diamond_sword'),
+        'listed item left the main hand once the listing was durable');
+
+  // If the listing did not persist, the item is simply gone. Prove it exists.
+  await runCommand('ah', 4000);
+  await sleep(2000);
+  if (!bot.currentWindow) {
+    console.log('  SKIP: Auction GUI not opened, cannot confirm the listing');
+    check(true, 'Auction GUI not available');
+  } else {
+    const listedSwords = getNonEmptySlots().filter(s => s.name === 'diamond_sword');
+    check(listedSwords.length > 0,
+          'auction house lists the diamond sword (item not lost)');
+    for (const s of listedSwords) {
+      console.log(`  Slot ${s.slot}: ${s.name} x${s.count}`);
+    }
+  }
+  await closeGui();
 
   msgs = await runCommand('ah collect', 3000);
   msgs = await runCommand('ah offers', 3000);

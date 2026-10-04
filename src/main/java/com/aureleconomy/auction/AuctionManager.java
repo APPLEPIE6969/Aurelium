@@ -127,42 +127,52 @@ public class AuctionManager {
  long now = System.currentTimeMillis();
  long expiration = now + durationMillis;
 
- Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
- "INSERT INTO auctions (seller_uuid, item_data, price, currency, is_bin, expiration, listing_fee, start_time, purchase_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
- java.sql.Statement.RETURN_GENERATED_KEYS)) {
- ps.setString(1, seller.toString());
- ps.setString(2, itemToBase64(item));
- ps.setBigDecimal(3, price);
- ps.setString(4, currency);
- ps.setBoolean(5, isBin);
- ps.setLong(6, expiration);
- ps.setBigDecimal(7, listingFee);
- ps.setLong(8, now);
- ps.setString(9, purchaseMode.name());
- ps.executeUpdate();
+Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+  com.aureleconomy.auction.AuctionItem created = null;
+  // Hold the shared write lock for the whole insert. EconomyManager and
+  // CustomItemRegistry already synchronize on this monitor; without it a
+  // concurrent balance write can make this INSERT throw and lose the listing.
+  synchronized (plugin.getDatabaseManager().getWriteLock()) {
+  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+  "INSERT INTO auctions (seller_uuid, item_data, price, currency, is_bin, expiration, listing_fee, start_time, purchase_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  java.sql.Statement.RETURN_GENERATED_KEYS)) {
+  ps.setString(1, seller.toString());
+  ps.setString(2, itemToBase64(item));
+  ps.setBigDecimal(3, price);
+  ps.setString(4, currency);
+  ps.setBoolean(5, isBin);
+  ps.setLong(6, expiration);
+  ps.setBigDecimal(7, listingFee);
+  ps.setLong(8, now);
+  ps.setString(9, purchaseMode.name());
+  ps.executeUpdate();
 
- ResultSet rs = ps.getGeneratedKeys();
- if (!rs.next()) {
-  throw new SQLException("No generated key returned for the new auction");
- }
+  ResultSet rs = ps.getGeneratedKeys();
+  if (!rs.next()) {
+   throw new SQLException("No generated key returned for the new auction");
+  }
 
- int id = rs.getInt(1);
- com.aureleconomy.auction.AuctionItem ai = new com.aureleconomy.auction.AuctionItem.Builder()
- .id(id).seller(seller).item(item).price(price).currency(currency)
- .isBin(isBin).expiration(expiration).listingFee(listingFee)
- .startTime(now).purchaseMode(purchaseMode).build();
+  int id = rs.getInt(1);
+  created = new com.aureleconomy.auction.AuctionItem.Builder()
+  .id(id).seller(seller).item(item).price(price).currency(currency)
+  .isBin(isBin).expiration(expiration).listingFee(listingFee)
+  .startTime(now).purchaseMode(purchaseMode).build();
 
- synchronized (activeAuctions) {
- activeAuctions.add(ai);
- }
- runOnMainThread(ai, onListed);
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error while listing auction", e);
- runOnMainThread(null, onListed);
- }
- });
- }
+  synchronized (activeAuctions) {
+  activeAuctions.add(created);
+  }
+  } catch (Exception e) {
+  // Deliberately broad: getConnection() can hand back null after a failed
+  // reconnect, which throws NullPointerException rather than SQLException.
+  // Callers only take the player's item once this reports success, so a
+  // failure here must always reach onListed as null.
+  plugin.getComponentLogger().error("Database error while listing auction", e);
+  created = null;
+  }
+  }
+  runOnMainThread(created, onListed);
+  });
+  }
 
  /** Bounces a {@link #listAuction} completion callback back onto the main thread. */
  private void runOnMainThread(com.aureleconomy.auction.AuctionItem listed,
@@ -307,19 +317,20 @@ public class AuctionManager {
  seller.sendMessage(Component.text(sellerMsg, NamedTextColor.GREEN));
  }
 
- // Update DB with remaining quantity
- plugin.getDatabaseManager().getWriteLock();
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auctions SET item_data = ?, price = ? WHERE id = ?")) {
- ItemStack updatedStack = auction.getItem().clone();
- updatedStack.setAmount(remaining);
- ps.setString(1, itemToBase64(updatedStack));
- ps.setBigDecimal(2, remaining > 0 ? unitPrice : BigDecimal.ZERO);
- ps.setInt(3, auction.getId());
- ps.executeUpdate();
- } finally {
- plugin.getDatabaseManager().getWriteLock().notifyAll();
- }
+// Update DB with remaining quantity
+  // This used to call getWriteLock() without synchronizing on it, which locked
+  // nothing and raced every other writer on the shared Connection.
+  synchronized (plugin.getDatabaseManager().getWriteLock()) {
+  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
+  .prepareStatement("UPDATE auctions SET item_data = ?, price = ? WHERE id = ?")) {
+  ItemStack updatedStack = auction.getItem().clone();
+  updatedStack.setAmount(remaining);
+  ps.setString(1, itemToBase64(updatedStack));
+  ps.setBigDecimal(2, remaining > 0 ? unitPrice : BigDecimal.ZERO);
+  ps.setInt(3, auction.getId());
+  ps.executeUpdate();
+  }
+  }
 
  if (remaining <= 0) {
  endAuction(auction);

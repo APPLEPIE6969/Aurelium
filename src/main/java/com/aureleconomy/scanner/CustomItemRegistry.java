@@ -4,6 +4,7 @@ import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.database.DatabaseManager;
 import com.aureleconomy.market.MarketItems.Category;
 import com.aureleconomy.market.MarketManager;
+import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.NamespacedKey;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -550,45 +551,140 @@ public class CustomItemRegistry {
  }
  }
 
- /**
- * Load discovered item overrides from config.yml.
- * Admins can customize prices, enabled status, etc. in config.
- * These override database values on startup.
- * Fix: use upsert() to re-index dedup maps when overrides change keys.
- */
- public void loadConfigOverrides() {
- org.bukkit.configuration.ConfigurationSection section = plugin.getConfig().getConfigurationSection("discovered-items");
- if (section == null) return;
+/**
+  * Load discovered item entries from config.yml.
+  *
+  * <p>Entries normally <em>override</em> items the scanner already found. An entry
+  * that also supplies a {@code material} can additionally <em>define</em> an item,
+  * which is the only way to register one by hand because the scanner itself only
+  * ever discovers items belonging to other plugins.
+  *
+  * <p>Entries that can be neither overridden nor defined used to be skipped in
+  * silence, so a hand-written item looked like it had been registered when it had
+  * not (issue #34). Every skipped entry is now reported.
+  *
+  * <p>Fix: use upsert() to re-index dedup maps when overrides change keys.
+  */
+  public void loadConfigOverrides() {
+  org.bukkit.configuration.ConfigurationSection section = plugin.getConfig().getConfigurationSection("discovered-items");
+  if (section == null) return;
 
- for (String canonicalId : section.getKeys(false)) {
- if (!itemsById.containsKey(canonicalId)) continue;
- CustomMarketItem existing = itemsById.get(canonicalId);
- String path = "discovered-items." + canonicalId;
+  List<String> skipped = new ArrayList<>();
+  int defined = 0;
+  int overridden = 0;
 
- CustomMarketItem.Builder builder = new CustomMarketItem.Builder()
- .canonicalId(canonicalId)
- .itemStack(existing.getItemStack())
- .sourcePlugin(section.getString(path + ".source-plugin", existing.getSourcePlugin()))
- .displayName(section.getString(path + ".display-name", existing.getDisplayName()))
- .category(section.getString(path + ".category", existing.getCategory()))
- .enabled(section.getBoolean(path + ".enabled", existing.isEnabled()));
+  for (String canonicalId : section.getKeys(false)) {
+  String path = "discovered-items." + canonicalId;
+  CustomMarketItem existing = itemsById.get(canonicalId);
+  String materialName = section.getString(path + ".material");
 
- double buyPrice = section.getDouble(path + ".buy-price", existing.getBuyPrice().doubleValue());
- double sellPrice = section.getDouble(path + ".sell-price", existing.getSellPrice().doubleValue());
- builder.buyPrice(java.math.BigDecimal.valueOf(buyPrice));
- builder.sellPrice(java.math.BigDecimal.valueOf(sellPrice));
+  if (existing == null && materialName == null) {
+  skipped.add(canonicalId + " (no material: key and not discovered by the scanner)");
+  continue;
+  }
 
- String pdcKey = section.getString(path + ".pdc-key");
- if (pdcKey != null) builder.pdcKey(pdcKey);
- String modelDataKey = section.getString(path + ".model-data-key");
- if (modelDataKey != null) builder.modelDataKey(modelDataKey);
- String pluginNativeId = section.getString(path + ".plugin-native-id");
- if (pluginNativeId != null) builder.pluginNativeId(pluginNativeId);
+  ItemStack stack;
+  if (existing != null) {
+  stack = existing.getItemStack();
+  } else {
+  stack = buildFromConfigMaterial(section, path, canonicalId, skipped);
+  if (stack == null) continue;
+  }
 
- // Fix: use upsert() instead of direct itemsById.put()
- // so that dedup indexes (pdcKeyToId, modelDataToId, etc.) are kept consistent
- upsert(builder.build());
- }
- }
+  CustomMarketItem.Builder builder = new CustomMarketItem.Builder()
+  .canonicalId(canonicalId)
+  .itemStack(stack)
+  .sourcePlugin(section.getString(path + ".source-plugin",
+  existing != null ? existing.getSourcePlugin() : "config"))
+  .displayName(section.getString(path + ".display-name",
+  existing != null ? existing.getDisplayName() : canonicalId))
+  .category(section.getString(path + ".category",
+  existing != null ? existing.getCategory() : "CUSTOM_ITEMS"))
+  .enabled(section.getBoolean(path + ".enabled",
+  existing != null ? existing.isEnabled() : true));
+
+  double buyPrice = section.getDouble(path + ".buy-price", existing != null ? existing.getBuyPrice().doubleValue() : -1);
+  double sellPrice = section.getDouble(path + ".sell-price", existing != null ? existing.getSellPrice().doubleValue() : -1);
+  if (buyPrice < 0 && existing == null) {
+  skipped.add(canonicalId + " (missing buy-price)");
+  continue;
+  }
+  if (sellPrice < 0 && existing == null) {
+  skipped.add(canonicalId + " (missing sell-price)");
+  continue;
+  }
+  builder.buyPrice(java.math.BigDecimal.valueOf(buyPrice));
+  builder.sellPrice(java.math.BigDecimal.valueOf(sellPrice));
+
+  String pdcKey = section.getString(path + ".pdc-key");
+  if (pdcKey != null) builder.pdcKey(pdcKey);
+  String modelDataKey = section.getString(path + ".model-data-key");
+  if (modelDataKey != null) builder.modelDataKey(modelDataKey);
+  String pluginNativeId = section.getString(path + ".plugin-native-id");
+  if (pluginNativeId != null) builder.pluginNativeId(pluginNativeId);
+
+  // Fix: use upsert() instead of direct itemsById.put()
+  // so that dedup indexes (pdcKeyToId, modelDataToId, etc.) are kept consistent
+  CustomMarketItem resolved = builder.build();
+  upsert(resolved);
+  if (existing == null) {
+  defined++;
+  addToMarket(canonicalId, resolved);
+  } else {
+  overridden++;
+  }
+  }
+
+  if (defined > 0 || overridden > 0) {
+  plugin.getComponentLogger().info("[CustomItems] Config entries applied: "
+  + defined + " defined, " + overridden + " overridden.");
+  }
+  if (!skipped.isEmpty()) {
+  plugin.getComponentLogger().warn("[CustomItems] Skipped " + skipped.size()
+  + " discovered-items config entr" + (skipped.size() == 1 ? "y" : "ies")
+  + " - add a 'material:' key to define one by hand: " + String.join(", ", skipped));
+  }
+  }
+
+  /**
+  * Builds the ItemStack for a hand-written config entry. Returns null and records
+  * the reason in {@code skipped} when the material is unusable.
+  */
+  private ItemStack buildFromConfigMaterial(org.bukkit.configuration.ConfigurationSection section,
+  String path, String canonicalId, List<String> skipped) {
+  String materialName = section.getString(path + ".material");
+  Material material = Material.matchMaterial(materialName == null ? "" : materialName);
+  if (material == null || material.isAir() || !material.isItem()) {
+  skipped.add(canonicalId + " (invalid material: '" + materialName + "')");
+  return null;
+  }
+
+  int amount = Math.max(1, section.getInt(path + ".amount", 1));
+  ItemStack stack = new ItemStack(material, amount);
+
+  int modelData = section.getInt(path + ".custom-model-data", 0);
+  if (modelData > 0) {
+  stack.editMeta(meta -> meta.setCustomModelData(modelData));
+  }
+
+  String name = section.getString(path + ".item-name");
+  if (name != null && !name.isEmpty()) {
+  stack.editMeta(meta -> meta.displayName(
+  net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().deserialize(name)));
+  }
+  return stack;
+  }
+
+  /**
+  * Publishes a config-defined item to the market, mirroring {@link #register}'s
+  * auto-add so hand-written items are actually sellable.
+  */
+  private void addToMarket(String canonicalId, CustomMarketItem item) {
+  if (!plugin.getConfig().getBoolean("custom-items.auto-add-to-market", true)) return;
+  MarketManager marketManager = plugin.getMarketManager();
+  if (marketManager != null) {
+  marketManager.addCustomMarketItem(canonicalId, item);
+  }
+  }
 
 }

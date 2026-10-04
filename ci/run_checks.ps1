@@ -45,7 +45,7 @@ foreach ($suite in @('test_market', 'test_stepper', 'test_currency', 'test_order
 }
 
 Write-Host '== static contracts ==' -ForegroundColor Cyan
-foreach ($check in @('check_web_ui.py', 'check_css_classes.py')) {
+foreach ($check in @('check_web_ui.py', 'check_css_classes.py', 'check_issue_fixes.py')) {
     $res = & python "ci\$check" 2>&1
     if ($LASTEXITCODE -ne 0) {
         $failed += $check

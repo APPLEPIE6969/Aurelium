@@ -171,15 +171,28 @@ public class AuctionCommand implements TabExecutor {
  AuctionItem.PurchaseMode purchaseMode = AuctionItem.PurchaseMode.valueOf(
  plugin.getConfig().getString("auction-house.purchase-mode", "STACK").toUpperCase());
 
- plugin.getAuctionManager().listAuction(player.getUniqueId(), item.clone(), price, currency, isBin,
- durationMillis,
- feeAmount, purchaseMode);
- player.getInventory().setItemInMainHand(null);
-
- player.sendMessage(
- Component.text("Item listed for " + plugin.getEconomyManager().getFormattedWithSymbol(price, currency) + " (Fee: " + plugin.getEconomyManager().getFormattedWithSymbol(feeAmount, currency) + ")",
- NamedTextColor.GREEN));
- }
+// The item stays in the player's hand until the insert is confirmed. Taking
+  // it here meant a failed insert destroyed the stack with no listing to
+  // collect from (issue #33).
+  ItemStack toList = item.clone();
+  final String listingCurrency = currency;
+  final BigDecimal listingFee = feeAmount;
+  plugin.getAuctionManager().listAuction(player.getUniqueId(), toList, price, currency, isBin,
+  durationMillis,
+  feeAmount, purchaseMode, (listed) -> {
+  if (listed == null) {
+  plugin.getEconomyManager().deposit(player, listingFee, listingCurrency);
+  player.sendMessage(
+  Component.text("Could not list the item. Your item was not taken and your listing fee has been refunded.",
+  NamedTextColor.RED));
+  return;
+  }
+  com.aureleconomy.utils.InventoryUtils.clearMainHandIfSimilar(player, toList);
+  player.sendMessage(
+  Component.text("Item listed for " + plugin.getEconomyManager().getFormattedWithSymbol(price, listingCurrency) + " (Fee: " + plugin.getEconomyManager().getFormattedWithSymbol(listingFee, listingCurrency) + ")",
+  NamedTextColor.GREEN));
+  });
+  }
 
  return true;
  }
