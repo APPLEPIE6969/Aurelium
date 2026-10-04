@@ -1030,6 +1030,21 @@ jobs:
           ls -la plugins/
       - name: Download Vault
         run: curl -sL "${{ env.VAULT_URL }}" -o plugins/Vault.jar
+      - name: Download ViaVersion + ViaBackwards
+        run: |
+          # The mineflayer bot speaks 1.21.11 while the server is 26.1.2, so the
+          # client is rejected outright without these:
+          #   "This server is version 26.1.2, you are using version 1.21.11"
+          # ViaBackwards lets an older client join a newer server; ViaVersion is
+          # its usual companion. These URLs were declared as workflow env vars but
+          # never downloaded by any job, which is why no 1.21.11 client had ever
+          # connected here.
+          curl -sL "${{ env.VIAVERSION_URL }}" -o plugins/ViaVersion.jar
+          curl -sL "${{ env.VIABACKWARDS_URL }}" -o plugins/ViaBackwards.jar
+          for j in plugins/Via*.jar; do
+            if [ ! -s "$j" ]; then echo "FAIL: $j empty or missing"; exit 1; fi
+          done
+          ls -la plugins/
       - name: Download Paper 26.1.2
         run: |
           PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
