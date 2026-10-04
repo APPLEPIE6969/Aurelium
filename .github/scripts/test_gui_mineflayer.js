@@ -215,7 +215,27 @@ async function clickSlot(window, slot) {
 }
 
 async function sleep(ms) {
- return new Promise(r => setTimeout(r, ms));
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/**
+ * Searches an arbitrarily nested value for a string containing `needle`.
+ *
+ * Item names and lore live at different depths depending on the protocol
+ * version, and mineflayer's window title is a plain object whose toString() is
+ * "[object Object]". Walking the structure is the only shape-independent way to
+ * assert on them.
+ */
+function deepIncludes(value, needle, depth = 0) {
+  if (depth > 14 || value == null) return false;
+  if (typeof value === 'string') return value.toLowerCase().includes(needle.toLowerCase());
+  if (typeof value !== 'object') return false;
+  try {
+    if (Array.isArray(value)) return value.some(v => deepIncludes(v, needle, depth + 1));
+    return Object.keys(value).some(k => deepIncludes(value[k], needle, depth + 1));
+  } catch (e) {
+    return false;
+  }
 }
 
 async function runTests() {
@@ -256,7 +276,7 @@ async function runTests() {
     if (!listWindow) throw new Error('no window');
 
     assert('GUI title contains "Custom Items"',
-      JSON.stringify(getWindowTitle() || '').includes('Custom Items'),
+      deepIncludes(getWindowTitle(), 'Custom Items'),
       `got title: ${JSON.stringify(getWindowTitle())}`);
 
     // mineflayer's window.slots covers the container *and* the player's own
@@ -273,7 +293,7 @@ async function runTests() {
       `slot 0 expected ${SEEDED}, got ${seeded && seeded.name}`);
 
     assert('seeded item lore carries its canonical id',
-      !!(seeded && JSON.stringify(seeded.nbt).includes('ci_seed_sword')),
+      deepIncludes(seeded, 'ci_seed_sword'),
       'lore did not contain ci_seed_sword');
 
     // Navigation bar, by exact slot.
@@ -294,8 +314,8 @@ async function runTests() {
       !getSlotItem(50), `unexpected ${getSlotItem(50)?.name} at 50`);
 
     assert('page info counts the discovered item',
-      JSON.stringify(getSlotItem(49)?.nbt || {}).includes('1'),
-      'page info lore did not report a count');
+      deepIncludes(getSlotItem(49), '1 custom items discovered'),
+      'page info lore did not report "1 custom items discovered"');
 
     // Detail view
     await clickSlot(bot.currentWindow, 0);
