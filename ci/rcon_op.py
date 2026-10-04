@@ -6,7 +6,7 @@ Usage: rcon_op.py [username]
 Defaults to TestBot. The mineflayer GUI suite connects as GUIBot, and /give
 needs OP, so its run has to op that name instead.
 """
-import socket, struct, sys
+import socket, struct, sys, time
 
 def rcon_read(sock):
     raw = b''
@@ -31,46 +31,68 @@ def rcon_read(sock):
     payload = body_data[8:].rstrip(b'\x00').decode(errors='replace')
     return (req_id, pkt_type, payload)
 
-def rcon_auth(sock, password):
+def rcon_auth(sock, password, timeout=5):
+    sock.settimeout(timeout)
     body = password.encode('utf-8') + b'\x00'
     data = struct.pack('<ii', 1, 3) + body + b'\x00'
     sock.sendall(struct.pack('<i', len(data)) + data)
     for _ in range(3):
         pkt = rcon_read(sock)
         if pkt is None:
-            return False
+            continue
         req_id, pkt_type, _ = pkt
-        if pkt_type == 2 and req_id != -1:
+        if pkt_type == 2 and req_id == 1:
             return True
     return False
 
-def rcon_cmd(sock, cmd):
+def rcon_cmd(sock, cmd, timeout=5):
+    sock.settimeout(timeout)
     body = cmd.encode('utf-8') + b'\x00'
     data = struct.pack('<ii', 2, 2) + body + b'\x00'
     sock.sendall(struct.pack('<i', len(data)) + data)
     for _ in range(3):
         pkt = rcon_read(sock)
         if pkt is None:
-            return ''
+            continue
         req_id, pkt_type, payload = pkt
-        if pkt_type == 2 and req_id != -1:
+        if pkt_type == 2 and req_id == 2:
             return payload
     return ''
 
+
+def connect(password='test', attempts=10):
+    """Retries while the server finishes booting; RCON is not listening the
+    instant the log says 'Done ('."""
+    last = None
+    for attempt in range(1, attempts + 1):
+        try:
+            s = socket.socket()
+            s.settimeout(10)
+            s.connect(('127.0.0.1', 25575))
+            if rcon_auth(s, password):
+                return s
+            s.close()
+            last = 'auth failed'
+        except (TimeoutError, ConnectionRefusedError, OSError) as e:
+            last = str(e)
+            try:
+                s.close()
+            except Exception:
+                pass
+        time.sleep(3)
+    print(f'RCON unavailable after {attempts} attempts: {last}')
+    return None
+
+
 try:
     username = sys.argv[1] if len(sys.argv) > 1 else 'TestBot'
-    s = socket.socket()
-    s.settimeout(30)
-    s.connect(('127.0.0.1', 25575))
-    if rcon_auth(s, 'test'):
-        resp = rcon_cmd(s, f'op {username}')
-        print(f'op {username}: {resp}')
-        s.close()
-        sys.exit(0)
-    else:
-        print('RCON auth failed')
-        s.close()
+    s = connect()
+    if s is None:
         sys.exit(1)
+    resp = rcon_cmd(s, f'op {username}')
+    print(f'op {username}: {resp}')
+    s.close()
+    sys.exit(0)
 except (TimeoutError, ConnectionRefusedError, OSError) as e:
     print(f'RCON error: {e}')
     sys.exit(1)
