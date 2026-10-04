@@ -3,12 +3,18 @@
 This is the exact failure that shipped in WebMarketMC (app.js from one layout,
 index.html from another), so it is worth checking mechanically.
 """
+import os
 import re
 import sys
 
-HTML = r"D:\Aurelium-plugin\src\main\resources\web\index.html"
-CSS = r"D:\Aurelium-plugin\src\main\resources\web\style.css"
-JS = r"D:\Aurelium-plugin\src\main\resources\web\app.js"
+# Resolve relative to this file so the check runs anywhere (CI included), not
+# only on the machine that happened to have the absolute path baked in.
+WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir,
+                   "src", "main", "resources", "web")
+
+HTML = os.path.join(WEB, "index.html")
+CSS = os.path.join(WEB, "style.css")
+JS = os.path.join(WEB, "app.js")
 
 html = open(HTML, encoding="utf-8").read()
 css = open(CSS, encoding="utf-8").read()

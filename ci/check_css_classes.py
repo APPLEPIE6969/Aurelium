@@ -4,13 +4,16 @@ The +/- buttons were invisible because the markup used .qty-btn while the
 stylesheet only defined .amount-btn. This finds every other instance of that
 class of bug, plus elements styled by id that the markup never uses.
 """
+import os
 import re
 import sys
 
-BASE = r"D:\Aurelium-plugin\src\main\resources\web"
-html = open(BASE + r"\index.html", encoding="utf-8").read()
-css = open(BASE + r"\style.css", encoding="utf-8").read()
-js = open(BASE + r"\app.js", encoding="utf-8").read()
+# Resolve relative to this file so the check runs anywhere (CI included).
+BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir,
+                    "src", "main", "resources", "web")
+html = open(os.path.join(BASE, "index.html"), encoding="utf-8").read()
+css = open(os.path.join(BASE, "style.css"), encoding="utf-8").read()
+js = open(os.path.join(BASE, "app.js"), encoding="utf-8").read()
 
 css_classes = set(re.findall(r"\.([a-zA-Z][\w-]*)", css))
 css_ids = set(re.findall(r"#([a-zA-Z][\w-]*)", css))

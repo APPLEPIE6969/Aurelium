@@ -5,14 +5,20 @@ rules cannot silently regress the icons. Exits non-zero if any material has no
 reachable texture (those fall back to the inline placeholder, which is fine, but
 should be known).
 """
-import json, re, sqlite3, sys, urllib.request
+import json, os, re, sqlite3, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
-DB = r"D:\aurelium-server-26\plugins\Aurelium\database.db"
+CI_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Local-only tool: it probes the live CDN against a running local server, so it
+# is deliberately not part of CI. Both paths can be overridden for other setups.
+DB = os.environ.get("AURELIUM_SERVER_DB",
+                    r"D:\aurelium-server-26\plugins\Aurelium\database.db")
 ITEM = "https://assets.mcasset.cloud/26.2/assets/minecraft/textures/item/"
 BLOCK = "https://assets.mcasset.cloud/26.2/assets/minecraft/textures/block/"
 
-js = open(r"D:\Aurelium-plugin\src\main\resources\web\app.js", encoding="utf-8").read()
+js = open(os.path.join(CI_DIR, os.pardir, "src", "main", "resources", "web", "app.js"),
+          encoding="utf-8").read()
 
 # A duplicated key in the override table silently keeps the last value, so a
 # stale earlier entry looks correct in review and is not.
@@ -126,7 +132,7 @@ mats = sorted({str(r[0]).lower() for r in con.execute(
 
 # Use the candidate chains produced by the real app.js, so these numbers always
 # describe shipped behaviour rather than a second implementation of the rules.
-CANDIDATES = json.load(open(r"D:\Aurelium-plugin\ci\candidates.json", encoding="utf-8"))
+CANDIDATES = json.load(open(os.path.join(CI_DIR, "candidates.json"), encoding="utf-8"))
 
 jobs = []
 for m, cands in CANDIDATES.items():
@@ -188,7 +194,7 @@ for m in mats:
         winner[m] = f"{c['dir']}/{c['name']}"
 
 print(f"\n// {len(winner)} entries override the default item/<material>.png path")
-with open(r"D:\Aurelium-plugin\ci\icon_table.txt", "w", encoding="utf-8") as fh:
+with open(os.path.join(CI_DIR, "icon_table.txt"), "w", encoding="utf-8") as fh:
     for m in sorted(winner):
         fh.write(f"    {m}: '{winner[m]}',\n")
 print("wrote ci/icon_table.txt")
