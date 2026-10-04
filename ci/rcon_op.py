@@ -1,25 +1,41 @@
 #!/usr/bin/env python3
-"""RCON helper - ops a bot on the server. Single attempt with long timeout.
+"""RCON helper - ops a bot on the server, retrying while it boots.
 
 Usage: rcon_op.py [username]
 
 Defaults to TestBot. The mineflayer GUI suite connects as GUIBot, and /give
-needs OP, so its run has to op that name instead.
+needs OP, so its run has to op that name instead. Exits non-zero unless the
+server confirms the operator was actually set.
 """
 import socket, struct, sys, time
 
 def rcon_read(sock):
-    raw = b''
-    while len(raw) < 4:
-        c = sock.recv(4 - len(raw))
-        if not c:
-            return None
-        raw += c
+    """Read one packet. Returns None on a short read *or* a timeout.
+
+    A timeout must not propagate: callers already treat None as 'no reply yet'
+    and keep reading, and an operator command can legitimately take a while
+    because the server may do a blocking profile lookup for a player who has
+    never joined.
+    """
+    try:
+        raw = b''
+        while len(raw) < 4:
+            c = sock.recv(4 - len(raw))
+            if not c:
+                return None
+            raw += c
+    except (TimeoutError, socket.timeout):
+        return None
     l = struct.unpack('<i', raw[:4])[0]
+    if l < 8 or l > 1048576:
+        return None
     body_data = b''
     remaining = l
     while remaining > 0:
-        c = sock.recv(min(remaining, 4096))
+        try:
+            c = sock.recv(min(remaining, 65536))
+        except (TimeoutError, socket.timeout):
+            return None
         if not c:
             break
         body_data += c
@@ -45,7 +61,7 @@ def rcon_auth(sock, password, timeout=5):
             return True
     return False
 
-def rcon_cmd(sock, cmd, timeout=5):
+def rcon_cmd(sock, cmd, timeout=30):
     sock.settimeout(timeout)
     body = cmd.encode('utf-8') + b'\x00'
     data = struct.pack('<ii', 2, 2) + body + b'\x00'
@@ -89,10 +105,20 @@ try:
     s = connect()
     if s is None:
         sys.exit(1)
+
     resp = rcon_cmd(s, f'op {username}')
-    print(f'op {username}: {resp}')
+    print(f'op {username}: {resp or "(no reply)"}')
+
+    # Verify rather than trust. A silent no-op here would leave /give failing
+    # later with a confusing permission error instead of an obvious cause.
+    # Paper answers either "Made <name> a server operator" or
+    # "<name> is already a server operator", so the name appears either way.
     s.close()
-    sys.exit(0)
+    if username.lower() in (resp or '').lower():
+        print(f'PASS: {username} is an operator')
+        sys.exit(0)
+    print(f'FAIL: server did not confirm op for {username}: {resp!r}')
+    sys.exit(1)
 except (TimeoutError, ConnectionRefusedError, OSError) as e:
     print(f'RCON error: {e}')
     sys.exit(1)
