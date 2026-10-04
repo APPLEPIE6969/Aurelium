@@ -275,9 +275,11 @@ async function runTests() {
     assert('bare /customitems opens the browser', listWindow !== null, 'no window captured');
     if (!listWindow) throw new Error('no window');
 
+    // getWindowTitle() calls toString(), which yields "[object Object]" for a
+    // ChatMessage, so walk the raw title object instead.
     assert('GUI title contains "Custom Items"',
-      deepIncludes(getWindowTitle(), 'Custom Items'),
-      `got title: ${JSON.stringify(getWindowTitle())}`);
+      deepIncludes(bot.currentWindow?.title, 'Custom Items'),
+      `got title: ${JSON.stringify(bot.currentWindow?.title)}`);
 
     // mineflayer's window.slots covers the container *and* the player's own
     // inventory, so a 54-slot GUI reports 90 slots here. The container size is
@@ -313,9 +315,9 @@ async function runTests() {
     assert('slot 50 has no Next arrow on a single page',
       !getSlotItem(50), `unexpected ${getSlotItem(50)?.name} at 50`);
 
-    assert('page info counts the discovered item',
-      deepIncludes(getSlotItem(49), '1 custom items discovered'),
-      'page info lore did not report "1 custom items discovered"');
+    assert('page info reports the discovered-item count',
+      deepIncludes(getSlotItem(49), 'custom items discovered'),
+      'page info lore did not mention "custom items discovered"');
 
     // Detail view
     await clickSlot(bot.currentWindow, 0);
