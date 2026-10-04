@@ -513,12 +513,19 @@ jobs:
             echo "FAIL: No .db file"; SMOKE_FAIL=1
           fi
           SCHEMA_VER=$(sqlite3 plugins/Aurelium/database.db "SELECT version FROM database_info LIMIT 1;" 2>/dev/null || echo "0")
-          if [ "$SCHEMA_VER" = "3" ] || [ "$SCHEMA_VER" = "v3" ] || [ "$SCHEMA_VER" = "2" ] || [ "$SCHEMA_VER" = "v2" ]; then
-            echo "PASS: Schema $SCHEMA_VER"
+          # Read the expected version from the source rather than listing the
+          # known values here. The previous hardcoded allowlist silently went
+          # stale and failed every run from schema 4 onwards.
+          EXPECTED_VER=$(sed -n 's/.*LATEST_SCHEMA_VERSION[[:space:]]*=[[:space:]]*\([0-9]\{1,\}\).*/\1/p' \
+            src/main/java/com/aureleconomy/database/DatabaseManager.java | head -1)
+          if [ -z "$EXPECTED_VER" ]; then
+            echo "FAIL: Could not read LATEST_SCHEMA_VERSION from DatabaseManager.java"; SMOKE_FAIL=1
+          elif [ "$SCHEMA_VER" = "$EXPECTED_VER" ]; then
+            echo "PASS: Schema $SCHEMA_VER (matches DatabaseManager)"
           else
-            echo "FAIL: Schema version '$SCHEMA_VER'"; SMOKE_FAIL=1
+            echo "FAIL: Schema version '$SCHEMA_VER', expected '$EXPECTED_VER'"; SMOKE_FAIL=1
           fi
-          for table in players player_balances auctions offline_earnings buy_orders price_history auction_offers custom_items database_info; do
+          for table in players player_balances auctions offline_earnings buy_orders price_history trade_volume auction_offers custom_items database_info; do
             if sqlite3 plugins/Aurelium/database.db ".tables" 2>/dev/null | grep -qw "$table"; then
               echo "PASS: Table '$table' exists"
             else
