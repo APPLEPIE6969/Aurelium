@@ -354,7 +354,7 @@ async function runTests() {
 
     assert('page info reports the discovered-item count',
       flatText(getSlotItem(49)).toLowerCase().includes('customitemsdiscovered'),
-      `page info text: ${JSON.stringify(flatText(getSlotItem(49)))}`);
+      `text=${JSON.stringify(flatText(getSlotItem(49)))} nbt=${JSON.stringify(getSlotItem(49)?.nbt)}`);
 
     // Detail view
     await clickSlot(bot.currentWindow, 0);
