@@ -1074,6 +1074,12 @@ jobs:
         run: |
           cd .github/scripts
           npm install --no-audit --no-fund
+      - name: Op the GUI bot
+        run: |
+          # /give needs OP, and the auction listing test needs to hand the bot an
+          # item to sell. Resolved by name over RCON, so it works before the bot
+          # has ever connected.
+          python3 ci/rcon_op.py GUIBot
       - name: Run mineflayer GUI tests
         run: |
           # Runs before test_rcon.py on purpose. The RCON suite takes well over

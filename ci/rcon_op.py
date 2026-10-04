@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""RCON helper - ops a bot on the server. Single attempt with long timeout."""
+"""RCON helper - ops a bot on the server. Single attempt with long timeout.
+
+Usage: rcon_op.py [username]
+
+Defaults to TestBot. The mineflayer GUI suite connects as GUIBot, and /give
+needs OP, so its run has to op that name instead.
+"""
 import socket, struct, sys
 
 def rcon_read(sock):
@@ -52,12 +58,13 @@ def rcon_cmd(sock, cmd):
     return ''
 
 try:
+    username = sys.argv[1] if len(sys.argv) > 1 else 'TestBot'
     s = socket.socket()
     s.settimeout(30)
     s.connect(('127.0.0.1', 25575))
     if rcon_auth(s, 'test'):
-        resp = rcon_cmd(s, 'op TestBot')
-        print(f'op TestBot: {resp}')
+        resp = rcon_cmd(s, f'op {username}')
+        print(f'op {username}: {resp}')
         s.close()
         sys.exit(0)
     else:
