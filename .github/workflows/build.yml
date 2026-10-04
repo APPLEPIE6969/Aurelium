@@ -1081,6 +1081,22 @@ jobs:
           print('seeded discovered-items.ci_seed_sword')
           PY
           grep -A7 '^discovered-items:' plugins/Aurelium/config.yml
+      - name: Op the GUI bot via ops.json
+        run: |
+          # /give needs OP. Writing ops.json is deterministic: RCON "op" for a
+          # player who has never joined comes back with an empty payload, so it
+          # cannot be confirmed from the reply. The UUID is the offline-mode
+          # name UUID, which is what the server will compute for this bot.
+          python3 - <<'PY'
+          import hashlib, io, json, uuid
+          name = 'GUIBot'
+          offline = uuid.UUID(bytes=hashlib.md5(('OfflinePlayer:' + name).encode('utf-8')).digest(),
+                              version=3)
+          io.open('ops.json', 'w', encoding='utf-8').write(
+              json.dumps([{'uuid': str(offline), 'level': 4, 'name': name}]))
+          print('ops.json:', offline)
+          PY
+          cat ops.json
       - name: Download Paper 26.1.2
         run: |
           PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"
@@ -1110,12 +1126,6 @@ jobs:
         run: |
           cd .github/scripts
           npm install --no-audit --no-fund
-      - name: Op the GUI bot
-        run: |
-          # /give needs OP, and the auction listing test needs to hand the bot an
-          # item to sell. Resolved by name over RCON, so it works before the bot
-          # has ever connected.
-          python3 ci/rcon_op.py GUIBot
       - name: Run mineflayer GUI tests
         run: |
           # Runs before test_rcon.py on purpose. The RCON suite takes well over
