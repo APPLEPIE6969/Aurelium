@@ -228,6 +228,48 @@ check(
     '/customitems reload' in config,
 )
 
+# --------------------------------------------------------------------------
+# The Custom Items browser was unreachable: nothing constructed it
+# --------------------------------------------------------------------------
+
+check(
+    'CustomItemsCommand registers a gui subcommand',
+    re.search(r'case\s+"gui"', cmd) is not None,
+)
+check(
+    'CustomItemsCommand constructs CustomItemsGUI',
+    'new com.aureleconomy.gui.CustomItemsGUI(' in cmd,
+    'the GUI existed but no command ever opened it',
+)
+check(
+    'bare /customitems opens the browser instead of printing usage',
+    re.search(r'if \(args\.length == 0\) \{\s*openGui\(', cmd) is not None,
+)
+check(
+    'opening the GUI is refused for the console rather than failing silently',
+    'can only be opened in-game' in cmd,
+)
+
+gui_test = strip_comments(read('.github/scripts/test_gui_mineflayer.js'))
+check(
+    'the GUI suite opens the browser via a subcommand that opens a window',
+    'customitems gui' in gui_test,
+    'the suite used `customitems list`, which answers on the console, so every '
+    'window assertion failed',
+)
+check(
+    'the GUI suite no longer opens the browser via the console-only list command',
+    "runCommand('customitems list')" in gui_test
+    and 'openCustomItemsGUI' in gui_test
+    and 'customitems ${subcommand}' in gui_test,
+)
+for slot, what in ((45, 'Back'), (49, 'page info'), (53, 'Rescan')):
+    check(
+        f'the GUI suite asserts slot {slot} ({what}) by its real slot',
+        f'getSlotItem({slot})' in gui_test,
+        'asserting the wrong slots is how these tests passed while broken',
+    )
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

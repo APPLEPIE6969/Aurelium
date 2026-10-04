@@ -1045,6 +1045,42 @@ jobs:
             if [ ! -s "$j" ]; then echo "FAIL: $j empty or missing"; exit 1; fi
           done
           ls -la plugins/
+      - name: Seed a config-defined custom item
+        run: |
+          # Start from the packaged defaults so no key is missing, then define one
+          # item by hand. The Custom Items browser needs an item to display, and
+          # `material:` is the only way to register one the scanner cannot see
+          # (issue #34) - the scanner only reads other plugins' items.
+          mkdir -p plugins/Aurelium
+          JAR=$(find plugins -maxdepth 1 -name 'Aurelium*.jar' | head -1)
+          if [ -z "$JAR" ]; then echo "FAIL: no Aurelium jar in plugins/"; exit 1; fi
+          unzip -p "$JAR" config.yml > plugins/Aurelium/config.yml
+          if [ ! -s plugins/Aurelium/config.yml ]; then echo "FAIL: could not extract config.yml"; exit 1; fi
+          python3 - <<'PY'
+          import io
+          p = 'plugins/Aurelium/config.yml'
+          s = io.open(p, encoding='utf-8').read()
+          entry = (
+              "discovered-items:\n"
+              "  ci_seed_sword:\n"
+              "    material: DIAMOND_SWORD\n"
+              "    amount: 1\n"
+              "    display-name: \"CI Seed Sword\"\n"
+              "    category: CUSTOM_ITEMS\n"
+              "    buy-price: 500.0\n"
+              "    sell-price: 250.0\n"
+              "    enabled: true\n"
+          )
+          if 'discovered-items: {}' in s:
+              s = s.replace('discovered-items: {}', entry)
+          elif '\ndiscovered-items:' in s:
+              raise SystemExit('config.yml already has discovered-items entries')
+          else:
+              s = s.rstrip() + '\n' + entry
+          io.open(p, 'w', encoding='utf-8').write(s)
+          print('seeded discovered-items.ci_seed_sword')
+          PY
+          grep -A7 '^discovered-items:' plugins/Aurelium/config.yml
       - name: Download Paper 26.1.2
         run: |
           PAPER_URL="https://fill-data.papermc.io/v1/objects/${{ env.PAPER_26_JAR_SHA }}/paper-26.1.2-${{ env.PAPER_26_BUILD }}.jar"

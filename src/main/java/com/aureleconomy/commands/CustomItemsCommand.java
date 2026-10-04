@@ -46,10 +46,12 @@ public class CustomItemsCommand implements TabExecutor {
  return true;
  }
 
- if (args.length == 0) {
- sendUsage(sender);
- return true;
- }
+if (args.length == 0) {
+  // Open the admin browser rather than printing usage. It is the richer view and
+  // was previously unreachable from any command.
+  openGui(sender, 1);
+  return true;
+  }
 
  CustomItemRegistry registry = plugin.getCustomItemRegistry();
  if (registry == null) {
@@ -57,17 +59,42 @@ public class CustomItemsCommand implements TabExecutor {
  return true;
  }
 
- switch (args[0].toLowerCase()) {
- case "scan" -> handleScan(sender, registry);
- case "list" -> handleList(sender, registry, args);
- case "info" -> handleInfo(sender, registry, args);
- case "reload" -> handleReload(sender, registry);
- case "toggle" -> handleToggle(sender, registry, args);
- case "price" -> handlePrice(sender, registry, args);
- default -> sendUsage(sender);
- }
- return true;
- }
+switch (args[0].toLowerCase()) {
+  case "scan" -> handleScan(sender, registry);
+  case "list" -> handleList(sender, registry, args);
+  case "info" -> handleInfo(sender, registry, args);
+  case "reload" -> handleReload(sender, registry);
+  case "toggle" -> handleToggle(sender, registry, args);
+  case "price" -> handlePrice(sender, registry, args);
+  case "gui" -> openGuiPage(sender, args);
+  default -> sendUsage(sender);
+  }
+  return true;
+  }
+
+  /**
+   * Opens the Custom Items admin browser. Only a player can be shown a GUI, so
+   * the console keeps getting the text listing instead of a silent no-op.
+   */
+  private void openGui(CommandSender sender, int page) {
+  if (!(sender instanceof org.bukkit.entity.Player player)) {
+  sender.sendMessage(Component.text("The custom items GUI can only be opened in-game.", NamedTextColor.RED));
+  return;
+  }
+  int clamped = Math.max(1, page);
+  new com.aureleconomy.gui.CustomItemsGUI(plugin, clamped - 1).open(player);
+  }
+
+  private void openGuiPage(CommandSender sender, String[] args) {
+  int page = 1;
+  if (args.length > 1) {
+  try {
+  page = Integer.parseInt(args[1]);
+  } catch (NumberFormatException ignored) {
+  }
+  }
+  openGui(sender, page);
+  }
 
  private void handleScan(CommandSender sender, CustomItemRegistry registry) {
  UnifiedItemScanner scanner = plugin.getUnifiedScanner();
@@ -310,8 +337,10 @@ private void handleReload(CommandSender sender, CustomItemRegistry registry) {
  }
 
  private void sendUsage(CommandSender sender) {
- sender.sendMessage(MM.deserialize("<gold><bold>Custom Items Commands</bold></gold>"));
- sender.sendMessage(MM.deserialize("<yellow>/customitems scan</yellow> <gray>- Trigger an immediate rescan</gray>"));
+sender.sendMessage(MM.deserialize("<gold><bold>Custom Items Commands</bold></gold>"));
+  sender.sendMessage(MM.deserialize("<yellow>/customitems</yellow> <gray>- Open the Custom Items browser</gray>"));
+    sender.sendMessage(MM.deserialize("<yellow>/customitems gui [page]</yellow> <gray>- Open the browser at a page</gray>"));
+    sender.sendMessage(MM.deserialize("<yellow>/customitems scan</yellow> <gray>- Trigger an immediate rescan</gray>"));
  sender.sendMessage(MM.deserialize("<yellow>/customitems list</yellow> <gray>- List all discovered items</gray>"));
  sender.sendMessage(MM.deserialize("<yellow>/customitems info <id></yellow> <gray>- Show item details</gray>"));
  sender.sendMessage(MM.deserialize("<yellow>/customitems reload</yellow> <gray>- Reload from database + rescan</gray>"));
@@ -324,9 +353,9 @@ private void handleReload(CommandSender sender, CustomItemRegistry registry) {
  @NotNull String label, @NotNull String[] args) {
  if (!sender.hasPermission("aureleconomy.admin")) return List.of();
 
- if (args.length == 1) {
- return List.of("scan", "list", "info", "reload", "toggle", "price");
- }
+if (args.length == 1) {
+      return List.of("gui", "scan", "list", "info", "reload", "toggle", "price");
+    }
 
  CustomItemRegistry registry = plugin.getCustomItemRegistry();
  if (registry == null) return List.of();

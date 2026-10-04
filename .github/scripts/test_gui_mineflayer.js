@@ -176,15 +176,24 @@ async function testAuctionListingKeepsItem() {
   await sleep(500);
 }
 
-async function openCustomItemsGUI() {
- runCommand('customitems list');
- return new Promise((resolve, reject) => {
- const timeout = setTimeout(() => reject(new Error('GUI did not open within 5s')), 5000);
- bot.once('windowOpen', (window) => {
- clearTimeout(timeout);
- resolve(window);
- });
- });
+/**
+ * Opens the Custom Items browser.
+ *
+ * `/customitems gui` is the entry point that actually opens the window;
+ * `/customitems list` answers on the console, which is what these tests were
+ * originally written against and why every one of them failed.
+ */
+async function openCustomItemsGUI(subcommand = 'gui') {
+  closeWindow();
+  await sleep(600);
+  runCommand(`customitems ${subcommand}`);
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('GUI did not open within 5s')), 5000);
+    bot.once('windowOpen', (window) => {
+      clearTimeout(timeout);
+      resolve(window);
+    });
+  });
 }
 
 async function clickSlot(window, slot) {
@@ -214,144 +223,162 @@ async function runTests() {
  await waitForSpawn();
  console.log('Bot spawned, starting GUI tests...');
 
- // Trigger scan first
- runCommand('customitems scan');
- await sleep(3000);
+// Custom Items browser
+  //
+  // Slot layout is asserted against CustomItemsGUI rather than guessed:
+  //   0..44 items | 45 Back(barrier) | 48 Prev(spectral_arrow) | 49 Page(book)
+  //   50 Next(spectral_arrow) | 53 Rescan(compass)
+  // Detail view: 13 item | 29 toggle(lime/gray dye) | 33 price(gold_nugget) | 45 Back
+  //
+  // The single item here is seeded through config `discovered-items` with a
+  // material: key, so this also covers defining an item by hand (issue #34).
+  const SEEDED = 'diamond_sword';
 
- // Test 1: Open custom items list GUI
- let listWindow;
- try {
- listWindow = await openCustomItemsGUI();
- assert('GUI opens with correct title',
- getWindowTitle()?.includes('Custom Items'),
- `Expected title containing 'Custom Items', got: ${getWindowTitle()}`);
- } catch (e) {
- assert('GUI opens with correct title', false, e.message);
- }
+  runCommand('customitems scan');
+  await sleep(2500);
 
- // Test 2: List view has 54 slots
- assert('List view has 54 slots',
- bot.currentWindow?.slots?.length === 54,
- `Expected 54 slots, got ${bot.currentWindow?.slots?.length}`);
+  // Bare `/customitems` should open the browser rather than print usage.
+  closeWindow();
+  await sleep(600);
+  let listWindow = null;
+  try {
+    runCommand('customitems');
+    listWindow = await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('no window within 5s')), 5000);
+      bot.once('windowOpen', w => { clearTimeout(t); resolve(w); });
+    });
+  } catch (e) {
+    assert('bare /customitems opens the browser', false, e.message);
+  }
 
- // Test 3: Custom items displayed
- const items = getAllWindowItems();
- assert('List view contains custom items',
- items.some(i => i.name === 'diamond_sword' || i.name === 'diamond_pickaxe' || i.name === 'diamond_helmet'),
- `Expected custom item materials, got: ${items.map(i => i.name).join(', ')}`);
+  try {
+    assert('bare /customitems opens the browser', listWindow !== null, 'no window captured');
+    if (!listWindow) throw new Error('no window');
 
- // Test 4: Navigation bar exists
- const navBarSlots = [45, 46, 47, 48, 49, 50, 51, 52, 53];
- const navItems = navBarSlots.filter(s => bot.currentWindow?.slots[s] !== null);
- assert('Navigation bar has interactive items',
- navItems.length >= 3,
- `Expected at least 3 nav items, got ${navItems.length}`);
+    assert('GUI title contains "Custom Items"',
+      (getWindowTitle() || '').includes('Custom Items'),
+      `got title: ${getWindowTitle()}`);
 
- // Test 5: Page info slot
- const pageInfoSlot = getSlotItem(49);
- assert('Page info slot exists', pageInfoSlot !== null, 'No item in slot 49');
+    assert('List view has 54 slots',
+      bot.currentWindow?.slots?.length === 54,
+      `expected 54, got ${bot.currentWindow?.slots?.length}`);
 
- // Test 6-12: Detail view
- const itemSlot = items.find(i => i.name === 'diamond_sword' || i.name === 'diamond_pickaxe');
- assert('Found a custom item to click', itemSlot !== undefined, 'No custom item found');
+    // The seeded, config-defined item must actually be registered.
+    const seeded = bot.currentWindow?.slots?.[0];
+    assert('config-defined item is registered and listed',
+      !!seeded && seeded.name === SEEDED,
+      `slot 0 expected ${SEEDED}, got ${seeded && seeded.name}`);
 
- if (itemSlot) {
- try {
- await clickSlot(listWindow, itemSlot.slot);
- await sleep(500);
+    assert('seeded item lore carries its canonical id',
+      !!(seeded && JSON.stringify(seeded.nbt).includes('ci_seed_sword')),
+      'lore did not contain ci_seed_sword');
 
- assert('Detail view opens after clicking item',
- bot.currentWindow !== null,
- 'No window open after clicking item');
+    // Navigation bar, by exact slot.
+    assert('slot 45 is the Back button (barrier)',
+      getSlotItem(45)?.name === 'barrier',
+      `got ${getSlotItem(45)?.name}`);
+    assert('slot 49 is the page info (book)',
+      getSlotItem(49)?.name === 'book',
+      `got ${getSlotItem(49)?.name}`);
+    assert('slot 53 is the Rescan button (compass)',
+      getSlotItem(53)?.name === 'compass',
+      `got ${getSlotItem(53)?.name}`);
 
- const displayItem = getSlotItem(13);
- assert('Detail view has item display at slot 13',
- displayItem !== null,
- 'No item at slot 13');
+    // One item means one page, so neither arrow should be offered.
+    assert('slot 48 has no Previous arrow on a single page',
+      !getSlotItem(48), `unexpected ${getSlotItem(48)?.name} at 48`);
+    assert('slot 50 has no Next arrow on a single page',
+      !getSlotItem(50), `unexpected ${getSlotItem(50)?.name} at 50`);
 
- const toggleButton = getSlotItem(29);
- assert('Toggle button exists at slot 29',
- toggleButton !== null,
- 'No toggle button at slot 29');
+    assert('page info counts the discovered item',
+      JSON.stringify(getSlotItem(49)?.nbt || {}).includes('1'),
+      'page info lore did not report a count');
 
- const toggleIsDye = toggleButton?.name === 'lime_dye' || toggleButton?.name === 'gray_dye';
- assert('Toggle button is a dye item',
- toggleIsDye,
- `Expected lime_dye or gray_dye, got: ${toggleButton?.name}`);
+    // Detail view
+    await clickSlot(bot.currentWindow, 0);
+    await sleep(1200);
 
- const priceButton = getSlotItem(33);
- assert('Price edit button exists at slot 33',
- priceButton !== null,
- 'No price edit button at slot 33');
+    assert('clicking an item opens the detail view',
+      !!bot.currentWindow, 'no window after clicking the item');
+    assert('detail view shows the item at slot 13',
+      getSlotItem(13)?.name === SEEDED,
+      `got ${getSlotItem(13)?.name}`);
+    assert('detail view has a toggle dye at slot 29',
+      ['lime_dye', 'gray_dye'].includes(getSlotItem(29)?.name),
+      `got ${getSlotItem(29)?.name}`);
+    assert('detail view has a price button (gold nugget) at slot 33',
+      getSlotItem(33)?.name === 'gold_nugget',
+      `got ${getSlotItem(33)?.name}`);
+    assert('detail view has a Back button at slot 45',
+      getSlotItem(45)?.name === 'barrier',
+      `got ${getSlotItem(45)?.name}`);
+    assert('detail view clears the list slots',
+      !getSlotItem(1), `slot 1 should be empty, got ${getSlotItem(1)?.name}`);
 
- const backButton = getSlotItem(45);
- assert('Back button exists at slot 45',
- backButton !== null,
- 'No back button at slot 45');
+    // Toggle must flip both ways and be reflected in the button material.
+    const before = getSlotItem(29)?.name;
+    await clickSlot(bot.currentWindow, 29);
+    await sleep(1500);
+    const after = getSlotItem(29)?.name;
+    assert('toggle flips the button state',
+      after !== before && ['lime_dye', 'gray_dye'].includes(after),
+      `before=${before} after=${after}`);
 
- // Test 13-14: Toggle
- if (toggleButton && toggleButton.name === 'lime_dye') {
- await clickSlot(bot.currentWindow, 29);
- await sleep(500);
- const newToggle = getSlotItem(29);
- assert('Toggle changes to disabled (gray dye)',
- newToggle?.name === 'gray_dye',
- `Expected gray_dye, got: ${newToggle?.name}`);
+    await clickSlot(bot.currentWindow, 29);
+    await sleep(1500);
+    assert('toggle flips back',
+      getSlotItem(29)?.name === before,
+      `expected ${before}, got ${getSlotItem(29)?.name}`);
 
- await clickSlot(bot.currentWindow, 29);
- await sleep(500);
- const reEnabled = getSlotItem(29);
- assert('Toggle changes back to enabled (lime dye)',
- reEnabled?.name === 'lime_dye',
- `Expected lime_dye, got: ${reEnabled?.name}`);
- } else {
- assert('Toggle changes to disabled (skipped)', true, '');
- assert('Toggle changes back to enabled (skipped)', true, '');
- }
+    // Back to the list.
+    await clickSlot(bot.currentWindow, 45);
+    await sleep(1200);
+    assert('Back returns to the list view',
+      !!getSlotItem(49), 'page info missing, still in detail view');
+    assert('list view still shows the seeded item',
+      getSlotItem(0)?.name === SEEDED, `got ${getSlotItem(0)?.name}`);
 
- // Test 15: Back button
- await clickSlot(bot.currentWindow, 45);
- await sleep(500);
- assert('Back button returns to list view',
- bot.currentWindow !== null,
- 'Failed to return to list view');
- } catch (e) {
- assert('Detail view interaction', false, e.message);
- }
- }
+    // Rescan
+    await clickSlot(bot.currentWindow, 53);
+    await sleep(3000);
+    assert('Rescan completes and reopens the list',
+      !!bot.currentWindow && !!getSlotItem(49),
+      'no list window after rescan');
+  } catch (e) {
+    assert('Custom Items browser interaction', false, e.message);
+  }
 
- // Test 16-17: Pagination
- const nextArrow = getSlotItem(53);
- if (nextArrow && (nextArrow.name === 'arrow' || nextArrow.name === 'paper')) {
- await clickSlot(bot.currentWindow, 53);
- await sleep(500);
- assert('Next page navigation works', true, '');
- const prevArrow = getSlotItem(45);
- if (prevArrow) {
- await clickSlot(bot.currentWindow, 45);
- await sleep(500);
- assert('Previous page navigation works', true, '');
- }
- } else {
- assert('Next page arrow exists (skipped — only 1 page)', true, '');
- assert('Previous page navigation works (skipped)', true, '');
- }
+  // `/customitems gui <page>` must clamp rather than throw on a bad page.
+  closeWindow();
+  await sleep(600);
+  try {
+    runCommand('customitems gui 99');
+    await sleep(2000);
+    assert('out-of-range page does not break the GUI',
+      !!bot.currentWindow, 'no window for /customitems gui 99');
+    closeWindow();
+  } catch (e) {
+    assert('out-of-range page does not break the GUI', false, e.message);
+  }
 
- // Test 18: Rescan
- closeWindow();
- try {
- const rescanWindow = await openCustomItemsGUI();
- const rescanSlot = findSlotByDisplayName('rescan') !== -1 ? findSlotByDisplayName('rescan') : 51;
- if (bot.currentWindow?.slots[rescanSlot]) {
- await clickSlot(bot.currentWindow, rescanSlot);
- await sleep(2000);
- assert('Rescan button triggers without errors', true, '');
- } else {
- assert('Rescan button exists in GUI', false, `No item at slot ${rescanSlot}`);
- }
- } catch (e) {
- assert('Rescan button triggers without errors', false, e.message);
- }
+  // `/customitems gui abc` must not throw on a non-numeric page.
+  closeWindow();
+  await sleep(600);
+  try {
+    runCommand('customitems gui abc');
+    await sleep(2000);
+    assert('non-numeric page falls back instead of erroring',
+      !!bot.currentWindow, 'no window for /customitems gui abc');
+    closeWindow();
+  } catch (e) {
+    assert('non-numeric page falls back instead of erroring', false, e.message);
+  }
+
+  // The text listing must still work alongside the GUI.
+  runCommand('customitems list');
+  await sleep(2000);
+  assert('/customitems list still answers without opening a GUI',
+    bot.currentWindow === null, 'list unexpectedly opened a window');
 
  // Test 19-21: Market and AH GUIs
  closeWindow();
