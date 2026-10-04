@@ -574,9 +574,20 @@ public class CustomItemRegistry {
   int overridden = 0;
 
   for (String canonicalId : section.getKeys(false)) {
-  String path = "discovered-items." + canonicalId;
+  // Read through the entry's own section rather than building a
+  // "discovered-items.<id>.<key>" path on the parent. Bukkit's
+  // ConfigurationSection.get() delegates to the config root, which does not
+  // resolve a plain value nested under a section, so those reads silently
+  // returned null - which is why a hand-written item never registered.
+  org.bukkit.configuration.ConfigurationSection entry =
+  section.getConfigurationSection(canonicalId);
+  if (entry == null) {
+  skipped.add(canonicalId + " (not a config section)");
+  continue;
+  }
+
   CustomMarketItem existing = itemsById.get(canonicalId);
-  String materialName = section.getString(path + ".material");
+  String materialName = entry.getString("material");
 
   if (existing == null && materialName == null) {
   skipped.add(canonicalId + " (no material: key and not discovered by the scanner)");
@@ -587,24 +598,24 @@ public class CustomItemRegistry {
   if (existing != null) {
   stack = existing.getItemStack();
   } else {
-  stack = buildFromConfigMaterial(section, path, canonicalId, skipped);
+  stack = buildFromConfigMaterial(entry, canonicalId, skipped);
   if (stack == null) continue;
   }
 
   CustomMarketItem.Builder builder = new CustomMarketItem.Builder()
   .canonicalId(canonicalId)
   .itemStack(stack)
-  .sourcePlugin(section.getString(path + ".source-plugin",
+  .sourcePlugin(entry.getString("source-plugin",
   existing != null ? existing.getSourcePlugin() : "config"))
-  .displayName(section.getString(path + ".display-name",
+  .displayName(entry.getString("display-name",
   existing != null ? existing.getDisplayName() : canonicalId))
-  .category(section.getString(path + ".category",
+  .category(entry.getString("category",
   existing != null ? existing.getCategory() : "CUSTOM_ITEMS"))
-  .enabled(section.getBoolean(path + ".enabled",
+  .enabled(entry.getBoolean("enabled",
   existing != null ? existing.isEnabled() : true));
 
-  double buyPrice = section.getDouble(path + ".buy-price", existing != null ? existing.getBuyPrice().doubleValue() : -1);
-  double sellPrice = section.getDouble(path + ".sell-price", existing != null ? existing.getSellPrice().doubleValue() : -1);
+  double buyPrice = entry.getDouble("buy-price", existing != null ? existing.getBuyPrice().doubleValue() : -1);
+  double sellPrice = entry.getDouble("sell-price", existing != null ? existing.getSellPrice().doubleValue() : -1);
   if (buyPrice < 0 && existing == null) {
   skipped.add(canonicalId + " (missing buy-price)");
   continue;
@@ -616,11 +627,11 @@ public class CustomItemRegistry {
   builder.buyPrice(java.math.BigDecimal.valueOf(buyPrice));
   builder.sellPrice(java.math.BigDecimal.valueOf(sellPrice));
 
-  String pdcKey = section.getString(path + ".pdc-key");
+  String pdcKey = entry.getString("pdc-key");
   if (pdcKey != null) builder.pdcKey(pdcKey);
-  String modelDataKey = section.getString(path + ".model-data-key");
+  String modelDataKey = entry.getString("model-data-key");
   if (modelDataKey != null) builder.modelDataKey(modelDataKey);
-  String pluginNativeId = section.getString(path + ".plugin-native-id");
+  String pluginNativeId = entry.getString("plugin-native-id");
   if (pluginNativeId != null) builder.pluginNativeId(pluginNativeId);
 
   // Fix: use upsert() instead of direct itemsById.put()
@@ -650,24 +661,24 @@ public class CustomItemRegistry {
   * Builds the ItemStack for a hand-written config entry. Returns null and records
   * the reason in {@code skipped} when the material is unusable.
   */
-  private ItemStack buildFromConfigMaterial(org.bukkit.configuration.ConfigurationSection section,
-  String path, String canonicalId, List<String> skipped) {
-  String materialName = section.getString(path + ".material");
-  Material material = Material.matchMaterial(materialName == null ? "" : materialName);
+private ItemStack buildFromConfigMaterial(org.bukkit.configuration.ConfigurationSection entry,
+  String canonicalId, List<String> skipped) {
+    String materialName = entry.getString("material");
+    Material material = Material.matchMaterial(materialName == null ? "" : materialName);
   if (material == null || material.isAir() || !material.isItem()) {
   skipped.add(canonicalId + " (invalid material: '" + materialName + "')");
   return null;
   }
 
-  int amount = Math.max(1, section.getInt(path + ".amount", 1));
+  int amount = Math.max(1, entry.getInt("amount", 1));
   ItemStack stack = new ItemStack(material, amount);
 
-  int modelData = section.getInt(path + ".custom-model-data", 0);
+  int modelData = entry.getInt("custom-model-data", 0);
   if (modelData > 0) {
   stack.editMeta(meta -> meta.setCustomModelData(modelData));
   }
 
-  String name = section.getString(path + ".item-name");
+  String name = entry.getString("item-name");
   if (name != null && !name.isEmpty()) {
   stack.editMeta(meta -> meta.displayName(
   net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().deserialize(name)));

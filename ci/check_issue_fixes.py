@@ -175,7 +175,18 @@ check(
 )
 check(
     '#34 loadConfigOverrides accepts a material: key to define an item',
-    '".material"' in overrides,
+    'getString("material")' in overrides,
+)
+check(
+    '#34 loadConfigOverrides reads each entry through its own config section',
+    'getConfigurationSection(canonicalId)' in overrides,
+    'reading "discovered-items.<id>.<key>" off the parent section silently '
+    'returns null for a plain value, so hand-written items never registered',
+)
+check(
+    '#34 loadConfigOverrides does not build parent-relative key paths',
+    'section.getString("discovered-items.' not in overrides
+    and 'path + ".material"' not in overrides,
 )
 check(
     '#34 loadConfigOverrides validates the material it is given',

@@ -256,12 +256,15 @@ async function runTests() {
     if (!listWindow) throw new Error('no window');
 
     assert('GUI title contains "Custom Items"',
-      (getWindowTitle() || '').includes('Custom Items'),
-      `got title: ${getWindowTitle()}`);
+      JSON.stringify(getWindowTitle() || '').includes('Custom Items'),
+      `got title: ${JSON.stringify(getWindowTitle())}`);
 
-    assert('List view has 54 slots',
-      bot.currentWindow?.slots?.length === 54,
-      `expected 54, got ${bot.currentWindow?.slots?.length}`);
+    // mineflayer's window.slots covers the container *and* the player's own
+    // inventory, so a 54-slot GUI reports 90 slots here. The container size is
+    // where the player inventory begins.
+    assert('List view is a 54-slot container',
+      bot.currentWindow?.inventoryStart === 54,
+      `expected inventoryStart 54, got ${bot.currentWindow?.inventoryStart} (slots=${bot.currentWindow?.slots?.length})`);
 
     // The seeded, config-defined item must actually be registered.
     const seeded = bot.currentWindow?.slots?.[0];
