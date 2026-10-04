@@ -238,6 +238,43 @@ function deepIncludes(value, needle, depth = 0) {
   }
 }
 
+/**
+ * Concatenates the visible text of a chat component tree.
+ *
+ * Necessary because MiniMessage gradients emit one component per character, so
+ * "Custom Items" arrives as "C", "u", "s", "t"... and no individual string ever
+ * contains the phrase. Modern NBT also wraps every string as
+ * {type: 'string', value: 'x'}, so the text is only reachable by descending to
+ * the leaf. Colour, font and type keys are skipped so only rendered text is
+ * collected.
+ */
+function deepText(value, out = [], depth = 0) {
+  if (depth > 20 || value == null) return '';
+  if (typeof value === 'string') {
+    out.push(value);
+    return out.join('');
+  }
+  if (typeof value !== 'object') return '';
+  try {
+    if (Array.isArray(value)) {
+      value.forEach(v => deepText(v, out, depth + 1));
+      return out.join('');
+    }
+    for (const k of Object.keys(value)) {
+      if (k === 'color' || k === 'font' || k === 'type') continue;
+      deepText(value[k], out, depth + 1);
+    }
+  } catch (e) {
+    /* odd NBT can throw on property access */
+  }
+  return out.join('');
+}
+
+/** Visible text with whitespace removed, for phrase matching across components. */
+function flatText(value) {
+  return deepText(value).replace(/\s+/g, '');
+}
+
 async function runTests() {
  try {
  await waitForSpawn();
@@ -278,7 +315,7 @@ async function runTests() {
     // getWindowTitle() calls toString(), which yields "[object Object]" for a
     // ChatMessage, so walk the raw title object instead.
     assert('GUI title contains "Custom Items"',
-      deepIncludes(bot.currentWindow?.title, 'Custom Items'),
+      flatText(bot.currentWindow?.title).toLowerCase().includes('customitems'),
       `got title: ${JSON.stringify(bot.currentWindow?.title)}`);
 
     // mineflayer's window.slots covers the container *and* the player's own
@@ -316,8 +353,8 @@ async function runTests() {
       !getSlotItem(50), `unexpected ${getSlotItem(50)?.name} at 50`);
 
     assert('page info reports the discovered-item count',
-      deepIncludes(getSlotItem(49), 'custom items discovered'),
-      'page info lore did not mention "custom items discovered"');
+      flatText(getSlotItem(49)).toLowerCase().includes('customitemsdiscovered'),
+      `page info text: ${JSON.stringify(flatText(getSlotItem(49)))}`);
 
     // Detail view
     await clickSlot(bot.currentWindow, 0);
