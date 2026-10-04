@@ -989,7 +989,10 @@ jobs:
   mineflayer-ingame-test:
     runs-on: ubuntu-latest
     needs: build
-    timeout-minutes: 30
+    # Raised from 30: this job now runs both the mineflayer GUI suite and the
+    # long RCON suite, and the RCON suite stretches past 30 minutes whenever the
+    # cloud dashboard is slow or unreachable.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 25
@@ -1052,6 +1055,21 @@ jobs:
           if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
             echo "Server failed to start"; cat logs/latest.log | tail -40; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
+      - name: Install mineflayer deps
+        run: |
+          cd .github/scripts
+          npm install --no-audit --no-fund
+      - name: Run mineflayer GUI tests
+        run: |
+          # Runs before test_rcon.py on purpose. The RCON suite takes well over
+          # 30 minutes when the cloud dashboard is unreachable, which used to hit
+          # the job timeout before these steps ran at all. Doing the short GUI
+          # suite first means it still gets exercised on a fresh server.
+          #
+          # It also drives a real player, so /ah and the GUI paths are reachable
+          # here; test_rcon.py only exercises the console, which /ah refuses.
+          cd .github/scripts
+          node test_gui_mineflayer.js
       - name: Run RCON in-game tests
         run: |
           python3 test_rcon.py
@@ -1060,16 +1078,6 @@ jobs:
           echo "=== Server exceptions ==="
           grep -i "exception\|error.*aurel\|severe" logs/latest.log | grep -vi "vault\|registration attempt\|PLEASE RESTART\|io_uring\|cloud dashboard" | head -30 || echo "No exceptions"
           exit $RC
-      - name: Install mineflayer deps
-        run: |
-          cd .github/scripts
-          npm install --no-audit --no-fund
-      - name: Run mineflayer GUI tests
-        run: |
-          # Drives a real player, so /ah and the GUI paths are reachable at all.
-          # test_rcon.py only exercises the console, which /ah refuses.
-          cd .github/scripts
-          node test_gui_mineflayer.js
       - name: Stop server
         if: always()
         run: |
