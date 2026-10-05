@@ -60,16 +60,26 @@ function extractLore(item) {
 }
 
 function getSlotItem(slot) {
- if (!bot.currentWindow) return null;
- const item = bot.currentWindow.slots[slot];
- if (!item) return null;
- return {
- name: item.name,
- displayName: extractDisplayName(item),
- lore: extractLore(item),
- count: item.count,
- nbt: item.nbt,
- };
+  // Read bot.currentWindow at call time, never a captured reference: the GUI
+  // rebuilds its inventory on the tick after each click, so a window captured
+  // earlier no longer reflects what is on screen.
+  const win = bot.currentWindow;
+  if (!win || !win.slots) return null;
+  const item = win.slots[slot];
+  if (!item) return null;
+  return {
+    name: item.name,
+    displayName: extractDisplayName(item),
+    lore: extractLore(item),
+    count: item.count,
+    nbt: item.nbt,
+    // Exposed deliberately: the item's own components are where the custom
+    // name and lore actually live. Modern mineflayer does not populate nbt, so
+    // asserting on nbt alone silently reads undefined and passes nothing.
+    customName: item.customName,
+    customLore: item.customLore,
+    raw: item,
+  };
 }
 
 function getAllWindowItems() {
@@ -101,8 +111,76 @@ function findSlotByDisplayName(partialName) {
  return -1;
 }
 
+/**
+ * Closes any open window and waits until the client agrees it is gone.
+ *
+ * Awaiting this matters: the server processes the close on the next tick, so a
+ * fixed sleep after it races, and the following command can arrive while the
+ * old window is still open. That makes the next windowOpen never fire and every
+ * following assertion read a stale window.
+ */
+/**
+ * Polls until the open window satisfies a predicate.
+ *
+ * The Custom Items browser rebuilds its inventory on the tick after a click, so
+ * the window briefly closes and reopens. Reading at a fixed delay therefore
+ * catches that gap and reports every click as a failure, even though the GUI
+ * behaves correctly. Wait for the expected contents instead.
+ */
+async function waitForWindow(predicate, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const w = bot.currentWindow;
+    if (w && (!predicate || predicate(w))) return w;
+    await sleep(150);
+  }
+  return bot.currentWindow;
+}
+
+/**
+ * Clicks a slot and waits for the window to show the expected result.
+ */
+async function clickSlot(slot, predicate, timeoutMs = 10000) {
+  if (!bot.currentWindow) return null;
+  bot.clickWindow(slot, 0, 0);
+  await sleep(300);
+  return waitForWindow(predicate, timeoutMs);
+}
+
+/**
+ * Runs a command and waits for the window it opens.
+ */
+async function openGui(command, timeoutMs = 10000) {
+  await closeWindow();
+  runCommand(command);
+  const win = await waitForWindow(null, timeoutMs);
+  if (!win) throw new Error(`no window after /${command}`);
+  await sleep(400);
+  return win;
+}
+
 function closeWindow() {
-  if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+  return new Promise((resolve) => {
+    if (!bot.currentWindow) return resolve();
+    const win = bot.currentWindow;
+    const done = () => resolve();
+    const poll = setInterval(() => {
+      if (bot.currentWindow !== win) {
+        clearInterval(poll);
+        done();
+      }
+    }, 100);
+    setTimeout(() => {
+      clearInterval(poll);
+      done();
+    }, 3000);
+    try {
+      bot.closeWindow(win);
+    } catch (e) {
+      clearInterval(poll);
+      done();
+    }
+  });
 }
 
 /**
@@ -115,7 +193,7 @@ function closeWindow() {
  * it was traded for is actually there.
  */
 async function testAuctionListingKeepsItem() {
-  closeWindow();
+  await closeWindow();
   await sleep(500);
 
   const ITEM = 'diamond_sword';
@@ -148,13 +226,7 @@ async function testAuctionListingKeepsItem() {
 
   // The listing must exist. Checked first because it is the half that used to
   // silently fail, leaving the player with nothing.
-  closeWindow();
-  await sleep(500);
-  runCommand('ah');
-  const ahWindow = await Promise.race([
-    new Promise(r => bot.once('windowOpen', w => r(w))),
-    sleep(4000).then(() => null)
-  ]);
+  const ahWindow = await openGui('ah');
 
   if (!ahWindow) {
     assert('auction GUI opens to confirm the listing', false, 'GUI did not open');
@@ -162,7 +234,7 @@ async function testAuctionListingKeepsItem() {
     const listed = (ahWindow.slots || []).some(s => s && s.name === ITEM);
     assert('auction house lists the diamond sword (item not lost)', listed,
       'slots=' + (ahWindow.slots || []).map(s => s && s.name).filter(Boolean).join(','));
-    closeWindow();
+    await closeWindow();
   }
 
   // And the item must have been taken out of the hand exactly once it was safe
@@ -184,34 +256,7 @@ async function testAuctionListingKeepsItem() {
  * originally written against and why every one of them failed.
  */
 async function openCustomItemsGUI(subcommand = 'gui') {
-  closeWindow();
-  await sleep(600);
-  runCommand(`customitems ${subcommand}`);
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('GUI did not open within 5s')), 5000);
-    bot.once('windowOpen', (window) => {
-      clearTimeout(timeout);
-      resolve(window);
-    });
-  });
-}
-
-async function clickSlot(window, slot) {
- return new Promise((resolve) => {
- const timeout = setTimeout(() => {
- resolve(bot.currentWindow || window);
- }, 2000);
- bot.once('windowOpen', (newWindow) => {
- clearTimeout(timeout);
- resolve(newWindow);
- });
- bot.clickWindow(slot, 0, 0, (err) => {
- if (err) {
- clearTimeout(timeout);
- setTimeout(() => resolve(bot.currentWindow || window), 500);
- }
- });
- });
+  return openGui(`customitems ${subcommand}`);
 }
 
 async function sleep(ms) {
@@ -295,15 +340,9 @@ async function runTests() {
   await sleep(2500);
 
   // Bare `/customitems` should open the browser rather than print usage.
-  closeWindow();
-  await sleep(600);
   let listWindow = null;
   try {
-    runCommand('customitems');
-    listWindow = await new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('no window within 5s')), 5000);
-      bot.once('windowOpen', w => { clearTimeout(t); resolve(w); });
-    });
+    listWindow = await openGui('customitems');
   } catch (e) {
     assert('bare /customitems opens the browser', false, e.message);
   }
@@ -332,8 +371,12 @@ async function runTests() {
       `slot 0 expected ${SEEDED}, got ${seeded && seeded.name}`);
 
     assert('seeded item lore carries its canonical id',
-      deepIncludes(seeded, 'ci_seed_sword'),
-      'lore did not contain ci_seed_sword');
+      flatText(seeded?.customLore).includes('ci_seed_sword'),
+      `lore=${JSON.stringify(flatText(seeded?.customLore))}`);
+
+    assert('seeded item is renamed from config',
+      flatText(seeded?.customName).replace(/\s+/g, '').includes('CISeedSword'),
+      `name=${JSON.stringify(flatText(seeded?.customName))}`);
 
     // Navigation bar, by exact slot.
     assert('slot 45 is the Back button (barrier)',
@@ -352,12 +395,30 @@ async function runTests() {
     assert('slot 50 has no Next arrow on a single page',
       !getSlotItem(50), `unexpected ${getSlotItem(50)?.name} at 50`);
 
+    // Assert against the lore field itself. Flattening the whole item puts the
+    // lore and the name in Object.keys order, so the words either side of the
+    // count are never adjacent and a substring search across the lot fails even
+    // when both are present.
+    // Do not assert a total. Listing an item at the auction house also registers an
+    // aurelium:<material>_auction_id entry, so the count legitimately grows once
+    // that test has run. Use deepText, not flatText: flatText strips the spaces
+    // and the words either side of the number stop matching.
+    const pageLore = deepText(getSlotItem(49)?.customLore);
     assert('page info reports the discovered-item count',
-      flatText(getSlotItem(49)).toLowerCase().includes('customitemsdiscovered'),
-      `text=${JSON.stringify(flatText(getSlotItem(49)))} nbt=${JSON.stringify(getSlotItem(49)?.nbt)}`);
+      /\b[1-9][0-9]*\s+custom items discovered\b/.test(pageLore),
+      `lore=${JSON.stringify(pageLore)}`);
+
+    assert('page info shows the page numbers',
+      flatText(getSlotItem(49)?.customName).replace(/\s+/g, '').includes('1/1'),
+      `name=${JSON.stringify(flatText(getSlotItem(49)?.customName))}`);
+
+    assert('nav items carry their labels',
+      flatText(getSlotItem(45)?.customName).includes('Back')
+      && flatText(getSlotItem(53)?.customName).includes('Rescan'),
+      `back=${JSON.stringify(flatText(getSlotItem(45)?.customName))} rescan=${JSON.stringify(flatText(getSlotItem(53)?.customName))}`);
 
     // Detail view
-    await clickSlot(bot.currentWindow, 0);
+    await clickSlot(0, w => w.slots && !!w.slots[13]);
     await sleep(1200);
 
     assert('clicking an item opens the detail view',
@@ -379,30 +440,30 @@ async function runTests() {
 
     // Toggle must flip both ways and be reflected in the button material.
     const before = getSlotItem(29)?.name;
-    await clickSlot(bot.currentWindow, 29);
-    await sleep(1500);
+    await clickSlot(29, w => w.slots && !!w.slots[29] && w.slots[29].name === 'gray_dye');
+    await sleep(300);
     const after = getSlotItem(29)?.name;
     assert('toggle flips the button state',
       after !== before && ['lime_dye', 'gray_dye'].includes(after),
       `before=${before} after=${after}`);
 
-    await clickSlot(bot.currentWindow, 29);
-    await sleep(1500);
+await clickSlot(29, w => w.slots && !!w.slots[29] && w.slots[29].name === 'lime_dye');
+    await sleep(300);
     assert('toggle flips back',
       getSlotItem(29)?.name === before,
       `expected ${before}, got ${getSlotItem(29)?.name}`);
 
     // Back to the list.
-    await clickSlot(bot.currentWindow, 45);
-    await sleep(1200);
+    await clickSlot(45, w => w.slots && !!w.slots[49]);
+    await sleep(600);
     assert('Back returns to the list view',
       !!getSlotItem(49), 'page info missing, still in detail view');
     assert('list view still shows the seeded item',
       getSlotItem(0)?.name === SEEDED, `got ${getSlotItem(0)?.name}`);
 
     // Rescan
-    await clickSlot(bot.currentWindow, 53);
-    await sleep(3000);
+    await clickSlot(53, w => w.slots && !!w.slots[49], 15000);
+    await sleep(600);
     assert('Rescan completes and reopens the list',
       !!bot.currentWindow && !!getSlotItem(49),
       'no list window after rescan');
@@ -411,27 +472,27 @@ async function runTests() {
   }
 
   // `/customitems gui <page>` must clamp rather than throw on a bad page.
-  closeWindow();
+  await closeWindow();
   await sleep(600);
   try {
     runCommand('customitems gui 99');
     await sleep(2000);
     assert('out-of-range page does not break the GUI',
       !!bot.currentWindow, 'no window for /customitems gui 99');
-    closeWindow();
+    await closeWindow();
   } catch (e) {
     assert('out-of-range page does not break the GUI', false, e.message);
   }
 
   // `/customitems gui abc` must not throw on a non-numeric page.
-  closeWindow();
+  await closeWindow();
   await sleep(600);
   try {
     runCommand('customitems gui abc');
     await sleep(2000);
     assert('non-numeric page falls back instead of erroring',
       !!bot.currentWindow, 'no window for /customitems gui abc');
-    closeWindow();
+    await closeWindow();
   } catch (e) {
     assert('non-numeric page falls back instead of erroring', false, e.message);
   }
@@ -442,26 +503,17 @@ async function runTests() {
   assert('/customitems list still answers without opening a GUI',
     bot.currentWindow === null, 'list unexpectedly opened a window');
 
- // Test 19-21: Market and AH GUIs
- closeWindow();
- runCommand('market');
- try {
- const marketWindow = await Promise.race([
- new Promise(r => bot.once('windowOpen', w => r(w))),
- sleep(3000).then(() => null)
- ]);
- assert('Market GUI opens', marketWindow !== null, 'Market GUI did not open');
- if (marketWindow) closeWindow();
- } catch { assert('Market GUI opens (skipped)', true, ''); }
-
-runCommand('ah');
+// Test 19-21: Market and AH GUIs
   try {
-  const ahWindow = await Promise.race([
-  new Promise(r => bot.once('windowOpen', w => r(w))),
-  sleep(3000).then(() => null)
-  ]);
+  const marketWindow = await openGui('market');
+  assert('Market GUI opens', marketWindow !== null, 'Market GUI did not open');
+  if (marketWindow) await closeWindow();
+  } catch { assert('Market GUI opens (skipped)', true, ''); }
+
+  try {
+  const ahWindow = await openGui('ah');
   assert('Auction House GUI opens', ahWindow !== null, 'AH GUI did not open');
-  if (ahWindow) closeWindow();
+  if (ahWindow) await closeWindow();
   } catch { assert('Auction House GUI opens (skipped)', true, ''); }
 
   // Test: listing an item must not destroy it (issue #33 regression).

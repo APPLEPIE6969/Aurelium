@@ -33,13 +33,23 @@ public class CustomItemsGUI extends GUIHolder {
  private final Map<Integer, CustomMarketItem> itemSlots = new HashMap<>();
  private CustomMarketItem selectedItem = null;
 
- public CustomItemsGUI(AurelEconomy plugin, int page) {
- this.plugin = plugin;
- this.page = page;
- this.inventory = plugin.getServer().createInventory(this, 54,
- MM.deserialize("<gradient:gold:yellow><bold>Custom Items</bold></gradient>"));
- setupItems();
- }
+public CustomItemsGUI(AurelEconomy plugin, int page) {
+  this(plugin, page, null);
+  }
+
+  /**
+   * @param selected item to open directly on its detail view, or null for the list
+   */
+  public CustomItemsGUI(AurelEconomy plugin, int page, CustomMarketItem selected) {
+  this.plugin = plugin;
+  this.page = page;
+  this.inventory = plugin.getServer().createInventory(this, 54,
+  MM.deserialize("<gradient:gold:yellow><bold>Custom Items</bold></gradient>"));
+  setupItems();
+  if (selected != null) {
+  showDetail(null, selected);
+  }
+  }
 
  public void setupItems() {
  itemSlots.clear();
@@ -130,10 +140,36 @@ public class CustomItemsGUI extends GUIHolder {
  }
  }
 
- private void showDetail(Player player, CustomMarketItem item) {
- selectedItem = item;
- inventory.clear();
- itemSlots.clear();
+/**
+ * Rebuilds this GUI's contents in a fresh inventory and shows it.
+ *
+ * <p>Mutating the inventory a player already has open is not re-sent by the
+ * server, so the client is left looking at stale contents and the window appears
+ * to close. Bukkit also refuses to re-open the very same Inventory instance, so
+ * the rebuild has to happen on a new instance — which is what every working
+ * navigation path in this class already did.
+ */
+private void reopen(Player player) {
+  // Must not close/re-open inside the InventoryClickEvent itself: Bukkit
+  // processes the event and a close issued during it cancels the matching open,
+  // which leaves the player looking at no window at all. Defer one tick so the
+  // click finishes first. Database work such as handleToggle makes this matter.
+  //
+  // Capture page and selection now: by the time the task runs, this instance may
+  // have been rebuilt or reset, and reading them then picks up the wrong state.
+  final int targetPage = page;
+  final CustomMarketItem target = selectedItem;
+  plugin.getServer().getScheduler().runTask(plugin, () -> {
+  if (!player.isOnline()) return;
+  player.closeInventory();
+  new CustomItemsGUI(plugin, targetPage, target).open(player);
+  });
+}
+
+private void showDetail(Player player, CustomMarketItem item) {
+  selectedItem = item;
+  inventory.clear();
+  itemSlots.clear();
 
  ItemStack display = item.getItemStack().clone();
  ItemMeta meta = display.getItemMeta();
@@ -195,34 +231,37 @@ public class CustomItemsGUI extends GUIHolder {
  return;
  }
 
- if (selectedItem != null) {
- // Detail view — refresh selectedItem from registry to avoid stale state
- CustomMarketItem currentItem = plugin.getCustomItemRegistry().getById(selectedItem.getCanonicalId());
- if (currentItem == null) {
- // Item was removed, go back to list
- selectedItem = null;
- setupItems();
- return;
- }
- selectedItem = currentItem;
+if (selectedItem != null) {
+  // Detail view — refresh selectedItem from registry to avoid stale state
+  CustomMarketItem currentItem = plugin.getCustomItemRegistry().getById(selectedItem.getCanonicalId());
+  if (currentItem == null) {
+  // Item was removed, go back to list
+  selectedItem = null;
+  setupItems();
+  reopen(player);
+  return;
+  }
+  selectedItem = currentItem;
 
- if (rawSlot == 45) {
- // Back to list
- selectedItem = null;
- setupItems();
- } else if (rawSlot == 29) {
- // Toggle
- handleToggle(player, selectedItem);
- // Refresh detail view with updated item
- CustomMarketItem updated = plugin.getCustomItemRegistry().getById(selectedItem.getCanonicalId());
- if (updated != null) selectedItem = updated;
- showDetail(player, selectedItem);
- } else if (rawSlot == 33) {
- // Edit price via chat prompt
- handleEditPrice(player, selectedItem);
- }
- return;
- }
+  if (rawSlot == 45) {
+  // Back to list
+  selectedItem = null;
+  setupItems();
+  reopen(player);
+  } else if (rawSlot == 29) {
+  // Toggle
+  handleToggle(player, selectedItem);
+  // Refresh detail view with updated item
+  CustomMarketItem updated = plugin.getCustomItemRegistry().getById(selectedItem.getCanonicalId());
+  if (updated != null) selectedItem = updated;
+  showDetail(player, selectedItem);
+  reopen(player);
+  } else if (rawSlot == 33) {
+  // Edit price via chat prompt
+  handleEditPrice(player, selectedItem);
+  }
+  return;
+  }
 
  // List view
  if (rawSlot == 45) {
@@ -248,10 +287,14 @@ public class CustomItemsGUI extends GUIHolder {
  player.sendMessage(MM.deserialize("<aqua>[CustomItems]</aqua> <green>Rescan complete!</green>"));
  new CustomItemsGUI(plugin, 0).open(player);
  }, 1L);
- } else if (itemSlots.containsKey(rawSlot)) {
- showDetail(player, itemSlots.get(rawSlot));
- }
- }
+} else if (itemSlots.containsKey(rawSlot)) {
+  // Reopen on the detail view for the clicked item. Mutating the open inventory
+  // in place is not re-sent to the client, and Bukkit will not re-open the same
+  // Inventory instance, so the rebuild must happen on a new one.
+  selectedItem = itemSlots.get(rawSlot);
+  reopen(player);
+  }
+  }
 
  private void handleToggle(Player player, CustomMarketItem item) {
  boolean newState = !item.isEnabled();

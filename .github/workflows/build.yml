@@ -1105,12 +1105,23 @@ jobs:
       - name: Start server
         run: |
           echo "eula=true" > eula.txt
-          cat > server.properties << 'PROPS'
+cat > server.properties << 'PROPS'
           online-mode=false
           server-port=25565
           enable-rcon=true
           rcon.port=25575
           rcon.password=test
+          # The GUI suite runs a bot that stands still for minutes at a time.
+          # Without these it gets killed by mobs mid-test, which closes the
+          # window and makes GUI assertions fail for no real reason. Note that
+          # slimes still spawn on peaceful and ignore spawn-monsters, so the
+          # existing ones are cleared explicitly after startup.
+          difficulty=peaceful
+          spawn-monsters=false
+          spawn-animals=false
+          spawn-npcs=false
+          do-daylight-cycle=false
+          keepInventory=true
           PROPS
           java -Xmx2G -jar paper.jar --nogui &
           SERVER_PID=$!
@@ -1122,6 +1133,10 @@ jobs:
           if ! grep -q "Done (" logs/latest.log 2>/dev/null; then
             echo "Server failed to start"; cat logs/latest.log | tail -40; kill $SERVER_PID 2>/dev/null || true; exit 1
           fi
+          # Peaceful still spawns slimes and they ignore spawn-monsters once they
+          # exist, so clear them or the bot gets killed mid-assertion.
+          echo "kill @e[type=!player]" | timeout 30 nc -q1 127.0.0.1 25565 2>/dev/null || true
+          sleep 2
       - name: Install mineflayer deps
         run: |
           cd .github/scripts

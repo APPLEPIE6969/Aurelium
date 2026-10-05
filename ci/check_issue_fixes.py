@@ -281,6 +281,57 @@ for slot, what in ((45, 'Back'), (49, 'page info'), (53, 'Rescan')):
         'asserting the wrong slots is how these tests passed while broken',
     )
 
+# --------------------------------------------------------------------------
+# CustomItemsGUI closed instead of navigating, because it mutated the open
+# inventory in place. Bukkit does not re-send an open inventory, and refuses to
+# re-open the same instance, so every in-place rebuild silently closed the GUI.
+# --------------------------------------------------------------------------
+
+cig = strip_comments(read('src/main/java/com/aureleconomy/gui/CustomItemsGUI.java'))
+
+check(
+    'CustomItemsGUI has a reopen helper for in-place rebuilds',
+    'private void reopen(Player player)' in cig,
+)
+check(
+    'CustomItemsGUI reopens on a new GUI instance, not the same inventory',
+    re.search(r'new CustomItemsGUI\(plugin, targetPage, target\)\.open\(player\)', cig) is not None,
+    'Player.openInventory on the already-open instance is a no-op, so the window '
+    'appears to close instead of showing the next view',
+)
+check(
+    'CustomItemsGUI defers the reopen off the click event',
+    re.search(r'runTask\(plugin, \(\) -> \{[^}]*closeInventory', cig, flags=re.S) is not None,
+    'closing inside an InventoryClickEvent cancels the matching open',
+)
+check(
+    'CustomItemsGUI can be constructed already showing a detail view',
+    re.search(r'CustomItemsGUI\(AurelEconomy plugin, int page, CustomMarketItem selected\)', cig) is not None,
+    'setupItems() clears selectedItem, so the rebuild needs to re-apply it',
+)
+
+# The GUI suite must wait for the rebuilt window rather than a fixed delay, since
+# the rebuild happens a tick after the click.
+check(
+    'the GUI suite waits for the rebuilt window instead of sleeping a fixed time',
+    'async function waitForWindow(' in gui_test and 'clickSlot(slot, predicate' in gui_test,
+    'a fixed delay reads the window during the close/reopen gap and reports every '
+    'click as a failure',
+)
+
+# The test server must not kill the bot mid-assertion.
+workflow = read('.github/workflows/build.yml')
+check(
+    'the GUI test server is set to peaceful',
+    'difficulty=peaceful' in workflow,
+    'the bot stood still for minutes and was killed by mobs, closing the window',
+)
+check(
+    'the GUI test server clears pre-existing mobs',
+    'kill @e[type=!player]' in workflow,
+    'slimes spawn on peaceful and ignore spawn-monsters once they exist',
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:
