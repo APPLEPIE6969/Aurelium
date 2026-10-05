@@ -109,8 +109,8 @@ BENIGN_LOG = re.compile(
     r'|cloud session'
     r'|registration attempt'
     r'|stale dashboard entry'
-    r'|webaureliummc'
-    r'|render\.com'
+    r'|aurelium\.alwaysdata\.net'
+    
     r'|Web API error'
     r'|\[Scanner\]'
     r'|\[CustomItems\] Failed to'

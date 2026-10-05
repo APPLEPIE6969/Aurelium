@@ -62,7 +62,7 @@ public class CloudSyncManager {
                 .connectTimeout(Duration.ofSeconds(60))
                 .build();
 
-        this.baseUrl = plugin.getConfig().getString("web.cloud.url", "https://webaureliummc.onrender.com");
+        this.baseUrl = plugin.getConfig().getString("web.cloud.url", "https://aurelium.alwaysdata.net");
         this.syncInterval = plugin.getConfig().getInt("web.cloud.sync-interval", 30);
 
         String id = plugin.getConfig().getString("web.cloud.server-id", "");
@@ -108,7 +108,7 @@ public class CloudSyncManager {
                             registrationFailed = true;
                             plugin.getComponentLogger().error("Cloud dashboard registration failed after " + MAX_REGISTRATION_FAILURES + " attempts (auth error): " + msg);
                             plugin.getComponentLogger().error("Your server-id has a stale entry in the dashboard with a different API key.");
-                            plugin.getComponentLogger().error("Fix: Delete the old server entry from the dashboard at https://webaureliummc.onrender.com, or set web.cloud.registration-secret in config.yml to match the dashboard's REGISTRATION_SECRET env var.");
+                            plugin.getComponentLogger().error("Fix: Delete the old server entry from the dashboard at https://aurelium.alwaysdata.net, or set web.cloud.registration-secret in config.yml to match the dashboard's REGISTRATION_SECRET env var.");
                         } else {
                             plugin.getComponentLogger().warn("Cloud dashboard registration failed (attempt " + registrationFailureCount + "/" + MAX_REGISTRATION_FAILURES + "): " + msg);
                         }
@@ -198,7 +198,7 @@ public class CloudSyncManager {
                         registrationFailed = true;
                         plugin.getComponentLogger().error("Cloud dashboard registration failed after " + MAX_REGISTRATION_FAILURES + " attempts (auth error): " + msg);
                         plugin.getComponentLogger().error("Your server-id has a stale entry in the dashboard with a different API key.");
-                        plugin.getComponentLogger().error("Fix: Delete the old server entry from the dashboard at https://webaureliummc.onrender.com, or set web.cloud.registration-secret in config.yml to match the dashboard's REGISTRATION_SECRET env var.");
+                        plugin.getComponentLogger().error("Fix: Delete the old server entry from the dashboard at https://aurelium.alwaysdata.net, or set web.cloud.registration-secret in config.yml to match the dashboard's REGISTRATION_SECRET env var.");
                     } else {
                         plugin.getComponentLogger().warn("Cloud dashboard registration failed (attempt " + registrationFailureCount + "/" + MAX_REGISTRATION_FAILURES + "): " + msg);
                         if (attempt < 3) {
