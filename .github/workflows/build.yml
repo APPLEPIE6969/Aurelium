@@ -872,7 +872,7 @@ jobs:
         run: |
           echo "Warming up cloud dashboard..."
           for i in $(seq 1 10); do
-            if curl -sS -f -o /dev/null --max-time 10 "https://webaureliummc.onrender.com"; then
+            if curl -sS -f -o /dev/null --max-time 10 "https://aurelium.alwaysdata.net/health"; then
               echo "Cloud dashboard is responsive"
               break
             fi
@@ -1105,7 +1105,7 @@ jobs:
       - name: Start server
         run: |
           echo "eula=true" > eula.txt
-cat > server.properties << 'PROPS'
+          cat > server.properties << 'PROPS'
           online-mode=false
           server-port=25565
           enable-rcon=true
@@ -1202,7 +1202,7 @@ cat > server.properties << 'PROPS'
       - name: Warm up cloud dashboard
         run: |
           for i in $(seq 1 10); do
-            if curl -sS -f -o /dev/null --max-time 10 "https://webaureliummc.onrender.com"; then
+            if curl -sS -f -o /dev/null --max-time 10 "https://aurelium.alwaysdata.net/health"; then
               echo "Cloud dashboard is responsive"
               break
             fi

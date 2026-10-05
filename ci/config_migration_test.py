@@ -145,7 +145,7 @@ def test_migration():
         errors.append("FAIL: web.cloud is missing/empty after migration")
     else:
         url = web_cloud.get("url", "")
-        if "webaureliummc" in url or url == "https://webaureliummc.onrender.com":
+        if "aurelium.alwaysdata.net" in url:
             print(f"PASS: web.cloud.url preserved ({url})")
         else:
             errors.append(f"FAIL: web.cloud.url = '{url}', expected cloud dashboard URL")
