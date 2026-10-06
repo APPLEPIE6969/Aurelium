@@ -141,9 +141,12 @@ def test_migration():
     else:
         url = web_cloud.get("url", "")
         if "aurelium.alwaysdata.net" in url:
-            print("PASS: web.cloud.url preserved (" + url + ")")
+            # The fixture starts on the retired host, so reaching the current one
+            # proves the startup rewrite ran and was persisted.
+            print("PASS: web.cloud.url migrated to the current dashboard (" + url + ")")
         else:
-            errors.append("FAIL: web.cloud.url = '" + url + "', expected cloud dashboard URL")
+            errors.append(
+                "FAIL: web.cloud.url = '" + url + "', expected it rewritten to the current dashboard")
 
     # 4. web.local should survive
     web_local = config.get("web", {}).get("local", {})

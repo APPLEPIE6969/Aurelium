@@ -84,7 +84,7 @@ web:
     session-timeout-minutes: 10
     cors-allowed-origins: []
   cloud:
-    url: "https://aurelium.alwaysdata.net"
+    url: "https://webaureliummc.onrender.com"
     server-id: ""
     api-key: ""
     sync-interval: 30

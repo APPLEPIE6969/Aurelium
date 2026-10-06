@@ -39,6 +39,25 @@ public class CloudSyncManager {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
+    /** Where the dashboard lives now. */
+    public static final String CURRENT_DASHBOARD_URL = "https://aurelium.alwaysdata.net";
+
+    /**
+     * Hosts that shipped as the configured default and have since been retired.
+     *
+     * <p>Bukkit never overwrites a user's config.yml, so an install upgrading from an earlier
+     * version still has the old host sitting in web.cloud.url. That host is gone, so the server
+     * would sync into a 503 for ever. getString(path, default) does not help: the key is present,
+     * so the default never applies. These entries are rewritten on startup instead.
+     *
+     * <p>Matching ignores scheme, trailing slashes and case, so http://, https:// and
+     * HTTPS://WebAureliumMC.onrender.com/ all resolve to the same host.
+     */
+    private static final String[] RETIRED_DASHBOARD_HOSTS = {
+            "webaureliummc.onrender.com",
+    };
+
     private final AurelEconomy plugin;
     private final HttpClient http;
     private final String baseUrl;
@@ -62,7 +81,7 @@ public class CloudSyncManager {
                 .connectTimeout(Duration.ofSeconds(60))
                 .build();
 
-        this.baseUrl = plugin.getConfig().getString("web.cloud.url", "https://aurelium.alwaysdata.net");
+        this.baseUrl = resolveDashboardUrl();
         this.syncInterval = plugin.getConfig().getInt("web.cloud.sync-interval", 30);
 
         String id = plugin.getConfig().getString("web.cloud.server-id", "");
@@ -85,6 +104,54 @@ public class CloudSyncManager {
         this.apiKey = key;
         this.prevApiKey = prevKey;
         this.registrationSecret = regSecret;
+    }
+
+    /**
+     * Reads web.cloud.url, rewriting it when it still points at a retired host.
+     *
+     * <p>Returns the URL to use for this session and persists the change, so the fix survives
+     * restarts and the user's file matches what the plugin is actually using.
+     */
+    private String resolveDashboardUrl() {
+        String configured = plugin.getConfig().getString("web.cloud.url", CURRENT_DASHBOARD_URL);
+        if (configured == null || configured.isBlank()) {
+            configured = CURRENT_DASHBOARD_URL;
+            plugin.getConfig().set("web.cloud.url", configured);
+            plugin.saveConfig();
+            return configured;
+        }
+
+        String trimmed = configured.trim();
+        String host = hostOf(trimmed);
+        for (String retired : RETIRED_DASHBOARD_HOSTS) {
+            if (retired.equals(host)) {
+                plugin.getConfig().set("web.cloud.url", CURRENT_DASHBOARD_URL);
+                plugin.saveConfig();
+                plugin.getComponentLogger().warn("Cloud dashboard URL '" + trimmed
+                        + "' has been retired. Updated web.cloud.url to " + CURRENT_DASHBOARD_URL
+                        + ". This is expected when upgrading from an older version.");
+                return CURRENT_DASHBOARD_URL;
+            }
+        }
+        // Not retired: respect whatever the admin chose, including a self-hosted dashboard.
+        return trimmed;
+    }
+
+    /** Host portion of a URL, lower-cased, for comparing against the retired list. */
+    private static String hostOf(String url) {
+        String rest = url;
+        int schemeEnd = rest.indexOf("://");
+        if (schemeEnd >= 0) {
+            rest = rest.substring(schemeEnd + 3);
+        }
+        int cut = rest.length();
+        for (char c : new char[]{'/', '?', '#', ':'}) {
+            int i = rest.indexOf(c);
+            if (i >= 0 && i < cut) {
+                cut = i;
+            }
+        }
+        return rest.substring(0, cut).toLowerCase(java.util.Locale.ROOT);
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────

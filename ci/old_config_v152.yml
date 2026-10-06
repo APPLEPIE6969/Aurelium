@@ -117,7 +117,7 @@ web:
 
   # Only used when mode is "cloud"
   cloud:
-    url: "https://aurelium.alwaysdata.net"
+    url: "https://webaureliummc.onrender.com"
     # Auto-generated on first run, don't share these
     server-id: ""
     api-key: ""
