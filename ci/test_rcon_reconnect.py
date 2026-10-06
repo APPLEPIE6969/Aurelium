@@ -129,18 +129,34 @@ def test_recovers_when_server_drops_socket():
     print('  PASS recovers from a dropped socket')
 
 
+def unused_port():
+    """A port with nothing listening on it.
+
+    Binding and immediately closing a listener is not enough: the accept thread
+    from make_stub keeps the fd alive, and on Linux the same port can be handed
+    back, so the connect succeeds and the test flakes. Asking the OS for an
+    ephemeral port and never binding it is reliable.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+    finally:
+        s.close()
+
+
 def test_dead_port_fails_fast():
-    srv, port = make_stub(False)
-    srv.close()
+    port = unused_port()
     start = time.time()
     try:
-        Rcon('127.0.0.1', port, 'pw', timeout=2)
+        r = Rcon('127.0.0.1', port, 'pw', timeout=2)
+        r.close()
     except OSError:
         elapsed = time.time() - start
         assert elapsed < 10, f'took {elapsed:.1f}s to fail'
         print(f'  PASS dead port refused in {elapsed:.2f}s')
         return
-    raise AssertionError('connected to a closed port')
+    raise AssertionError('connected to a port with no listener')
 
 
 if __name__ == '__main__':
