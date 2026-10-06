@@ -56,6 +56,11 @@ jobs:
           # into a BrokenPipeError.
           echo "=== ci/test_rcon_reconnect.py ==="
           python3 ci/test_rcon_reconnect.py
+          # The suite verifies persisted state directly, and does so against
+          # SQLite or MySQL depending on AURELIUM_DB_HOST. This checks the dialect
+          # selection so a silent no-read cannot pass as success again.
+          echo "=== ci/test_db_dialect.py ==="
+          python3 ci/test_db_dialect.py
       - name: Set up JDK ${{ matrix.jdk }}
         uses: actions/setup-java@v5
         with:
@@ -686,6 +691,13 @@ jobs:
           rcon.port=25575
           rcon.password=test
           PROPS
+          # Tell the suite to verify persisted state against MySQL rather than
+          # opening the plugin's SQLite file, which does not exist in this job.
+          echo "AURELIUM_DB_HOST=127.0.0.1" >> $GITHUB_ENV
+          echo "AURELIUM_DB_PORT=3306" >> $GITHUB_ENV
+          echo "AURELIUM_DB_USER=root" >> $GITHUB_ENV
+          echo "AURELIUM_DB_PASSWORD=test" >> $GITHUB_ENV
+          echo "AURELIUM_DB_NAME=aurelium_test" >> $GITHUB_ENV
           java -Xmx2G -jar paper.jar --nogui &
           SERVER_PID=$!
           echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV

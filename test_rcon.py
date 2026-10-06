@@ -47,9 +47,11 @@ AURELIUM_RCON_PORT, AURELIUM_RCON_PASSWORD.
 import json
 import os
 import re
+import shutil
 import socket
 import sqlite3
 import struct
+import subprocess
 import sys
 import time
 
@@ -360,24 +362,106 @@ def load_config():
     return cfg
 
 
+
+# ── backend-agnostic schema queries ─────────────────────────────────
+#
+# The suite originally spoke SQLite only. Under MySQL there is no file to open,
+# so every persisted-state assertion returned None and the economy checks failed
+# even though the plugin was writing correctly. These emit the right dialect for
+# whichever backend AURELIUM_DB_HOST selects.
+
+def _is_mysql():
+    return bool(os.environ.get('AURELIUM_DB_HOST'))
+
+
+def table_exists_sql(table):
+    if _is_mysql():
+        return (
+            'SELECT table_name FROM information_schema.tables '
+            f"WHERE table_schema = DATABASE() AND table_name = '{table}'"
+        )
+    return "SELECT name FROM sqlite_master WHERE type='table' " \
+           f"AND name='{table}'"
+
+
+def table_list_sql():
+    if _is_mysql():
+        return (
+            'SELECT table_name FROM information_schema.tables '
+            'WHERE table_schema = DATABASE()'
+        )
+    return "SELECT name FROM sqlite_master WHERE type='table'"
+
+
+def columns_sql(table):
+    if _is_mysql():
+        return (
+            'SELECT column_name FROM information_schema.columns '
+            f"WHERE table_schema = DATABASE() AND table_name = '{table}'"
+        )
+    return f'PRAGMA table_info({table})'
+
+
+def create_sql(table):
+    if _is_mysql():
+        return (
+            'SELECT create_statement FROM information_schema.tables '
+            f"WHERE table_schema = DATABASE() AND table_name = '{table}'"
+        )
+    return "SELECT sql FROM sqlite_master WHERE type='table' " \
+           f"AND name='{table}'"
+
+def mysql_config_from_env():
+    """Return MySQL connection details when the suite is pointed at a server.
+
+    Set by the mysql-test job. Returns None for the SQLite-backed jobs.
+    """
+    host = os.environ.get('AURELIUM_DB_HOST')
+    if not host:
+        return None
+    return {
+        'host': host,
+        'port': os.environ.get('AURELIUM_DB_PORT', '3306'),
+        'user': os.environ.get('AURELIUM_DB_USER', 'root'),
+        'password': os.environ.get('AURELIUM_DB_PASSWORD', 'test'),
+        'name': os.environ.get('AURELIUM_DB_NAME', 'aurelium_test'),
+    }
+
+
 class Database:
-    """Read-only view of the plugin's SQLite file, with async-write polling."""
+    """Read-only view of the plugin's database, with async-write polling.
+
+    Supports both backends. Under SQLite it opens the plugin's ``.db`` file
+    directly; under MySQL there is no file to open, so it queries the server
+    through ``mysql`` on PATH (the mysql-test job runs one in Docker). Without
+    this, every persisted-state assertion silently returned ``None`` under MySQL
+    and 17 economy checks failed even though the plugin was writing correctly.
+    """
 
     def __init__(self, path):
         self.path = path
-        self.available = os.path.isfile(path)
-        self._note = '' if self.available else f'not found at {path}'
+        self.mysql_config = mysql_config_from_env()
         self.conn = None
-        if self.available:
-            try:
-                # Opened read/write rather than mode=ro: a WAL database needs a
-                # writable -shm index even for readers. The suite only issues
-                # SELECTs, and the file is only opened if it already exists.
-                self.conn = sqlite3.connect(path, timeout=20)
-                self.conn.row_factory = sqlite3.Row
-            except sqlite3.Error as exc:
-                self.available = False
-                self._note = f'unopenable: {exc}'
+        self.available = False
+        self._note = ''
+
+        if self.mysql_config:
+            self.available = shutil.which('mysql') is not None
+            if not self.available:
+                self._note = 'mysql client not on PATH'
+        else:
+            self.available = os.path.isfile(path)
+            self._note = '' if self.available else f'not found at {path}'
+            if self.available:
+                try:
+                    # Opened read/write rather than mode=ro: a WAL database needs a
+                    # writable -shm index even for readers. The suite only issues
+                    # SELECTs, and the file is only opened if it already exists.
+                    self.conn = sqlite3.connect(path, timeout=20)
+                    self.conn.row_factory = sqlite3.Row
+                except sqlite3.Error as exc:
+                    self.available = False
+                    self._note = f'unopenable: {exc}'
 
     def close(self):
         if self.conn is not None:
@@ -386,9 +470,42 @@ class Database:
             except sqlite3.Error:
                 pass
 
+    def _mysql_query(self, sql):
+        """Run a SELECT through the mysql client and return list of tuples.
+
+        The client is invoked per query rather than holding a driver connection,
+        so there is no idle socket for MySQL's wait_timeout to close underneath
+        the suite - the same failure the plugin itself had to guard against.
+        """
+        cfg = self.mysql_config
+        cmd = [
+            'mysql',
+            f"--host={cfg['host']}",
+            f"--port={cfg['port']}",
+            f"--user={cfg['user']}",
+            f"--password={cfg['password']}",
+            '--batch', '--skip-column-names',
+            cfg['name'],
+            '--execute', sql,
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        if proc.returncode != 0:
+            return []
+        rows = []
+        for line in proc.stdout.decode('utf-8', errors='replace').splitlines():
+            if not line.strip():
+                continue
+            rows.append(tuple(line.split('\t')))
+        return rows
+
     def q(self, sql, args=()):
         if not self.available:
             return []
+        if self.mysql_config:
+            return self._mysql_query(sql)
         try:
             return self.conn.execute(sql, args).fetchall()
         except sqlite3.Error:
@@ -402,7 +519,15 @@ class Database:
         row = self.one(sql, args)
         if row is None:
             return default
-        return row[0]
+        value = row[0]
+        if self.mysql_config:
+            # The client returns everything as text; the suite compares balances
+            # against floats, so coerce the numeric shapes back.
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return value
+        return value
 
     def wait_for(self, predicate, timeout=25.0, interval=0.25):
         """Poll until predicate() is truthy. Returns its final value."""
@@ -414,7 +539,8 @@ class Database:
         return value
 
     def journal_mode(self):
-        if not self.available:
+        if not self.available or self.mysql_config:
+            # PRAGMA is SQLite-only.
             return None
         try:
             return self.scalar('PRAGMA journal_mode', default=None)
@@ -594,7 +720,7 @@ def sec_schema(t):
     expected = ['auction_offers', 'auctions', 'buy_orders', 'custom_items',
                 'database_info', 'offline_earnings', 'player_balances',
                 'players', 'price_history']
-    rows = t.db.q("SELECT name FROM sqlite_master WHERE type='table'")
+    rows = t.db.q(table_list_sql())
     present = {r['name'] for r in rows}
     for table in expected:
         t.check(table in present, f'table {table} exists',
@@ -645,11 +771,11 @@ def sec_schema(t):
     for table, expected_cols in columns.items():
         if table not in present:
             continue
-        cols = {r['name'] for r in t.db.q(f'PRAGMA table_info({table})')}
+        cols = {r[0] for r in t.db.q(columns_sql(table))}
         missing = expected_cols - cols
         t.check(not missing, f'{table} has all expected columns', f'missing {sorted(missing)}')
 
-    pk = t.db.q("SELECT sql FROM sqlite_master WHERE type='table' AND name='player_balances'")
+    pk = t.db.q(create_sql('player_balances'))
     t.check(bool(pk) and 'PRIMARY KEY' in (pk[0]['sql'] or '').upper(),
             'player_balances declares a composite primary key')
     dupes = t.db.q('SELECT uuid, currency, COUNT(*) c FROM player_balances '
@@ -697,8 +823,7 @@ def sec_economy(t):
         t.routed(command, f'/eco rejects {label} without a routing error')
     t.unchanged(PLAYER, cur, baseline,
                 'rejected /eco invocations left the balance untouched')
-    t.check(t.db.one("SELECT name FROM sqlite_master WHERE type='table' "
-                     "AND name='player_balances'") is not None,
+    t.check(t.db.one(table_exists_sql('player_balances')) is not None,
             'player_balances table survived the SQL-injection amount probe')
 
     # --- set / give / take arithmetic ---
@@ -819,8 +944,7 @@ def sec_auction(t):
                 'no auction rows created by console-sourced /ah invocations')
         t.check(t.db.scalar('SELECT COUNT(*) FROM auction_offers', default=0) == before_offers,
                 'no offer rows created by console-sourced /ah invocations')
-        t.check(t.db.one("SELECT name FROM sqlite_master WHERE type='table' "
-                         "AND name='auctions'") is not None,
+        t.check(t.db.one(table_exists_sql('auctions')) is not None,
                 'auctions table survived the /ah search injection probe')
         bad = t.db.q('SELECT id, expiration, start_time FROM auctions')
         t.check(all(r['expiration'] > r['start_time'] for r in bad),
@@ -867,8 +991,7 @@ def sec_orders(t):
     if t.db.available:
         t.check(t.db.scalar('SELECT COUNT(*) FROM buy_orders', default=0) == before,
                 'no order rows created by console-sourced /orders invocations')
-        t.check(t.db.one("SELECT name FROM sqlite_master WHERE type='table' "
-                         "AND name='buy_orders'") is not None,
+        t.check(t.db.one(table_exists_sql('buy_orders')) is not None,
                 'buy_orders table survived the /orders search injection probe')
         bad = t.db.q('SELECT id, amount_requested, amount_filled FROM buy_orders')
         t.check(all(r['amount_filled'] <= r['amount_requested'] for r in bad),
@@ -973,8 +1096,7 @@ def sec_player_only(t):
     # /bal against a bogus currency creates a row for that currency; ensure the
     # table is intact and no players rows were lost.
     if t.db.available:
-        t.check(t.db.one("SELECT name FROM sqlite_master WHERE type='table' "
-                         "AND name='players'") is not None,
+        t.check(t.db.one(table_exists_sql('players')) is not None,
                 'players table survived the /bal injection probe')
 
 
@@ -997,11 +1119,11 @@ def sec_adversarial(t):
     # A hostile but correctly-sized player name reaches getOfflinePlayer() and is
     # then bound as a PreparedStatement parameter. The tables must survive.
     if t.db.available:
-        tables_before = len(t.db.q("SELECT name FROM sqlite_master WHERE type='table'"))
+        tables_before = len(t.db.q(table_list_sql()))
         rows_before = t.db.scalar('SELECT COUNT(*) FROM players', default=0)
         t.cmd(f'eco set {INJECT_NAME} 42')
         time.sleep(2.5)
-        tables_after = len(t.db.q("SELECT name FROM sqlite_master WHERE type='table'"))
+        tables_after = len(t.db.q(table_list_sql()))
         rows_after = t.db.scalar('SELECT COUNT(*) FROM players', default=0)
         t.check(tables_after == tables_before,
                 'injected player name did not drop any table',
