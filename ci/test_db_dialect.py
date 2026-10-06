@@ -6,10 +6,15 @@ SQLite path (used by every other job) is unchanged.
 """
 import importlib.util
 import os
+import shutil
 import sys
 
-REPO = r"D:\Aurelium-plugin"
-spec = importlib.util.spec_from_file_location("test_rcon", os.path.join(REPO, "test_rcon.py"))
+# Resolve the repo from this file rather than hardcoding a path: the check runs
+# on Linux CI, where a Windows path does not exist.
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+spec = importlib.util.spec_from_file_location(
+    "test_rcon", os.path.join(REPO, "test_rcon.py")
+)
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
@@ -66,7 +71,7 @@ check("sqlite conn not opened in mysql mode", db.conn is None)
 db.close()
 
 os.environ.pop("AURELIUM_DB_HOST", None)
-db2 = mod.Database(r"D:\nonexistent\database.db")
+db2 = mod.Database(os.path.join(os.sep, "nonexistent-aurelium-check", "database.db"))
 check("sqlite mode selected", db2.mysql_config is None)
 check("missing sqlite file marks unavailable", db2.available is False, db2._note)
 db2.close()
@@ -90,7 +95,6 @@ check("journal_mode is None under mysql", db3.journal_mode() is None)
 db3.close()
 
 print("\n=== without a mysql client the suite must report unavailable, not lie ===")
-import shutil
 if shutil.which("mysql") is None:
     db4 = mod.Database("x.db")
     check("unavailable without the client", db4.available is False, db4._note)
