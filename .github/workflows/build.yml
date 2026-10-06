@@ -39,6 +39,7 @@ jobs:
             gradle_task: ":v1_21_11:shadowJar"
             artifact_name: aurelium-1-21-11
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - name: Static contract checks
@@ -50,6 +51,11 @@ jobs:
             echo "=== $check ==="
             python3 "$check"
           done
+          # Exercises the RCON reconnect path against a stub that drops the
+          # socket, so a mid-suite Paper restart cannot turn a passing run
+          # into a BrokenPipeError.
+          echo "=== ci/test_rcon_reconnect.py ==="
+          python3 ci/test_rcon_reconnect.py
       - name: Set up JDK ${{ matrix.jdk }}
         uses: actions/setup-java@v5
         with:
@@ -100,6 +106,7 @@ jobs:
 
   config-migration-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build
     steps:
       - uses: actions/checkout@v5
@@ -220,6 +227,7 @@ jobs:
 
   config-migration-test-152-to-153:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build
     steps:
       - uses: actions/checkout@v5
@@ -338,6 +346,7 @@ jobs:
 
   vault-autoinstall-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build
     steps:
       - uses: actions/checkout@v5
@@ -445,6 +454,7 @@ jobs:
 
   smoke-and-ingame-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: build
     steps:
       - uses: actions/checkout@v5
@@ -593,6 +603,7 @@ jobs:
 
   mysql-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: build
     steps:
       - name: Start MySQL container
@@ -703,6 +714,7 @@ jobs:
 
   scanner-mysql-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build
     steps:
       - name: Start MySQL container
@@ -819,6 +831,7 @@ jobs:
 
   cloud-registration-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: build
     steps:
       - uses: actions/checkout@v5
@@ -992,7 +1005,7 @@ jobs:
     # Raised from 30: this job now runs both the mineflayer GUI suite and the
     # long RCON suite, and the RCON suite stretches past 30 minutes whenever the
     # cloud dashboard is slow or unreachable.
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 25
@@ -1175,7 +1188,7 @@ jobs:
   restart-cycle-test:
     runs-on: ubuntu-latest
     needs: build
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 25

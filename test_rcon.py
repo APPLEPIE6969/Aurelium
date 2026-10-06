@@ -149,18 +149,52 @@ class RconError(Exception):
 
 class Rcon:
     def __init__(self, host, port, password, timeout=15):
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.settimeout(timeout)
-        self.sock.connect((host, port))
+        self.host = host
+        self.port = port
+        self.password = password
+        self.timeout = timeout
         self._req_id = 1
-        if not self._login(password):
-            raise RconError('authentication failed')
+        self.sock = self._connect()
 
-    def _read_packet(self):
+    def _connect(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(self.timeout)
+        sock.connect((self.host, self.port))
+        if not self._login(sock):
+            raise RconError('authentication failed')
+        return sock
+
+    def _reconnect(self, attempts=3, delay=5.0):
+        """Rebuild the socket after the server dropped us.
+
+        A Paper restart (or a runner being starved mid-suite) closes the RCON
+        socket. Without this the next send() raises BrokenPipeError and kills the
+        whole run, so a suite that already passed dozens of assertions reports as
+        a hard failure. Retry with backoff, then wait for the port to answer.
+        """
+        last = None
+        for attempt in range(1, attempts + 1):
+            try:
+                self.close()
+            except Exception:
+                pass
+            try:
+                self.sock = self._connect()
+                return True
+            except (OSError, RconError) as exc:
+                last = exc
+                print(f'  [rcon] reconnect {attempt}/{attempts} failed: {exc}',
+                      flush=True)
+                # The server may still be booting; give it room on later tries.
+                time.sleep(delay * attempt)
+        raise RconError(f'could not reconnect to {self.host}:{self.port}: {last}')
+
+    def _read_packet(self, sock=None):
+        sock = sock if sock is not None else self.sock
         try:
             raw = b''
             while len(raw) < 4:
-                chunk = self.sock.recv(4 - len(raw))
+                chunk = sock.recv(4 - len(raw))
                 if not chunk:
                     return None
                 raw += chunk
@@ -170,7 +204,7 @@ class Rcon:
             body = b''
             remaining = length
             while remaining > 0:
-                chunk = self.sock.recv(min(remaining, 8192))
+                chunk = sock.recv(min(remaining, 8192))
                 if not chunk:
                     return None
                 body += chunk
@@ -184,12 +218,12 @@ class Rcon:
         except OSError:
             return None
 
-    def _login(self, password):
-        body = password.encode('utf-8') + b'\x00'
+    def _login(self, sock):
+        body = self.password.encode('utf-8') + b'\x00'
         data = struct.pack('<ii', 1, 3) + body + b'\x00'
-        self.sock.sendall(struct.pack('<i', len(data)) + data)
+        sock.sendall(struct.pack('<i', len(data)) + data)
         for _ in range(4):
-            pkt = self._read_packet()
+            pkt = self._read_packet(sock)
             if pkt is None:
                 break
             if pkt[1] == 2:
@@ -197,7 +231,25 @@ class Rcon:
         return False
 
     def send(self, cmd):
-        """Run a command and return every byte the server sent back."""
+        """Run a command, reconnecting if the server dropped the socket.
+
+        _read_packet returns None both for a read timeout and for a peer that
+        closed the connection, so an empty reply is not by itself proof of a
+        dead server. Treat "no reply at all" as recoverable: reconnect and retry
+        once. A server that is merely slow for a command still answers on the
+        retry, and a server that is genuinely gone raises, which is clearer than
+        silently asserting against an empty string.
+        """
+        out = self._send_once(cmd)
+        if out.strip():
+            return out
+        print(f'  [rcon] {cmd.split()[0]!r} returned no reply; reconnecting',
+              flush=True)
+        self._reconnect()
+        return self._send_once(cmd)
+
+    def _send_once(self, cmd):
+        """One attempt. Raises OSError if the socket is already gone."""
         self._req_id += 1
         req_id = self._req_id
         body = cmd.encode('utf-8') + b'\x00'
@@ -222,7 +274,7 @@ class Rcon:
             if pkt is None:
                 break
             out.append(pkt[2])
-        self.sock.settimeout(15)
+        self.sock.settimeout(self.timeout)
         return '\n'.join(p for p in out if p)
 
     def close(self):
