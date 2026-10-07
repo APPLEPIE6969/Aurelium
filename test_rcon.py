@@ -394,12 +394,18 @@ def table_list_sql():
 
 
 def columns_sql(table):
+    """Column names as the FIRST field of each row, on either backend.
+
+    SQLite's PRAGMA table_info returns (cid, name, type, ...) so the name is at
+    index 1, while information_schema.columns returns the name at index 0.
+    Selecting the name alone on both keeps the caller dialect-independent.
+    """
     if _is_mysql():
         return (
             'SELECT column_name FROM information_schema.columns '
             f"WHERE table_schema = DATABASE() AND table_name = '{table}'"
         )
-    return f'PRAGMA table_info({table})'
+    return f'SELECT name FROM pragma_table_info(\'{table}\')'
 
 
 def create_sql(table):
@@ -435,15 +441,31 @@ class Database:
     directly; under MySQL there is no file to open, so it queries the server
     through ``mysql`` on PATH (the mysql-test job runs one in Docker). Without
     this, every persisted-state assertion silently returned ``None`` under MySQL
-    and 17 economy checks failed even though the plugin was writing correctly.
+    and the economy checks failed even though the plugin was writing correctly.
     """
 
-    def __init__(self, path):
+    def __init__(self, path, expected_type=None):
         self.path = path
         self.mysql_config = mysql_config_from_env()
         self.conn = None
         self.available = False
         self._note = ''
+
+        # The plugin's configured backend is the source of truth. If it disagrees
+        # with what we were told to read, every assertion below is about to fail
+        # for the wrong reason, so say so loudly rather than reporting "not found".
+        if expected_type and self.mysql_config and expected_type.lower() != 'mysql':
+            self._note = (f'plugin is configured for {expected_type!r} but '
+                          f'AURELIUM_DB_HOST is set; refusing to read MySQL')
+        elif expected_type and not self.mysql_config and expected_type.lower() == 'mysql':
+            self._note = ('plugin is configured for mysql but AURELIUM_DB_HOST is '
+                          'not set, so the suite would look for a SQLite file that '
+                          'does not exist')
+
+        if self._note:
+            # Deliberately leave available False: pretending to work is worse.
+            self.available = False
+            return
 
         if self.mysql_config:
             self.available = shutil.which('mysql') is not None
@@ -1291,7 +1313,13 @@ def main():
     t = Suite()
     t.cfg = load_config()
     db_file = (t.cfg.get('database') or {}).get('file') or 'database.db'
-    t.db = Database(os.path.join(PLUGIN_DIR, db_file))
+    db_type = (t.cfg.get('database') or {}).get('type', 'sqlite')
+    t.db = Database(os.path.join(PLUGIN_DIR, db_file), expected_type=db_type)
+    if not t.db.available and t.db._note:
+        # Loud on purpose: a mis-wired harness reads as "the plugin is broken"
+        # when the truth is that the suite cannot see the database at all.
+        print(f"WARNING: persisted-state verification is unavailable: {t.db._note}",
+              file=sys.stderr)
 
     print(f"server dir : {SERVER_DIR}")
     print(f"plugin dir : {PLUGIN_DIR}")

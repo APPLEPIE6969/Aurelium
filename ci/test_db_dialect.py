@@ -34,8 +34,10 @@ for fn, arg in [(mod.table_exists_sql, "players"),
                 (mod.columns_sql, "players"),
                 (mod.create_sql, "players")]:
     sql = fn(arg) if arg else fn()
-    check(f"{fn.__name__} uses sqlite_master/PRAGMA",
-          "sqlite_master" in sql or "PRAGMA" in sql, sql[:70])
+    # PRAGMA table_info is unusable here because it puts the column *id* first;
+    # the SQLite branch selects the name alone instead.
+    check(f"{fn.__name__} stays on SQLite",
+          "information_schema" not in sql, sql[:70])
 
 print("\n=== mysql-test env selects information_schema ===")
 os.environ["AURELIUM_DB_HOST"] = "127.0.0.1"
@@ -76,6 +78,26 @@ check("sqlite mode selected", db2.mysql_config is None)
 check("missing sqlite file marks unavailable", db2.available is False, db2._note)
 db2.close()
 
+print("\n=== a harness/backend mismatch must refuse rather than read nothing ===")
+os.environ["AURELIUM_DB_HOST"] = "127.0.0.1"
+mismatch = mod.Database("x.db", expected_type="sqlite")
+check("plugin=sqlite but env says mysql -> unavailable",
+      mismatch.available is False, mismatch._note)
+mismatch.close()
+
+os.environ.pop("AURELIUM_DB_HOST", None)
+missing = mod.Database(os.path.join(os.sep, "nope-aurelium", "database.db"),
+                       expected_type="mysql")
+check("plugin=mysql but env missing -> says so, not 'not found at'",
+      missing.available is False and "AURELIUM_DB_HOST" in missing._note, missing._note)
+missing.close()
+
+os.environ["AURELIUM_DB_HOST"] = "127.0.0.1"
+agree = mod.Database("x.db", expected_type="mysql")
+check("plugin=mysql and env set -> no mismatch complaint",
+      "refusing" not in agree._note and "not set" not in agree._note, agree._note)
+agree.close()
+
 print("\n=== scalar coerces MySQL text to float ===")
 os.environ["AURELIUM_DB_HOST"] = "127.0.0.1"
 db3 = mod.Database("x.db")
@@ -102,6 +124,28 @@ if shutil.which("mysql") is None:
     db4.close()
 else:
     print("  SKIP (mysql client present on this machine)")
+
+print("\n=== SQLite column names must come back as names, not ids ===")
+# PRAGMA table_info returns (cid, name, type, ...) so index 0 is the column id.
+# Selecting the name alone on both backends keeps the caller dialect-independent.
+import sqlite3
+import tempfile
+
+os.environ.pop("AURELIUM_DB_HOST", None)
+_tmpdir = tempfile.mkdtemp()
+_dbpath = os.path.join(_tmpdir, "dialect.db")
+_conn = sqlite3.connect(_dbpath)
+_conn.execute("CREATE TABLE auction_offers (id INTEGER, auction_id INTEGER, amount REAL)")
+_conn.commit()
+_conn.close()
+
+_db = mod.Database(_dbpath)
+_rows = _db.q(mod.columns_sql("auction_offers"))
+_names = {r[0] for r in _rows}
+check("sqlite column names are names, not ids",
+      _names == {"id", "auction_id", "amount"}, str(sorted(_names)))
+check("no column id leaked into the set", 0 not in _names or len(_names) == 3, str(_names))
+_db.close()
 
 print()
 if failures:

@@ -693,11 +693,15 @@ jobs:
           PROPS
           # Tell the suite to verify persisted state against MySQL rather than
           # opening the plugin's SQLite file, which does not exist in this job.
-          echo "AURELIUM_DB_HOST=127.0.0.1" >> $GITHUB_ENV
-          echo "AURELIUM_DB_PORT=3306" >> $GITHUB_ENV
-          echo "AURELIUM_DB_USER=root" >> $GITHUB_ENV
-          echo "AURELIUM_DB_PASSWORD=test" >> $GITHUB_ENV
-          echo "AURELIUM_DB_NAME=aurelium_test" >> $GITHUB_ENV
+          # Must be exported into this shell, not appended to $GITHUB_ENV:
+          # $GITHUB_ENV only takes effect for *later* steps, and test_rcon.py
+          # runs in this one, so it was still looking for the SQLite file.
+          export AURELIUM_DB_HOST=127.0.0.1
+          export AURELIUM_DB_PORT=3306
+          export AURELIUM_DB_USER=root
+          export AURELIUM_DB_PASSWORD=test
+          export AURELIUM_DB_NAME=aurelium_test
+          echo "DB target: $AURELIUM_DB_HOST:$AURELIUM_DB_PORT/$AURELIUM_DB_NAME (client: $(command -v mysql || echo MISSING))"
           java -Xmx2G -jar paper.jar --nogui &
           SERVER_PID=$!
           echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
