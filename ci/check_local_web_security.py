@@ -81,10 +81,12 @@ check("InetSocketAddress is built from the configured host",
 
 # A wildcard is still allowed, but only with an explicit warning, because it is
 # a legitimate choice behind a TLS proxy.
+# ComponentLogger spells it warn, not warning - the other one is java.util.logging
+# via getLogger(), and using the wrong one does not compile.
 check("a wildcard bind warns about cleartext tokens",
       re.search(r'"0\.0\.0\.0"\.equals\(bindHost\)', server) is not None
-      and "warning(" in server_code,
-      "binding 0.0.0.0 no longer warns")
+      and re.search(r"getComponentLogger\(\)\.warn\(", server) is not None,
+      "binding 0.0.0.0 no longer warns via ComponentLogger.warn")
 
 # ── response hardening ──────────────────────────────────────────────────────
 for header in ("Content-Security-Policy", "X-Content-Type-Options",
@@ -144,6 +146,18 @@ check("revoking by token does not orphan the player index",
 # ── config ──────────────────────────────────────────────────────────────────
 check("config.yml still defaults the host to localhost",
       re.search(r'host:\s*"localhost"', read(CONFIG)) is not None)
+
+# ── logger API ──────────────────────────────────────────────────────────────
+# Paper's ComponentLogger has no warning(String); that spelling belongs to
+# java.util.logging via getLogger(). A wrong method name is a compile error on
+# all three JDK variants, and this caught one during review.
+ALLOWED = {"info", "warn", "error", "severe"}
+bad = set()
+for path in (SERVER, HANDLER, SESSIONS):
+    for m in re.finditer(r"getComponentLogger\(\)\.(\w+)\s*\(", read(path)):
+        if m.group(1) not in ALLOWED:
+            bad.add(f"{os.path.basename(path)}: {m.group(1)}")
+check("only real ComponentLogger methods are used", not bad, ", ".join(sorted(bad)))
 
 print()
 if failures:

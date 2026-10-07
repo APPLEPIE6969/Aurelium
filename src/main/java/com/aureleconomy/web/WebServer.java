@@ -78,7 +78,7 @@ public class WebServer {
             server.setExecutor(httpExecutor);
 
             if ("0.0.0.0".equals(bindHost) || "::".equals(bindHost)) {
-                plugin.getComponentLogger().warning(
+                plugin.getComponentLogger().warn(
                         "Web dashboard is bound to " + bindHost + ", so it is reachable from "
                                 + "every network interface. It is served over plain HTTP, so session "
                                 + "tokens travel in cleartext; put it behind a proxy with TLS or set "
