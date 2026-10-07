@@ -2092,3 +2092,12 @@ header {
         width: 98%;
     }
 }
+
+/* Previously an inline style attribute on the header logo icon.
+   Moved here so a strict Content-Security-Policy does not need
+   style-src 'unsafe-inline'. */
+.logo-icon-svg {
+    width: 24px;
+    height: 24px;
+    color: #f59e0b;
+}

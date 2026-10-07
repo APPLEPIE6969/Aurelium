@@ -10,13 +10,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <!-- Google Analytics 4 (GA4) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag() { dataLayer.push(arguments); }
-        gtag('js', new Date());
-        gtag('config', 'G-XXXXXXXXXX');
-    </script>
 </head>
 
 <body>
@@ -34,7 +27,7 @@
         <div class="header-left">
             <div class="logo">
                 <span class="logo-icon">
-                    <svg class="icon" style="width:24px;height:24px;color:#f59e0b" viewBox="0 0 24 24">
+                    <svg class="icon logo-icon-svg" viewBox="0 0 24 24">
                         <path d="M14.5 2l7.5 7.5-7 7-7.5-7.5z" />
                         <path d="M2 22l7-7" />
                         <path d="M11 13l3.5-3.5" />
@@ -160,7 +153,7 @@
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
                     <input type="text" id="orders-search" placeholder="Search by item or buyer..."
-                           autocomplete="off" oninput="handleOrdersSearch(this)">
+                           autocomplete="off" data-search="handleOrdersSearch">
                 </div>
             </div>
 
@@ -205,7 +198,7 @@
                         <circle cx="11" cy="11" r="8" />
                         <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
-                    <input type="text" id="stocks-search" placeholder="Search markets..." oninput="handleStocksSearch(this)">
+                    <input type="text" id="stocks-search" placeholder="Search markets..." data-search="handleStocksSearch">
                 </div>
             </div>
 
@@ -255,7 +248,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h3 id="buy-modal-title">Buy Item</h3>
-                <button class="modal-close" onclick="closeModal('buy-modal')" aria-label="Close">×</button>
+                <button class="modal-close" data-close-modal="buy-modal" aria-label="Close">×</button>
             </div>
             <div class="modal-body">
                 <div class="modal-item">
@@ -276,8 +269,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal('buy-modal')">Cancel</button>
-                <button class="btn-confirm" onclick="confirmBuy()">Confirm Purchase</button>
+                <button class="btn-cancel" data-close-modal="buy-modal">Cancel</button>
+                <button class="btn-confirm" data-action="confirmBuy">Confirm Purchase</button>
             </div>
         </div>
     </div>
@@ -287,7 +280,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h3 id="sell-modal-title">Sell Item</h3>
-                <button class="modal-close" onclick="closeModal('sell-modal')" aria-label="Close">&times;</button>
+                <button class="modal-close" data-close-modal="sell-modal" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="modal-item">
@@ -308,8 +301,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal('sell-modal')">Cancel</button>
-                <button class="btn-confirm" onclick="confirmSell()">Confirm Sale</button>
+                <button class="btn-cancel" data-close-modal="sell-modal">Cancel</button>
+                <button class="btn-confirm" data-action="confirmSell">Confirm Sale</button>
             </div>
         </div>
     </div>
@@ -319,7 +312,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h3 id="bid-modal-title">Place Bid</h3>
-                <button class="modal-close" onclick="closeModal('bid-modal')" aria-label="Close">×</button>
+                <button class="modal-close" data-close-modal="bid-modal" aria-label="Close">×</button>
             </div>
             <div class="modal-body">
                 <div class="modal-item">
@@ -332,8 +325,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal('bid-modal')">Cancel</button>
-                <button class="btn-confirm" onclick="confirmBid()">Place Bid</button>
+                <button class="btn-cancel" data-close-modal="bid-modal">Cancel</button>
+                <button class="btn-confirm" data-action="confirmBid">Place Bid</button>
             </div>
         </div>
     </div>
@@ -343,7 +336,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h3 id="fill-modal-title">Fill Buy Order</h3>
-                <button class="modal-close" onclick="closeModal('order-fill-modal')" aria-label="Close">×</button>
+                <button class="modal-close" data-close-modal="order-fill-modal" aria-label="Close">×</button>
             </div>
             <div class="modal-body">
                 <div class="modal-item">
@@ -364,8 +357,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal('order-fill-modal')">Cancel</button>
-                <button class="btn-confirm" onclick="confirmOrderFill()">Confirm Fill</button>
+                <button class="btn-cancel" data-close-modal="order-fill-modal">Cancel</button>
+                <button class="btn-confirm" data-action="confirmOrderFill">Confirm Fill</button>
             </div>
         </div>
     </div>
@@ -375,13 +368,13 @@
         <div class="modal modal-large">
             <div class="modal-header">
                 <h3 id="chart-modal-title">Price History</h3>
-                <button class="modal-close" onclick="closeModal('chart-modal')" aria-label="Close">×</button>
+                <button class="modal-close" data-close-modal="chart-modal" aria-label="Close">×</button>
             </div>
             <div class="modal-body">
                 <canvas id="chart-modal-canvas" width="800" height="400"></canvas>
             </div>
             <div class="modal-footer">
-                <button class="btn-cancel" onclick="closeModal('chart-modal')">Close</button>
+                <button class="btn-cancel" data-close-modal="chart-modal">Close</button>
             </div>
         </div>
     </div>
@@ -396,7 +389,7 @@
                 <p id="error-message"></p>
             </div>
             <div class="modal-footer">
-                <button class="btn-confirm" onclick="closeModal('error-overlay')">OK</button>
+                <button class="btn-confirm" data-close-modal="error-overlay">OK</button>
             </div>
         </div>
     </div>

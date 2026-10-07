@@ -1742,7 +1742,47 @@ function lastPage() {
 
 // ── helpers ────────────────────────────────────────────────────────
 
+/**
+ * Wire up the declarative attributes in index.html.
+ *
+ * These used to be inline on* handlers. A Content-Security-Policy blocks inline
+ * event handlers outright unless every value is hashed, and a hash list breaks
+ * silently whenever a handler changes, so the attributes are bound here instead.
+ * data-* is invisible to CSS and to the CSP, so the markup renders identically.
+ *
+ * Three attributes are handled:
+ *   data-close-modal="buy-modal" -> closeModal('buy-modal')
+ *   data-action="confirmBuy"    -> confirmBuy()
+ *   data-search="handleOrdersSearch" -> handleOrdersSearch(this)
+ */
+function bindDeclarativeHandlers() {
+    document.querySelectorAll('[data-close-modal]').forEach((el) => {
+        const modal = el.getAttribute('data-close-modal');
+        el.addEventListener('click', () => closeModal(modal));
+    });
+
+    document.querySelectorAll('[data-action]').forEach((el) => {
+        const name = el.getAttribute('data-action');
+        el.addEventListener('click', () => {
+            if (typeof window[name] === 'function') {
+                window[name]();
+            }
+        });
+    });
+
+    // "input" rather than "change" to match the previous oninput behaviour.
+    document.querySelectorAll('[data-search]').forEach((el) => {
+        const name = el.getAttribute('data-search');
+        el.addEventListener('input', () => {
+            if (typeof window[name] === 'function') {
+                window[name](el);
+            }
+        });
+    });
+}
+
 function bindEvents() {
+    bindDeclarativeHandlers();
     // Card/row/canvas clicks are delegated: the payload rides in data-obj (HTML
     // escaped) instead of an inline onclick, which breaks as soon as a value
     // contains a quote.
