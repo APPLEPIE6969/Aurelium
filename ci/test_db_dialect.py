@@ -105,10 +105,10 @@ db3 = mod.Database("x.db")
 # and q() short-circuits to []. Force the flag so the coercion itself is tested;
 # whether a client exists is asserted separately above.
 db3.available = True
-db3._mysql_query = lambda sql: [("1250.5",)]
+db3._mysql_query = lambda sql: [mod.NamedRow(["balance"], ["1250.5"])]
 v = db3.scalar("SELECT balance FROM player_balances")
 check("numeric text becomes float", isinstance(v, float) and v == 1250.5, repr(v))
-db3._mysql_query = lambda sql: [("Steve",)]
+db3._mysql_query = lambda sql: [mod.NamedRow(["name"], ["Steve"])]
 v2 = db3.scalar("SELECT name FROM players")
 check("non-numeric text stays a string", v2 == "Steve", repr(v2))
 db3._mysql_query = lambda sql: []
@@ -124,6 +124,56 @@ if shutil.which("mysql") is None:
     db4.close()
 else:
     print("  SKIP (mysql client present on this machine)")
+
+print("\n=== MySQL rows must be name-addressable like sqlite3.Row ===")
+# The suite indexes results by column name in many places. Returning bare tuples
+# made those raise "TypeError: tuple indices must be integers or slices, not str"
+# and took out the whole section.
+import subprocess
+
+os.environ["AURELIUM_DB_HOST"] = "127.0.0.1"
+_SAMPLE = (
+    "id\tname\tbalance\tnote\n"
+    "1\tSteve\t1250.5\tNULL\n"
+    "2\tAlex\t42\tvip\n"
+).encode()
+_orig_run = subprocess.run
+
+
+def _fake_run(cmd, capture_output=False, timeout=None):
+    class _P:
+        returncode = 0
+        stdout = _SAMPLE
+        stderr = b""
+    return _P()
+
+
+subprocess.run = _fake_run
+try:
+    _db = mod.Database("x.db")
+    _db.available = True
+    _rows = _db._mysql_query("SELECT id, name, balance, note FROM t")
+finally:
+    subprocess.run = _orig_run
+
+check("header parsed, rows returned", len(_rows) == 2, str(len(_rows)))
+_r = _rows[0]
+check("row['name'] works", _r["name"] == "Steve", repr(_r["name"]))
+check("numeric string becomes float", isinstance(_r["balance"], float) and _r["balance"] == 1250.5,
+      repr(_r["balance"]))
+check("integer string becomes int", isinstance(_r["id"], int) and _r["id"] == 1, repr(_r["id"]))
+check("NULL becomes None", _r["note"] is None, repr(_r["note"]))
+check("integer index still works", _r[1] == "Steve", repr(_r[1]))
+check("the suite's numeric comparison pattern works",
+      all(float(x["balance"]) >= 0 for x in _rows))
+check("'name' in row works", "name" in _r)
+check("row.get with a missing key returns the default",
+      _r.get("nope", "dflt") == "dflt")
+check("keys() exposes column names", _r.keys() == ["id", "name", "balance", "note"],
+      str(_r.keys()))
+check("membership comparison works", _rows[0]["name"] in ("Steve", "Alex"))
+check("int-valued balance is comparable numerically",
+      isinstance(_rows[1]["balance"], int) and _rows[1]["balance"] == 42)
 
 print("\n=== SQLite column names must come back as names, not ids ===")
 # PRAGMA table_info returns (cid, name, type, ...) so index 0 is the column id.

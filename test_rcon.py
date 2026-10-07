@@ -434,6 +434,72 @@ def mysql_config_from_env():
     }
 
 
+class NamedRow:
+    """A result row addressable by column name, like sqlite3.Row.
+
+    The mysql client returns everything as text. The suite compares balances,
+    timestamps and counts numerically, so numeric-looking values are coerced on
+    access. That keeps call sites such as ``r['amount_filled'] <=
+    r['amount_requested']`` working identically on both backends instead of
+    comparing strings, which would silently pass or fail.
+    """
+
+    __slots__ = ('_names', '_values')
+
+    def __init__(self, names, values):
+        self._names = list(names)
+        self._values = list(values)
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return _coerce(self._values[key])
+        try:
+            idx = self._names.index(key)
+        except ValueError:
+            raise KeyError(key) from None
+        return _coerce(self._values[idx])
+
+    def keys(self):
+        return list(self._names)
+
+    def __contains__(self, key):
+        return key in self._names
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __repr__(self):
+        return f'NamedRow({dict(zip(self._names, self._values))!r})'
+
+    def __eq__(self, other):
+        if isinstance(other, NamedRow):
+            return self._values == other._values
+        return tuple(self._values) == tuple(other)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except (KeyError, IndexError):
+            return default
+
+
+def _coerce(value):
+    """Turn the client's text into int/float where it looks numeric."""
+    if not isinstance(value, str) or value == '':
+        return value
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
 class Database:
     """Read-only view of the plugin's database, with async-write polling.
 
@@ -493,11 +559,15 @@ class Database:
                 pass
 
     def _mysql_query(self, sql):
-        """Run a SELECT through the mysql client and return list of tuples.
+        """Run a SELECT through the mysql client and return name-addressable rows.
 
         The client is invoked per query rather than holding a driver connection,
         so there is no idle socket for MySQL's wait_timeout to close underneath
         the suite - the same failure the plugin itself had to guard against.
+
+        Column names are requested and wrapped so rows support ``row['col']`` like
+        sqlite3.Row does. The suite indexes results by name in many places, and
+        returning bare tuples made those raise TypeError under MySQL.
         """
         cfg = self.mysql_config
         cmd = [
@@ -506,7 +576,7 @@ class Database:
             f"--port={cfg['port']}",
             f"--user={cfg['user']}",
             f"--password={cfg['password']}",
-            '--batch', '--skip-column-names',
+            '--batch',
             cfg['name'],
             '--execute', sql,
         ]
@@ -516,11 +586,23 @@ class Database:
             return []
         if proc.returncode != 0:
             return []
+
+        lines = proc.stdout.decode('utf-8', errors='replace').splitlines()
+        if not lines:
+            return []
+        # First line is the header because --skip-column-names was not used.
+        header = lines[0].split('\t')
         rows = []
-        for line in proc.stdout.decode('utf-8', errors='replace').splitlines():
+        for line in lines[1:]:
             if not line.strip():
                 continue
-            rows.append(tuple(line.split('\t')))
+            values = line.split('\t')
+            # A NULL comes back as the literal NULL; expose it as None so
+            # comparisons like `r['spent'] or 0` behave as they do on SQLite.
+            values = [None if v == 'NULL' else v for v in values]
+            if len(values) < len(header):
+                values += [None] * (len(header) - len(values))
+            rows.append(NamedRow(header, values))
         return rows
 
     def q(self, sql, args=()):
@@ -541,15 +623,9 @@ class Database:
         row = self.one(sql, args)
         if row is None:
             return default
-        value = row[0]
-        if self.mysql_config:
-            # The client returns everything as text; the suite compares balances
-            # against floats, so coerce the numeric shapes back.
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return value
-        return value
+        # MySQL rows come back as text and are coerced in NamedRow.__getitem__,
+        # so both backends hand the caller a real number here.
+        return row[0]
 
     def wait_for(self, predicate, timeout=25.0, interval=0.25):
         """Poll until predicate() is truthy. Returns its final value."""
