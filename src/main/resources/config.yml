@@ -127,6 +127,10 @@ web:
 
   # Only used when mode is "local"
   local:
+    # Interface the dashboard listens on. "localhost" keeps it on this machine
+    # only, which is what you want unless a TLS-terminating proxy sits in front
+    # of it. Setting "0.0.0.0" exposes the dashboard, and the session token in
+    # its URL, on every network interface over plain HTTP.
     host: "localhost"
     port: 8585
     # Identifier this server is addressed by in dashboard URLs:

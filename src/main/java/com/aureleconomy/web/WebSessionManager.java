@@ -113,6 +113,29 @@ public class WebSessionManager {
         }
     }
 
+    /**
+     * Invalidate a session by its token, for an explicit logout.
+     *
+     * <p>The dashboard link carries the token in the URL, so a player who logs out
+     * on a shared machine could otherwise leave it usable until the session idles
+     * out. Removing the row revokes it immediately.
+     *
+     * @return true if a live session was removed
+     */
+    public boolean invalidateToken(String token) {
+        if (token == null) {
+            return false;
+        }
+        Session session = sessions.remove(token);
+        if (session == null) {
+            return false;
+        }
+        // Only drop the player's index if it still points at this token;
+        // a newer /web run has already replaced it.
+        playerTokens.remove(session.playerUuid, token);
+        return true;
+    }
+
     private static class Session {
         final UUID playerUuid;
         long lastActivity;

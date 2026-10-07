@@ -47,7 +47,7 @@ jobs:
           # Source-level contracts that need no server. These guard wiring that
           # unit tests cannot reach, such as the auction listing only taking the
           # player's item once the insert is confirmed (issue #33).
-          for check in ci/check_web_ui.py ci/check_css_classes.py ci/check_issue_fixes.py ci/check_cloud_url_migration.py; do
+          for check in ci/check_web_ui.py ci/check_css_classes.py ci/check_issue_fixes.py ci/check_cloud_url_migration.py ci/check_local_web_security.py; do
             echo "=== $check ==="
             python3 "$check"
           done

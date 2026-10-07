@@ -70,6 +70,11 @@ public class DashboardApiHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         Map<String, String> params = parseQuery(exchange.getRequestURI().getQuery());
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+        // Every API response is per-player (balances, orders, purchases), so none of
+        // it may be stored by a shared or browser cache. The static dashboard
+        // shell gets the same policy with no-cache from WebServer.
+        exchange.getResponseHeaders().set("Cache-Control", "no-store");
+        exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
 
         if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
             exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -107,6 +112,20 @@ public class DashboardApiHandler implements HttpHandler {
         }
     }
 
+    /**
+     * The token the caller presented, from the Authorization header or {@code ?token=}.
+     *
+     * <p>Used by logout, which must revoke the token that was actually presented
+     * rather than deriving one from the authenticated player.
+     */
+    private static String bearerOrParamToken(HttpExchange exchange, Map<String, String> params) {
+        String header = exchange.getRequestHeaders().getFirst("Authorization");
+        if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return header.substring(7).trim();
+        }
+        return params.get("token");
+    }
+
     private UUID authenticate(HttpExchange exchange, Map<String, String> params) {
         String header = exchange.getRequestHeaders().getFirst("Authorization");
         if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
@@ -138,6 +157,17 @@ public class DashboardApiHandler implements HttpHandler {
             case "orders" -> send(exchange, 200, ordersPage(params));
             case "stocks" -> send(exchange, 200, stocksPage(params));
             case "price-history" -> send(exchange, 200, cache.priceHistoryJson());
+            case "logout" -> {
+                if (post) {
+                    // Revoke the token the caller presented. It is taken from the
+                    // request rather than the authenticated player so that a stale
+                    // token revokes only itself and cannot kill a newer session.
+                    boolean revoked = sessions.invalidateToken(bearerOrParamToken(exchange, params));
+                    send(exchange, 200, "{\"success\":" + revoked + "}");
+                } else {
+                    send(exchange, 405, "{\"error\":\"POST required\"}");
+                }
+            }
             case "purchase-status" -> purchaseStatus(exchange, params, player);
             case "buy" -> {
                 if (post) {

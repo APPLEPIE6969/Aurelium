@@ -3,6 +3,7 @@ package com.aureleconomy.web;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.webstore.PurchaseQueue;
 import com.aureleconomy.webstore.WebSnapshotCache;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -12,6 +13,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
@@ -28,6 +30,15 @@ public class WebServer {
     private final String serverId;
     private HttpServer server;
     private final int port;
+    private final String host;
+    /**
+     * The pool handed to {@link HttpServer}.
+     *
+     * <p>{@code newFixedThreadPool} makes non-daemon threads, so the pool has to be
+     * shut down explicitly in {@link #stop()} or they outlive plugin disable and
+     * stall a reload.
+     */
+    private ExecutorService httpExecutor;
     private boolean started = false;
 
     private static final Map<String, String> MIME_TYPES = Map.of(
@@ -43,6 +54,7 @@ public class WebServer {
                      WebPurchaseExecutor executor, String serverId) {
         this.plugin = plugin;
         this.port = plugin.getConfig().getInt("web.local.port", 8585);
+        this.host = plugin.getConfig().getString("web.local.host", "localhost");
         this.serverId = serverId;
         this.cache = cache;
     this.queue = queue;
@@ -53,8 +65,25 @@ public class WebServer {
 
     public boolean start() {
         try {
-            server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
-            server.setExecutor(Executors.newFixedThreadPool(4));
+            // Honour web.local.host. It used to be ignored and the socket bound to
+            // 0.0.0.0, so opting into local mode exposed the dashboard - and the
+            // session token in its URL, in cleartext over plain HTTP - on every
+            // interface of what is usually a publicly reachable Minecraft host.
+            // The config default is "localhost", so the safe behaviour is also the
+            // documented one; anyone who genuinely wants remote access can set
+            // web.local.host themselves.
+            String bindHost = (host == null || host.isBlank()) ? "localhost" : host.trim();
+            server = HttpServer.create(new InetSocketAddress(bindHost, port), 0);
+            httpExecutor = Executors.newFixedThreadPool(4);
+            server.setExecutor(httpExecutor);
+
+            if ("0.0.0.0".equals(bindHost) || "::".equals(bindHost)) {
+                plugin.getComponentLogger().warning(
+                        "Web dashboard is bound to " + bindHost + ", so it is reachable from "
+                                + "every network interface. It is served over plain HTTP, so session "
+                                + "tokens travel in cleartext; put it behind a proxy with TLS or set "
+                                + "web.local.host to localhost.");
+            }
 
             server.createContext("/api/",
                     new DashboardApiHandler(plugin, sessionManager, cache, queue, serverId));
@@ -73,6 +102,7 @@ public class WebServer {
                     byte[] nf = "<!DOCTYPE html><html><body><h1>404 Not Found</h1></body></html>"
                             .getBytes(StandardCharsets.UTF_8);
                     exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                    applySecurityHeaders(exchange);
                     exchange.sendResponseHeaders(404, nf.length);
                     try (OutputStream os = exchange.getResponseBody()) {
                         os.write(nf);
@@ -102,7 +132,7 @@ public class WebServer {
             executor.start();
             plugin.getComponentLogger().info("Web dashboard started on port " + port
                     + " (server id '" + serverId + "', queue: " + queue.getClass().getSimpleName() + ")");
-            plugin.getComponentLogger().info("Open http://localhost:" + port
+            plugin.getComponentLogger().info("Open http://" + bindHost + ":" + port
                     + "/shop/" + serverId + " in your browser");
 
             return true;
@@ -122,6 +152,13 @@ public class WebServer {
             server.stop(0);
             started = false;
             plugin.getComponentLogger().info("Web dashboard stopped.");
+        }
+        // Shut the pool down explicitly: its threads are non-daemon, so leaving
+        // them running keeps the JVM alive and the port can stay bound across a
+        // plugin reload.
+        if (httpExecutor != null) {
+            httpExecutor.shutdownNow();
+            httpExecutor = null;
         }
         // Shutdown session cleanup task and clear sessions
         if (sessionManager != null) {
@@ -151,6 +188,51 @@ public class WebServer {
         exchange.close();
     }
 
+    /**
+     * Content-Security-Policy for the dashboard.
+     *
+     * <p>Same policy the cloud backend serves. The markup binds its handlers with
+     * data- attributes and keeps its one inline style in style.css, so script-src
+     * and style-src need nothing beyond 'self' - no 'unsafe-inline' and no hashes
+     * to keep in step with the markup. Google Fonts and the Minecraft item-texture
+     * hosts are the only external origins the page uses.
+     *
+     * <p>frame-ancestors is what stops a hostile page from iframing the dashboard
+     * and clickjacking the Buy/Sell buttons; without it the local server served no
+     * framing restriction at all.
+     */
+    private static final String CSP = String.join("; ",
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' https://fonts.googleapis.com",
+            "font-src 'self' https://fonts.gstatic.com",
+            "img-src 'self' https://assets.mcasset.cloud data: https://mc-heads.net",
+            "connect-src 'self'",
+            "frame-ancestors 'self'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "object-src 'none'");
+
+    /**
+     * Apply the headers the static dashboard shell should carry.
+     *
+     * <p>HSTS is deliberately absent: this server speaks plain HTTP, and an HSTS
+     * header on a host:port that is never HTTPS would only confuse a browser. The
+     * framing and MIME-sniffing restrictions are still worth having.
+     *
+     * <p>{@code no-cache} rather than {@code no-store} because these are the
+     * shell assets, not player data. The JSON API sets {@code no-store} itself,
+     * since that is where balances live.
+     */
+    private static void applySecurityHeaders(HttpExchange exchange) {
+        Headers h = exchange.getResponseHeaders();
+        h.set("Content-Security-Policy", CSP);
+        h.set("X-Content-Type-Options", "nosniff");
+        h.set("X-Frame-Options", "SAMEORIGIN");
+        h.set("Referrer-Policy", "no-referrer");
+        h.set("Cache-Control", "no-cache");
+    }
+
     /** Serve a file from src/main/resources/web/ inside the JAR. */
     private void serveStaticFile(HttpExchange exchange, String path) throws IOException {
         String sanitized = path.replace("..", "").replaceAll("[^a-zA-Z0-9/._-]", "");
@@ -161,6 +243,7 @@ public class WebServer {
                 String notFound = "<!DOCTYPE html><html><body><h1>404 Not Found</h1></body></html>";
                 byte[] bytes = notFound.getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                applySecurityHeaders(exchange);
                 exchange.sendResponseHeaders(404, bytes.length);
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(bytes);
@@ -174,7 +257,7 @@ public class WebServer {
             String contentType = MIME_TYPES.getOrDefault(ext, "application/octet-stream");
 
             exchange.getResponseHeaders().set("Content-Type", contentType);
-            exchange.getResponseHeaders().set("Cache-Control", "no-cache");
+            applySecurityHeaders(exchange);
             exchange.sendResponseHeaders(200, data.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(data);
