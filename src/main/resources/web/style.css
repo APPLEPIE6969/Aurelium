@@ -1285,6 +1285,32 @@ header {
     display: block;
 }
 
+/* Wraps the sparkline to make it the price-history trigger. Resetting the
+   button chrome keeps the cell looking unchanged, while a real button gives
+   keyboard focus and Enter/Space activation that a clickable svg would not. */
+.sparkline-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    background: none;
+    border: 0;
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    line-height: 0;
+}
+
+.sparkline-btn:hover .sparkline {
+    opacity: 0.75;
+}
+
+.sparkline-btn:focus-visible {
+    outline: 2px solid #f59e0b;
+    outline-offset: 2px;
+}
+
 .sparkline.up {
     color: var(--accent);
 }

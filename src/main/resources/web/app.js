@@ -1234,9 +1234,12 @@ function renderStats(stats) {
 }
 
 /** Compact inline trend from the cached price history. */
-function sparkline(key) {
+function sparkline(stock) {
+    const key = stock.key;
     const series = priceHistory[key];
     if (!Array.isArray(series) || series.length < 2) {
+        // Nothing to chart, so no button: opening a modal that can only say
+        // "Not enough history yet" is worse than saying so inline.
         return '<span class="trend-flat">no data</span>';
     }
     const pts = series.slice(-40);
@@ -1253,13 +1256,23 @@ function sparkline(key) {
             return `${x.toFixed(1)},${y.toFixed(1)}`;
         })
         .join(' ');
-    const rising = vals[vals.length - 1] >= vals[0];
+const rising = vals[vals.length - 1] >= vals[0];
     const cls = rising ? 'up' : 'down';
-    return `<svg class="sparkline ${cls}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
-                 role="img" aria-label="7 day trend, ${rising ? 'up' : 'down'}">
-                <polyline points="${coords}" fill="none" stroke="currentColor" stroke-width="1.5"
-                          vector-effect="non-scaling-stroke"/>
-            </svg>`;
+    // The sparkline is the only affordance for the price-history modal, so it is
+    // a real <button> rather than a clickable svg: that makes it reachable by
+    // keyboard and announced as an action, for no visual cost once the button
+    // chrome is reset. The svg is hidden from assistive tech so the label is
+    // not announced twice.
+    const label = `Price history for ${stock.name}, 7 day trend ${rising ? 'up' : 'down'}`;
+    return `<button type="button" class="sparkline-btn" data-action="chart"
+                  data-obj="${esc(JSON.stringify({ key: stock.key, name: stock.name }))}"
+                  title="${esc(label)}" aria-label="${esc(label)}">
+                <svg class="sparkline ${cls}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"
+                     aria-hidden="true" focusable="false">
+                    <polyline points="${coords}" fill="none" stroke="currentColor" stroke-width="1.5"
+                              vector-effect="non-scaling-stroke"/>
+                </svg>
+            </button>`;
 }
 
 function renderStocks() {
@@ -1308,7 +1321,7 @@ function renderStocks() {
                             : ' title="No price from 24h ago yet, so this is the change since the item was listed"'
                     }>${sign}${change.toFixed(2)}%${s.changeBasis === '24h' ? '' : '<span class="basis-tag">listing</span>'}</span>
                 </td>
-                <td class="col-trend">${sparkline(s.key)}</td>
+                <td class="col-trend">${sparkline(s)}</td>
                 <td class="col-actions">
                     <button class="btn-trade trade-buy" data-action="buy" data-obj="${esc(JSON.stringify(s))}"
                             ${Number(s.buyPrice) > 0 ? '' : 'disabled'}>Buy</button>
@@ -1428,6 +1441,37 @@ async function drawChart(canvas, key) {
     ctx.textAlign = 'left';
     ctx.fillText(max.toFixed(2), pad, pad - 8);
     ctx.fillText(min.toFixed(2), pad, canvas.height - pad + 14);
+
+    drawTimeAxis(ctx, canvas, pad, points);
+}
+
+/**
+ * Draw the first and last date under the chart.
+ *
+ * <p>An earlier version drew a label per point, which piled up on top of each
+ * other and became unreadable. Labels are now placed at both ends only, and the
+ * right-hand one is right-aligned so it cannot run off the canvas. Both are
+ * skipped if either timestamp is missing or unparseable rather than rendering
+ * "Invalid Date".
+ */
+function drawTimeAxis(ctx, canvas, pad, points) {
+    const first = Number(points[0] && points[0].t);
+    const last = Number(points[points.length - 1] && points[points.length - 1].t);
+    if (!Number.isFinite(first) || !Number.isFinite(last)) {
+        return;
+    }
+    const fmt = (ms) =>
+        new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+    const y = canvas.height - 6;
+    ctx.fillStyle = '#888';
+    ctx.font = '11px Inter, sans-serif';
+
+    ctx.textAlign = 'left';
+    ctx.fillText(fmt(first), pad, y);
+
+    ctx.textAlign = 'right';
+    ctx.fillText(fmt(last), canvas.width - pad, y);
 }
 
 // ── modals ─────────────────────────────────────────────────────────
