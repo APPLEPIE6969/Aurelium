@@ -7,24 +7,24 @@
 - **Automatic version check on startup** - Aurelium now checks Modrinth on server startup to see if you are running the latest version for your Minecraft version. If you are behind, it logs a message in the console telling you how many versions behind you are and where to download the latest build. The check runs asynchronously and does not slow down startup.
 - **Cloud dashboard key rotation** - when restarting your server with a new API key, the plugin now sends the previous key as proof of ownership, allowing it to re-register automatically without manual intervention. The old key is saved in config for future restarts.
 - **Admin endpoint security** - the web dashboard's admin endpoints now require a `REGISTRATION_SECRET` environment variable to be configured. If the secret is not set, the endpoint returns 403 instead of allowing unauthenticated access.
-- **New dashboard address** - the web dashboard now runs at `https://aurelium.alwaysdata.net` instead of the old Render address, which is being shut down. Existing configs are migrated automatically the first time your server starts, so there is nothing to change by hand. If your server was pointed at a custom dashboard URL it is rewritten too, and the change is logged so you can see it happened.
+- **New dashboard address** - the web dashboard is now hosted at `https://aurelium.alwaysdata.net`, replacing the previous address. Configs are migrated automatically the first time your server starts, so there is nothing to change by hand, and the change is logged so you can see it happened.
 - **Local dashboard is no longer exposed to the internet** - if you set `mode: local`, the dashboard used to listen on every network interface even though your config said `localhost`. On a publicly reachable Minecraft host that meant anyone who found the port could see it, and the session link travelled unencrypted. It now listens where your config actually says. **If you were reaching your local dashboard from another machine, add `host: "0.0.0.0"` under `web.local` to keep doing that** - the plugin warns you in the console when you do.
 - **You can now revoke a dashboard session** - a new `POST /logout` endpoint invalidates your session link immediately instead of leaving it usable until an hour of inactivity passes. Sessions were already cancelled when you disconnect.
 
 ### Bug Fixes
 
 - **Fixed a security hole in the dashboard's session system** - the endpoints that create and update player sessions, and the one that confirms a purchase, could be called without a valid server key. Someone who knew or guessed a server ID could have created a session for it and read player balances, or confirmed purchases. All three now require the server's API key and reject anything else.
-- **Dashboard buttons work again** - a security header added during this work blocked the dashboard's buttons, confirmations and modals from responding. They all work again, and nothing about the page looks different.
+- **Dashboard buttons work again** - the security rules added for this release initially blocked the dashboard's buttons, confirmations and modals from responding. They all work again, and nothing about the page looks different.
 - **Google Analytics removed** - it was loading third-party code onto a page showing player balances and needed a special exception in the security rules. It only ever had a placeholder ID, so nothing was being tracked. It can be added back properly if you want it.
-- **Missing item icons no longer fill the console** - when an item texture failed to load, the fallback handler was blocked by the security rules. It now works through a single shared listener and stops after the last attempt instead of retrying forever.
-- **MySQL database backends** - the CI suite that verifies a MySQL-backed server was reporting every balance check as "not written" while the plugin was in fact writing correctly. The test was dropping the values it was searching for. MySQL CI is green for the first time.
+- **Missing item icons no longer fill the console** - when an item texture failed to load, the fallback was blocked by the security rules. It now works as intended and stops after the last attempt instead of retrying.
+- **MySQL support is properly verified** - the tests that check a MySQL-backed server were not reading the values back properly, so they could report that data was not being saved when it was. MySQL is now confirmed working on every build.
 - **Registration CI test** - added an automated CI job that verifies fresh cloud dashboard registration works correctly with a clean server, catching registration regressions before release.
 
 ### Security
 
 - The dashboard is now served with a strict content security policy, `X-Frame-Options`, `nosniff`, no caching of player data, and forced HTTPS. The rules need no exceptions and no upkeep, because the dashboard no longer relies on inline scripts or styles.
 - The local dashboard gets the same protections, minus forced HTTPS, which does not apply to plain local HTTP.
-- The dashboard's database no longer grows without limit. Old sessions are cleared automatically, where previously one row was kept for every player visit forever.
+- Old dashboard sessions are cleared automatically after a few days instead of being kept indefinitely, so the dashboard stays fast as it accumulates players.
 
 ---
 
