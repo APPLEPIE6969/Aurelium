@@ -125,6 +125,43 @@ if shutil.which("mysql") is None:
 else:
     print("  SKIP (mysql client present on this machine)")
 
+print("\n=== helper output column labels must match across dialects ===")
+# Every helper's result is read by column name (r['name'], pk[0]['sql']), so the
+# alias has to be identical on both backends. SQLite says `name` where
+# information_schema says `table_name`, which raised KeyError: 'name'.
+import re as _re
+
+
+def _first_label(sql):
+    m = _re.search(r"SELECT\s+(?:DISTINCT\s+)?([A-Za-z_][\w]*)(?:\s+AS\s+([A-Za-z_][\w]*))?", sql, _re.I)
+    if not m:
+        return None
+    return (m.group(2) or m.group(1)).lower()
+
+
+os.environ.pop("AURELIUM_DB_HOST", None)
+_sqlite_labels = {
+    "table_exists_sql": _first_label(mod.table_exists_sql("players")),
+    "table_list_sql": _first_label(mod.table_list_sql()),
+    "columns_sql": _first_label(mod.columns_sql("players")),
+    "create_sql": _first_label(mod.create_sql("players")),
+}
+os.environ["AURELIUM_DB_HOST"] = "127.0.0.1"
+_mysql_labels = {
+    "table_exists_sql": _first_label(mod.table_exists_sql("players")),
+    "table_list_sql": _first_label(mod.table_list_sql()),
+    "columns_sql": _first_label(mod.columns_sql("players")),
+    "create_sql": _first_label(mod.create_sql("players")),
+}
+for key in _sqlite_labels:
+    check(f"{key} labels its output the same on both backends",
+          _sqlite_labels[key] == _mysql_labels[key],
+          f"sqlite={_sqlite_labels[key]} mysql={_mysql_labels[key]}")
+check("table listing is labelled 'name' as the suite expects",
+      _mysql_labels["table_list_sql"] == "name", str(_mysql_labels["table_list_sql"]))
+check("create statement is labelled 'sql' as the suite expects",
+      _mysql_labels["create_sql"] == "sql", str(_mysql_labels["create_sql"]))
+
 print("\n=== MySQL rows must be name-addressable like sqlite3.Row ===")
 # The suite indexes results by column name in many places. Returning bare tuples
 # made those raise "TypeError: tuple indices must be integers or slices, not str"

@@ -377,7 +377,7 @@ def _is_mysql():
 def table_exists_sql(table):
     if _is_mysql():
         return (
-            'SELECT table_name FROM information_schema.tables '
+            'SELECT table_name AS name FROM information_schema.tables '
             f"WHERE table_schema = DATABASE() AND table_name = '{table}'"
         )
     return "SELECT name FROM sqlite_master WHERE type='table' " \
@@ -385,9 +385,12 @@ def table_exists_sql(table):
 
 
 def table_list_sql():
+    # Aliased to `name` on both backends: SQLite's sqlite_master column is
+    # `name` while information_schema calls it `table_name`, and the suite reads
+    # r['name'] from this result.
     if _is_mysql():
         return (
-            'SELECT table_name FROM information_schema.tables '
+            'SELECT table_name AS name FROM information_schema.tables '
             'WHERE table_schema = DATABASE()'
         )
     return "SELECT name FROM sqlite_master WHERE type='table'"
@@ -398,20 +401,22 @@ def columns_sql(table):
 
     SQLite's PRAGMA table_info returns (cid, name, type, ...) so the name is at
     index 1, while information_schema.columns returns the name at index 0.
-    Selecting the name alone on both keeps the caller dialect-independent.
+    Selecting the name alone, aliased identically on both, keeps the caller
+    dialect-independent.
     """
     if _is_mysql():
         return (
-            'SELECT column_name FROM information_schema.columns '
+            'SELECT column_name AS name FROM information_schema.columns '
             f"WHERE table_schema = DATABASE() AND table_name = '{table}'"
         )
     return f'SELECT name FROM pragma_table_info(\'{table}\')'
 
 
 def create_sql(table):
+    # Aliased to `sql` for the same reason: the suite reads pk[0]['sql'].
     if _is_mysql():
         return (
-            'SELECT create_statement FROM information_schema.tables '
+            'SELECT create_statement AS sql FROM information_schema.tables '
             f"WHERE table_schema = DATABASE() AND table_name = '{table}'"
         )
     return "SELECT sql FROM sqlite_master WHERE type='table' " \
