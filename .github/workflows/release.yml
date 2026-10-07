@@ -23,8 +23,11 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
+      # All three supported versions, newest first, matching the CI build matrix.
+      # This used to build only 26.1.2 and 1.21.11, so a release advertised Paper
+      # 26.2 support without shipping the jar.
       - name: Build all versions
-        run: ./gradlew :v26_1_2:shadowJar :v1_21_11:shadowJar
+        run: ./gradlew :v26_2:shadowJar :v26_1_2:shadowJar :v1_21_11:shadowJar
 
       - name: Extract version from tag
         id: version
@@ -61,6 +64,7 @@ jobs:
           draft: false
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
           files: |
+            versions/26.2/build/libs/*.jar
             versions/26.1.2/build/libs/*.jar
             versions/1.21.11/build/libs/*.jar
           body_path: /tmp/changelog.txt
