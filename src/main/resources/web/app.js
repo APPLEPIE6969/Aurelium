@@ -400,7 +400,9 @@ function iconFallback(img, material) {
         img.src = iconUrlFor(cands[step]);
         return;
     }
-    img.removeAttribute('onerror');
+    // The fallback icon itself can fail to load. Flag the image so the delegated
+    // listener stops retrying instead of looping on error events.
+    img.dataset.iconDone = '1';
     img.src = FALLBACK_ICON;
     img.style.visibility = 'visible';
 }
@@ -418,8 +420,32 @@ function setItemIcon(img, material) {
 
 function itemIconTag(material) {
     const key = String(material || 'stone').toLowerCase();
+    // A literal onerror="..." attribute here would be an inline event handler,
+    // which a strict CSP blocks at runtime. The failure is handled by the
+    // delegated listener above instead.
     return `<img src="${itemIconUrl(key)}" alt="" loading="lazy"
-                 onerror="iconFallback(this, '${escJs(key)}')">`;
+                 data-icon-fallback="${esc(key)}">`;
+}
+
+/**
+ * Catch icon load failures for every <img data-icon-fallback>.
+ *
+ * `error` does not bubble, so this listens in the capture phase on the document
+ * to see it regardless of which element the image sits in.
+ */
+function bindIconFallbacks() {
+    document.addEventListener('error', (ev) => {
+        const img = ev.target;
+        if (!img || img.tagName !== 'IMG') {
+            return;
+        }
+        const material = img.dataset.iconFallback;
+        // Undefined when the image was not tagged by itemIconTag.
+        if (material === undefined || img.dataset.iconDone === '1') {
+            return;
+        }
+        iconFallback(img, material);
+    }, true);
 }
 
 // ── bootstrap ───────────────────────────────────────────��───────────
@@ -1783,6 +1809,7 @@ function bindDeclarativeHandlers() {
 
 function bindEvents() {
     bindDeclarativeHandlers();
+    bindIconFallbacks();
     // Card/row/canvas clicks are delegated: the payload rides in data-obj (HTML
     // escaped) instead of an inline onclick, which breaks as soon as a value
     // contains a quote.
@@ -2091,9 +2118,9 @@ function esc(s) {
 }
 
 /**
- * Escape a value for embedding inside a single-quoted JS string inside an
- * onclick attribute. Also escapes U+2028/U+2029, which are literal newlines to a
- * JS parser and would otherwise break the attribute.
+ * Escape a value for embedding inside a single-quoted JS string inside an HTML
+ * attribute. Also escapes U+2028/U+2029, which are literal newlines to a JS
+ * parser and would otherwise break the attribute.
  */
 function escJs(s) {
     return String(s)
