@@ -60,7 +60,12 @@ jobs:
           # SQLite or MySQL depending on AURELIUM_DB_HOST. This checks the dialect
           # selection so a silent no-read cannot pass as success again.
           echo "=== ci/test_db_dialect.py ==="
-          python3 ci/test_db_dialect.py
+            python3 ci/test_db_dialect.py
+            # The mysql client is driven by --execute, so the suite binds its own
+            # placeholders. That binding went missing once and turned every
+            # persisted-state assertion into "persisted None"; these pin it.
+            echo "=== ci/test_mysql_binding.py ==="
+            python3 ci/test_mysql_binding.py
       - name: Set up JDK ${{ matrix.jdk }}
         uses: actions/setup-java@v5
         with:

@@ -413,11 +413,26 @@ def columns_sql(table):
 
 
 def create_sql(table):
-    # Aliased to `sql` for the same reason: the suite reads pk[0]['sql'].
+    """A single `sql` column describing `table`'s key, on either backend.
+
+    information_schema.tables has no DDL column - `create_statement` does not
+    exist - so selecting it made every MySQL run error and the caller read the
+    empty result as "no primary key". MySQL has no CREATE TABLE text available
+    through SQL at all (only SHOW CREATE TABLE, which the suite reaches via
+    Database.create_ddl), so this reconstructs the PRIMARY KEY clause from
+    information_schema.STATISTICS, which is what the assertion actually needs.
+    """
     if _is_mysql():
+        # Wrapped in a derived table so the outer SELECT projects a bare column
+        # named `sql`, which is what ci/test_db_dialect.py reads the label from.
         return (
-            'SELECT create_statement AS sql FROM information_schema.tables '
-            f"WHERE table_schema = DATABASE() AND table_name = '{table}'"
+            "SELECT sql FROM ("
+            "SELECT CONCAT('PRIMARY KEY (', "
+            "GROUP_CONCAT(column_name ORDER BY seq_in_index), ')') AS sql "
+            "FROM information_schema.STATISTICS "
+            "WHERE table_schema = DATABASE() AND table_name = '"
+            + table
+            + "' AND index_name = 'PRIMARY' GROUP BY index_name) AS t"
         )
     return "SELECT sql FROM sqlite_master WHERE type='table' " \
            f"AND name='{table}'"
@@ -521,6 +536,9 @@ class Database:
         self.conn = None
         self.available = False
         self._note = ''
+        # Set when a query fails, so the suite can say why instead of reporting
+        # a missing row.
+        self.last_error = ''
 
         # The plugin's configured backend is the source of truth. If it disagrees
         # with what we were told to read, every assertion below is about to fail
@@ -563,7 +581,78 @@ class Database:
             except sqlite3.Error:
                 pass
 
-    def _mysql_query(self, sql):
+    @staticmethod
+    def _mysql_literal(value):
+        """Render a Python value as a MySQL literal.
+
+        The client is driven by `--execute`, so there is no driver to bind
+        parameters for us. Everything is escaped the way
+        mysql_real_escape_string does and quoted explicitly rather than
+        interpolated raw.
+        """
+        if value is None:
+            return 'NULL'
+        if isinstance(value, bool):
+            return '1' if value else '0'
+        if isinstance(value, (int, float)):
+            return repr(value)
+        if isinstance(value, (bytes, bytearray)):
+            return "X'" + value.hex() + "'"
+        text = str(value)
+        escaped = (text
+                   .replace('\\', '\\\\')
+                   .replace("'", "\\'")
+                   .replace('"', '\\"')
+                   .replace('\x00', '\\0')
+                   .replace('\n', '\\n')
+                   .replace('\r', '\\r')
+                   .replace('\x1a', '\\Z'))
+        return "'" + escaped + "'"
+
+    @classmethod
+    def _bind(cls, sql, args):
+        """Substitute ``?`` placeholders outside string/identifier literals.
+
+        A plain ``sql.replace('?', ...)` would also rewrite a ``?`` that appears
+        inside a quoted literal, so the scan tracks quoting state. This mirrors
+        what sqlite3 does for the same query on the other backend.
+        """
+        args = tuple(args)
+        if not args:
+            return sql
+
+        out = []
+        idx = 0
+        quote = None
+        i = 0
+        while i < len(sql):
+            ch = sql[i]
+            if quote:
+                out.append(ch)
+                if ch == '\\' and i + 1 < len(sql):
+                    out.append(sql[i + 1])
+                    i += 2
+                    continue
+                if ch == quote:
+                    quote = None
+            elif ch in ("'", '"', '`'):
+                quote = ch
+                out.append(ch)
+            elif ch == '?':
+                if idx >= len(args):
+                    raise ValueError(
+                        'more placeholders than arguments in: ' + sql)
+                out.append(cls._mysql_literal(args[idx]))
+                idx += 1
+            else:
+                out.append(ch)
+            i += 1
+        if idx != len(args):
+            raise ValueError(
+                f'{len(args) - idx} unused argument(s) in: {sql}')
+        return ''.join(out)
+
+    def _mysql_query(self, sql, args=()):
         """Run a SELECT through the mysql client and return name-addressable rows.
 
         The client is invoked per query rather than holding a driver connection,
@@ -573,8 +662,19 @@ class Database:
         Column names are requested and wrapped so rows support ``row['col']`` like
         sqlite3.Row does. The suite indexes results by name in many places, and
         returning bare tuples made those raise TypeError under MySQL.
+
+        A failure is recorded in ``last_error`` rather than only returning an
+        empty list: an empty list is indistinguishable from "no such row", which
+        is how a broken query previously looked like a plugin that never wrote.
         """
+        self.last_error = ''
         cfg = self.mysql_config
+        try:
+            sql = self._bind(sql, args)
+        except ValueError as exc:
+            self.last_error = str(exc)
+            return []
+
         cmd = [
             'mysql',
             f"--host={cfg['host']}",
@@ -587,9 +687,12 @@ class Database:
         ]
         try:
             proc = subprocess.run(cmd, capture_output=True, timeout=30)
-        except (OSError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            self.last_error = f'mysql client failed: {exc}'
             return []
         if proc.returncode != 0:
+            err = proc.stderr.decode('utf-8', errors='replace').strip()
+            self.last_error = err or f'mysql exited {proc.returncode}'
             return []
 
         lines = proc.stdout.decode('utf-8', errors='replace').splitlines()
@@ -614,7 +717,8 @@ class Database:
         if not self.available:
             return []
         if self.mysql_config:
-            return self._mysql_query(sql)
+            # args used to be dropped here, which sent a literal ? to the server.
+            return self._mysql_query(sql, args)
         try:
             return self.conn.execute(sql, args).fetchall()
         except sqlite3.Error:
@@ -649,6 +753,32 @@ class Database:
             return self.scalar('PRAGMA journal_mode', default=None)
         except sqlite3.Error:
             return None
+
+    def create_ddl(self, table):
+        """The CREATE TABLE statement for `table`, on either backend.
+
+        information_schema.tables has no DDL column, so MySQL needs
+        SHOW CREATE TABLE, whose text sits in the second column. Asking for a
+        nonexistent information_schema column used to make this raise, and the
+        empty result was read as 'no primary key'.
+        """
+        if not self.available:
+            return ''
+        if self.mysql_config:
+            rows = self._mysql_query(f'SHOW CREATE TABLE `{table}`')
+            if not rows:
+                return ''
+            row = rows[0]
+            # Columns are `Table` and `Create Table`.
+            names = row.keys()
+            for candidate in ('Create Table', 'create table', 'Create View'):
+                if candidate in names:
+                    return row[candidate] or ''
+            return row[1] if len(row) > 1 else ''
+        rows = self.q(create_sql(table))
+        if not rows:
+            return ''
+        return rows[0]['sql'] or ''
 
 
 # ────────────────────────────── suite ──────────────────────────────
@@ -851,8 +981,11 @@ def sec_schema(t):
                 'database schema matches LATEST_SCHEMA_VERSION',
                 f'found={version!r} expected={expected!r}')
 
-    t.check(t.db.journal_mode() is not None, 'journal mode readable',
-            f'journal_mode={t.db.journal_mode()!r}')
+    if _is_mysql():
+        t.skip('journal mode', 'PRAGMA is SQLite-only; MySQL uses InnoDB')
+    else:
+        t.check(t.db.journal_mode() is not None, 'journal mode readable',
+                f'journal_mode={t.db.journal_mode()!r}')
 
     columns = {
         'players': {'uuid', 'name', 'gui_style'},
@@ -878,9 +1011,10 @@ def sec_schema(t):
         missing = expected_cols - cols
         t.check(not missing, f'{table} has all expected columns', f'missing {sorted(missing)}')
 
-    pk = t.db.q(create_sql('player_balances'))
-    t.check(bool(pk) and 'PRIMARY KEY' in (pk[0]['sql'] or '').upper(),
-            'player_balances declares a composite primary key')
+    ddl = t.db.create_ddl('player_balances')
+    t.check(bool(ddl) and 'PRIMARY KEY' in ddl.upper(),
+            'player_balances declares a composite primary key',
+            f'ddl={ddl[:120]!r} err={t.db.last_error!r}')
     dupes = t.db.q('SELECT uuid, currency, COUNT(*) c FROM player_balances '
                    'GROUP BY uuid, currency HAVING c > 1')
     t.check(not dupes, 'player_balances has no duplicate (uuid, currency) pairs',

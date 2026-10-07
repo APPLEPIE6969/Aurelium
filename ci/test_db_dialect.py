@@ -105,13 +105,13 @@ db3 = mod.Database("x.db")
 # and q() short-circuits to []. Force the flag so the coercion itself is tested;
 # whether a client exists is asserted separately above.
 db3.available = True
-db3._mysql_query = lambda sql: [mod.NamedRow(["balance"], ["1250.5"])]
+db3._mysql_query = lambda sql, args=(): [mod.NamedRow(["balance"], ["1250.5"])]
 v = db3.scalar("SELECT balance FROM player_balances")
 check("numeric text becomes float", isinstance(v, float) and v == 1250.5, repr(v))
-db3._mysql_query = lambda sql: [mod.NamedRow(["name"], ["Steve"])]
+db3._mysql_query = lambda sql, args=(): [mod.NamedRow(["name"], ["Steve"])]
 v2 = db3.scalar("SELECT name FROM players")
 check("non-numeric text stays a string", v2 == "Steve", repr(v2))
-db3._mysql_query = lambda sql: []
+db3._mysql_query = lambda sql, args=(): []
 check("empty result returns the default", db3.scalar("SELECT 1", default="dflt") == "dflt")
 check("journal_mode is None under mysql", db3.journal_mode() is None)
 db3.close()
