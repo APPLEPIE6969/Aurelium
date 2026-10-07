@@ -1,5 +1,27 @@
 # Aurelium - Changelog
 
+## v1.5.5 - Dashboard Security Overhaul
+
+### What's New
+
+- **New dashboard address** - the web dashboard now runs at `https://aurelium.alwaysdata.net` instead of the old Render address, which is being shut down. Existing configs are migrated automatically the first time your server starts, so there is nothing to change by hand. If your server was using a custom dashboard URL, it is rewritten and the change is logged so you can see it happened.
+- **Local dashboard is no longer exposed to the internet** - if you set `mode: local`, the dashboard used to listen on every network interface, even though the config said `localhost`. On a publicly reachable Minecraft host that meant anyone who found the port could see it, and the session link travelled unencrypted. It now actually listens where your config says. **If you were reaching your local dashboard from another machine, add `host: "0.0.0.0"` under `web.local` to keep doing that** - the plugin will warn you in the console when you do.
+- **You can now log out of the dashboard** - a new button-free `POST /logout` endpoint revokes your session link immediately, instead of it staying usable until an hour of inactivity passes. Sessions are already cancelled when you disconnect.
+
+### Bug Fixes
+
+- **Fixed a security hole in the dashboard's session system** - the endpoints that create and update player sessions, and the one that confirms a purchase, could be called without a valid server key. Someone who knew (or guessed) a server ID could have created a session for it and read player balances or confirmed purchases. All three now require the server's API key and reject anything else.
+- **Dashboard buttons work again** - a security header added earlier blocked the dashboard's buttons, confirmations and modals from responding. They all work again now, and the fix changed nothing visually.
+- **Google Analytics removed** - it was loading third-party code onto a page showing player balances and needed a special exception in the security rules. It was only ever a placeholder ID, so nothing was being tracked. Say the word if you want it back properly.
+- **Missing item icons no longer spam the console** - when an item texture failed to load, the fallback handler was blocked by the security rules. It now works through a single shared listener and stops after the last attempt instead of retrying forever.
+
+### Security
+
+- The dashboard is now served with a strict content security policy, `X-Frame-Options`, `nosniff`, `no-store` caching on player data, and forced HTTPS. The rules need no exceptions and no maintenance, because the dashboard no longer relies on inline scripts or styles.
+- The local dashboard receives the same protections, minus forced HTTPS which does not apply to plain local HTTP.
+
+---
+
 ## v1.5.4 - Version Checker & Cloud Dashboard Hardening
 
 ### What's New
