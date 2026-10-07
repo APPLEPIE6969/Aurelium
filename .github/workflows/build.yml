@@ -11,12 +11,12 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PAPER_26_BUILD: "72"
-  PAPER_26_JAR_SHA: "0555a0b0468a5198d8fb1a16e1f9e95c81a917a2dc8f2e09867b4044742f6401"
+  PAPER_26_BUILD: "74"
+  PAPER_26_JAR_SHA: "1d70b1dab9cf4a6de615209a536f3a45a2186240253c428213ce2188ab95e5f7"
   PAPER_12111_BUILD: "132"
   PAPER_12111_JAR_SHA: "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
-  PAPER_262_BUILD: "56"
-  PAPER_262_JAR_SHA: "8600cc3b91ea38d7e836d562550b31d0fa3ed785d14dffc1a6d9dc1d36c21fa5"
+  PAPER_262_BUILD: "132"
+  PAPER_262_JAR_SHA: "5ab560a769c1ab413cb7f637dd0dc697974571f2db0a667cfbac511422e51b26"
   VAULT_URL: "https://github.com/MilkBowl/Vault/releases/download/1.7.3/Vault.jar"
   VIAVERSION_URL: "https://cdn.modrinth.com/data/P1OZGk5p/versions/z0sCGSmk/ViaVersion-5.10.1-SNAPSHOT.jar"
   VIABACKWARDS_URL: "https://cdn.modrinth.com/data/NpvuJQoq/versions/2dyKr4e5/ViaBackwards-5.10.1-SNAPSHOT.jar"
