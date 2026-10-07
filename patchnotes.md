@@ -1,6 +1,6 @@
 # Aurelium - Patch Notes
 
-## v1.5.5 - Dashboard Security Overhaul
+## v1.5.4 - Version Checker & Cloud Dashboard Hardening
 
 ### Breaking Changes
 
@@ -8,6 +8,14 @@
 
 ### Plugin Changes
 
+- **Version Checker**: On server startup, Aurelium now asynchronously queries the Modrinth API to check if you are running the latest version for your server's Minecraft version. If you are behind, a console message is logged:
+    - `[Aurelium] You are X versions behind based on your server's Minecraft version. Latest is X.Y.Z, you have A.B.C.`
+    - `[Aurelium] Download the latest version at: https://modrinth.com/plugin/aurelium/versions`
+    - The check is non-blocking and runs on an async thread, so it does not impact server startup time
+    - All log messages are prefixed with `[Aurelium]` so they are clearly identifiable
+- **Cloud Dashboard Key Rotation**: The plugin now sends the previous API key as `X-Current-Api-Key` header during registration, allowing legitimate server restarts with rotated keys to re-register without manual intervention. On successful key rotation, the plugin automatically saves the current key as `prev-api-key` in config for future restarts
+- **REGISTRATION_SECRET Support**: Admin-only endpoints on the web dashboard now require a `REGISTRATION_SECRET` environment variable to be set - rejects with 403 if missing, preventing unauthenticated access when the secret is not configured
+- **Dashboard moved to AlwaysData (web)** - the cloud URL now points at `https://aurelium.alwaysdata.net`, a Rust + SQLite service on the free `plus-free` plan's `user_program` site type, replacing the retired Render deployment. `CloudSyncManager.resolveDashboardUrl()` rewrites the retired host (and any custom one) on startup, persists it, and logs the change; old-config fixtures intentionally still contain the retired URL so the migration stays tested.
 - **Session-minting endpoints now require the server API key (web)** - `POST /api/session`, `POST /api/session-update` and `POST /api/confirm-purchase` accepted requests with no credential check, so a caller who knew or guessed a `serverId` could mint a player session for it and read balances, or confirm a purchase. All three validate `X-Api-Key` against the registered server before touching the store and return 401 otherwise. Verified live: forged sessions with no key and with a wrong key both 401.
 - **`POST /logout` revokes the presented token (web)** - added `WebSessionManager.invalidateToken(String)`, which removes the row and removes the player's index entry only when it still points at that token (`playerTokens.remove(uuid, token)`), so a stale link cannot kill a session created by a later `/web`. Previously a session could only be dropped by idling out or disconnecting.
 - **Local dashboard response hardening (web)** - added a `Content-Security-Policy` matching the cloud backend's, plus `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` and `Referrer-Policy: no-referrer`. `frame-ancestors 'self'` is the part that matters here: without it any site could iframe the dashboard and clickjack the Buy/Sell buttons. HSTS is deliberately omitted because the server speaks plain HTTP. `applySecurityHeaders()` is applied to all three content-bearing responses including both hand-rolled 404s, and `DashboardApiHandler` sets `Cache-Control: no-store` because those responses are per-player balances.
@@ -19,24 +27,28 @@
 - **Handlers moved to data attributes** - 17 inline `on*` attributes became `data-close-modal` / `data-action` / `data-search`, bound in a new `bindDeclarativeHandlers()` called from `bindEvents()`. Binding skips any attribute that does not name a function on `window`, so the pre-existing delegated `[data-action][data-obj]` row handler is untouched and market rows are not double-handled.
 - **The one inline style moved to CSS** - the header logo's `width/height/color` became `.logo-icon-svg`.
 - **Google Analytics removed** - both the loader and its inline bootstrap were deleted. The ID was the placeholder `G-XXXXXXXXXX`, so no data was being collected, and its inline bootstrap would have required a `script-src` hash on a page displaying player balances.
+- This is what makes the strict CSP possible without `unsafe-inline` or a hash list to maintain: `script-src 'self'` and `style-src 'self' https://fonts.googleapis.com`.
 - Verified pixel-identical before and after against the live site: 0 of 1,400,000 pixels differ.
 
 ### Cloud Backend (`aurelium-cloud`, Rust)
 
 - **Strict CSP, no hashes** - `script-src 'self'` with no `unsafe-inline`, no `unsafe-hashes` and no per-handler hashes, made possible by the frontend work above. `https://www.googletagmanager.com` was removed from `script-src`; it was still trusted after GA was deleted, which was pure attack surface.
 - **Sessions no longer grow without bound** - the plugin mints a fresh 32-byte token per shop open and `sessions` is keyed on it, so every visit inserted a row and nothing removed one. Added `Store::prune_sessions(max_age_seconds)`, called at startup with a 96h default and overridable via `AURELIUM_SESSION_TTL_HOURS`. AlwaysData idle-stops the app after `max_idle_time`, so this runs at least every 30 minutes. A prune failure logs a warning and continues rather than blocking startup. Verified on production: a 200-day-old row was deleted and a fresh one kept. Four new store tests.
-- **CI apt hardening** - the runner image lists `azure.archive.ubuntu.com` first, and when it is unreachable a bare `apt-get update` retries for ten-plus minutes before falling back, which parked the build. Each attempt now has a 15s timeout and one retry, three attempts are made with partial lists cleared between, and three failures exit loudly rather than hanging.
+- **Deployment** - static musl binary built on CI, uploaded and swapped atomically (`.new` + `mv`) because AlwaysData keeps the old process running and Linux refuses to truncate a running executable (`ETXTBSY`). This cost an hour once, so `DEPLOY.md` documents verifying the remote checksum. The app runs in a namespace invisible over SSH, so a restart goes through the site API.
+- **CI apt hardening** - the runner image lists `azure.archive.ubuntu.com` first, and when it is unreachable a bare `apt-get update` retries for ten-plus minutes before falling back, which parked a build. Each attempt now has a 15s timeout and one retry, three attempts are made with partial lists cleared between, and three failures exit loudly rather than hanging.
 - Test suite is now 14 store + 23 integration, with clippy `-D warnings` and `cargo fmt --check` clean.
 - Production cleanup: the six manual test servers and all seven sessions, including two attacker-chosen tokens minted during the security probe, were deleted from the live database. Backed up to `/tmp/aurelium-cloud.db.bak` first. Verified the old forged tokens now return 401.
 
 ### CI Changes
 
+- **Cloud Registration CI Test**: New `cloud-registration-test` CI job that starts a fresh Paper server with a unique server-id/api-key, warms up the cloud dashboard (`https://aurelium.alwaysdata.net/health`), and verifies successful registration by grepping server logs for "Cloud dashboard registered" - catches registration regressions before release
+- **VersionChecker CI Test**: Non-blocking test that verifies the Modrinth version check runs without errors (network failures are non-fatal)
 - **`ci/test_mysql_binding.py` (new)** - the suite verifies persisted state by querying the plugin's database, and under MySQL that goes through the `mysql` client via `--execute`, so it binds placeholders itself. 18 checks covering substitution, escaping and placeholder counts. Pinned directly against the original defect by inspecting `Database.q`'s source, so a dropped argument cannot pass unnoticed again.
-- **`ci/check_local_web_security.py` (new)** - 23 checks over `WebServer.java`, `DashboardApiHandler.java`, `WebSessionManager.java` and `config.yml`. Verifies each 200/404 response individually rather than counting helper calls, since a count can be satisfied while one path is left bare. Also asserts every `getComponentLogger()` call names a method that actually exists, which is how the `warning`/`warn` compile error below was caught before it reached a build.
+- **`ci/check_local_web_security.py` (new)** - 23 checks over `WebServer.java`, `DashboardApiHandler.java`, `WebSessionManager.java` and `config.yml`. Verifies each 200/404 response individually rather than counting helper calls, since a count can be satisfied while one path is left bare. Also asserts every `getComponentLogger()` call names a method that actually exists, which is how a `warning`/`warn` compile error was caught before it reached a build.
 - **`ci/test_db_dialect.py` updated** - the `_mysql_query` test doubles used a one-argument lambda and broke when the method gained an optional `args` parameter.
 - MySQL harness fixes: `Database.q()` forwarded SQL but **dropped `args`**, so every parameterised query reached the server with a literal `?`, errored, and was turned into an empty result by a non-zero exit. That is indistinguishable from "the plugin never wrote", and it is why all 22 economy, concurrency and restart assertions reported `persisted None` while the plugin was writing correctly. Substitution is now quote-aware so a `?` inside a string literal is left alone, escaped the way `mysql_real_escape_string` does rather than interpolated raw, raises on an arity mismatch, and records failures in `last_error`. Two SQLite-only assertions no longer run under MySQL: `PRAGMA journal_mode`, and `create_sql()`, which selected `create_statement` from `information_schema.tables` - a column that does not exist, so the query always errored and the empty result read as "no primary key".
 - `mysql-test` is green for the first time: 0 failures out of the suite that previously reported 22.
-- Explicit `timeout-minutes` on the long-running jobs, plus YAML indentation repair.
+- RCON reconnect/retry with dedicated tests, stale MySQL connection validation (`SELECT 1` on an interval plus JDBC options), explicit `timeout-minutes` on the long jobs, and a YAML indentation repair.
 
 ### Outstanding
 
@@ -44,25 +56,6 @@
 - **CI registers against the production database**, leaving `ci-test-*` and Paper-registered rows in `servers` (130 at last check). Worth pointing at a separate database.
 - `release.yml` still omits the `26.2` artifact, so no release has been cut since `v1.5.0`.
 - A live trade loop from an actual Minecraft server through `confirm-purchase` is still unverified; `cloud-registration-test` covers registration only.
-
----
-
-## v1.5.4 - Version Checker & Cloud Dashboard Hardening
-
-### Plugin Changes
-
-- **Version Checker**: On server startup, Aurelium now asynchronously queries the Modrinth API to check if you are running the latest version for your server's Minecraft version. If you are behind, a console message is logged:
-  - `[Aurelium] You are X versions behind based on your server's Minecraft version. Latest is X.Y.Z, you have A.B.C.`
-  - `[Aurelium] Download the latest version at: https://modrinth.com/plugin/aurelium/versions`
-  - The check is non-blocking and runs on an async thread, so it does not impact server startup time
-  - All log messages are prefixed with `[Aurelium]` so they are clearly identifiable
-- **Cloud Dashboard Key Rotation**: The plugin now sends the previous API key as `X-Current-Api-Key` header during registration, allowing legitimate server restarts with rotated keys to re-register without manual intervention. On successful key rotation, the plugin automatically saves the current key as `prev-api-key` in config for future restarts
-- **REGISTRATION_SECRET Support**: Admin-only endpoints on the web dashboard now require a `REGISTRATION_SECRET` environment variable to be set — rejects with 403 if missing, preventing unauthenticated access when the secret is not configured
-
-### CI Changes
-
-- **Cloud Registration CI Test**: New `cloud-registration-test` CI job that starts a fresh Paper server with a unique server-id/api-key, warms up the Render dashboard, and verifies successful registration by grepping server logs for "Cloud dashboard registered" — catches registration regressions before release
-- **VersionChecker CI Test**: Non-blocking test that verifies the Modrinth version check runs without errors (network failures are non-fatal)
 
 ---
 
