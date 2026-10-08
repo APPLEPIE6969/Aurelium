@@ -14,6 +14,7 @@
 
 ### Plugin Changes
 
+- **Updated to the current stable Paper builds** - the CI matrix previously compiled and tested against Paper 26.2 build 40 and 26.1.2 build 72, both of which have since shipped newer stable builds. The matrix now uses 26.2 build 132 and 26.1.2 build 74, and the release job downloads the matching server jars so the integration tests run against the same builds you download. 1.21.11 stays on build 132
 - **Version Checker**: On server startup, Aurelium now asynchronously queries the Modrinth API to check if you are running the latest version for your server's Minecraft version. If you are behind, a console message is logged:
     - `[Aurelium] You are X versions behind based on your server's Minecraft version. Latest is X.Y.Z, you have A.B.C.`
     - `[Aurelium] Download the latest version at: https://modrinth.com/plugin/aurelium/versions`
@@ -29,8 +30,10 @@
 
 - **Buttons work under a strict content security policy** - the dashboard used inline click handlers, which a strict policy blocks outright. They are now bound from the page's own script, so the dashboard can be served with `script-src 'self'` and no exceptions. This is also why the security header added earlier in this release no longer breaks the Buy, Sell, Bid and confirm buttons
 - **Google Analytics removed** - it required third-party script on a page showing player balances, and its inline bootstrap would have needed a policy exception. It was only ever configured with a placeholder ID, so no analytics data was being collected. It can be added back properly if you want it
+- **The price history chart can be opened again (web)** - the trend sparkline next to each item never opened anything, so the chart could not be reached from the dashboard at all, even though the code to draw it was already there. The sparkline is now a button that opens the price history for that item, and it works with the keyboard as well as the mouse. Items without enough history still show `no data` inline instead of opening a modal that has nothing to show
+- **The price history chart is readable now (web)** - the canvas was drawn at half the size it was displayed at, so the axis labels came out about 5 pixels tall and the dates overlapped into an unreadable pile. The chart now draws at its real size, sharp on any display. The first and last dates are labelled, and the lowest price is drawn inside the plot so it no longer collides with them
 - **Missing item icons no longer spam the console (web)** - the fallback that walks a chain of icon URLs when a texture fails to load was being blocked by the content security policy. It now works, and stops after the final attempt instead of retrying
-- No visual changes: the dashboard renders identically before and after
+- Apart from the sparkline now showing a hover and keyboard-focus outline, the dashboard renders identically before and after
 
 ### CI Changes
 
