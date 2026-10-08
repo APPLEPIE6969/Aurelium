@@ -23,7 +23,7 @@ A server-owned shop with dynamic pricing and three interface modes:
 
 - **Classic** - Traditional chest-based inventory GUI
 - **Modern** - Styled chest GUI with MiniMessage gradient titles, glass-pane borders, formatted lore
-- **Web** - Browser dashboard (see [Web Dashboard](#web-dashboard))
+- **Web** - Browser dashboard (see the Web Dashboard section below)
 
 **Pricing Mechanics:**
 - Prices automatically rise on buys (Demand) and fall on sells (Supply)
