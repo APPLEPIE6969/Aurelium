@@ -3,7 +3,7 @@
 > **Experimental Web Features**
 > The web dashboard is in active development. Expect potential bugs or instability if you enable `web.enabled`. The core in-game economy, GUI markets, and auction house are stable.
 
-A comprehensive, standalone economy plugin for Minecraft Paper.
+A standalone economy plugin for Minecraft Paper.
 
 **Compatibility**: Paper, Purpur, Pufferfish, Leaves
 
@@ -86,7 +86,7 @@ Automatically discovers custom items from popular third-party plugins:
 
 ### Web Dashboard
 
-A modern, responsive web app with [nearly 100% uptime](https://stats.uptimerobot.com/vzXzS8Op2J):
+A web app with [nearly 100% uptime](https://stats.uptimerobot.com/vzXzS8Op2J):
 
 - **Server Market** - purchase items from the web, delivered instantly in-game
 
@@ -109,9 +109,9 @@ A modern, responsive web app with [nearly 100% uptime](https://stats.uptimerobot
 **Web Features:**
 - Live Sync: in-game changes reflect instantly on the web and vice-versa
 - Prices recorded every 10 minutes, stored for 7 days
-- Cloud Mode: optional cloud hosted dashboard via Render
+- Cloud Mode: optional cloud hosted dashboard, works on every host with no port forwarding
 - Multi-Currency UI: custom currency symbols synced from `config.yml`
-- Icon Fallbacks: seamless fallback for older MC versions
+- Icon Fallbacks: falls back to older item textures on older MC versions
 - Secure Sessions: `/web` in-game generates a time-limited link (rolling 1-hour timeout)
 - Tab Sleep Mode: no network/CPU when tab is inactive; instant wake on return
 - RAM Optimized: per-server memory under 1MB via raw JSON string caching
@@ -150,6 +150,7 @@ A modern, responsive web app with [nearly 100% uptime](https://stats.uptimerobot
 | Command | Description | Permission |
 | :--- | :--- | :--- |
 | `/eco <give\|take\|set> <player> <amount> [currency]` | Modify player balances | `aureleconomy.admin` |
+| `/customitems` | Open the custom items browser | `aureleconomy.admin` |
 | `/customitems scan` | Force rescan all supported custom item plugins | `aureleconomy.admin` |
 | `/customitems list` | View all discovered custom items | `aureleconomy.admin` |
 | `/customitems info <id>` | Show details for a specific custom item | `aureleconomy.admin` |
@@ -177,9 +178,13 @@ A modern, responsive web app with [nearly 100% uptime](https://stats.uptimerobot
 
 ## Setup
 
-1. Download the latest `Aurelium.jar`
+1. Download the jar that matches your server's Minecraft version from [Modrinth](https://modrinth.com/plugin/aurelium/versions)
+   - Files ending in `1.21.x` are for Minecraft 1.21 through 1.21.11
+   - Files ending in `26.1.x` are for Minecraft 26.1, 26.1.1 and 26.1.2
+   - Files ending in `26.2.x` are for Minecraft 26.2
 2. Place it in your server's `plugins/` folder
 3. Restart the server
+   - Requires Java 25
    - If Vault is not detected, Aurelium automatically extracts and installs it on first run
 
 ---
@@ -203,7 +208,7 @@ database:
 
 `ssl-mode` defaults to `PREFERRED`: the connection is encrypted whenever the server offers TLS,
 without needing a truststore. Use `VERIFY_CA` or `VERIFY_IDENTITY` if the database is reached over
-an untrusted network — those also validate the server certificate.
+an untrusted network, since those also validate the server certificate.
 
 ### Economy
 
@@ -282,8 +287,37 @@ buy-orders:
 ```yaml
 web:
   enabled: true
-  port: 8585
-  # Session timeout: rolling 1 hour of inactivity (hardcoded)
+  mode: cloud            # "local" = webserver inside the plugin (needs an open port)
+                         # "cloud" = syncs to an external server (works on all hosts)
+  local:                 # only used when mode is "local"
+    host: "localhost"    # keeps the dashboard on this machine. "0.0.0.0" exposes it,
+                         # and the session link in its URL, on every network interface
+    port: 8585
+    server-id: "local"   # how this server is addressed in dashboard URLs
+    session-timeout-minutes: 60
+    snapshot-interval-seconds: 30
+    price-history-interval-minutes: 10
+  cloud:                 # only used when mode is "cloud"
+    url: "https://aurelium.alwaysdata.net"
+    sync-interval: 30
+```
+
+Your server's `server-id` and `api-key` under `web.cloud` are generated automatically
+on first run and saved to config. Don't share them: the key is what authorizes your
+server to the dashboard.
+
+In `local` mode the dashboard runs inside the plugin, so there is nothing else to host.
+In `cloud` mode everything syncs to the hosted dashboard, so it works even on hosts
+where you cannot open a port. Players open the dashboard with `/web`, which generates
+a time-limited link; a session can also be revoked at any time.
+
+Web purchases are queued before they are charged, and whether that queue survives a
+restart is configurable:
+
+```yaml
+web-queue:
+  type: memory           # memory (lost on restart) or sqlite (kept on disk)
+  file: "web-queue.db"
 ```
 
 ### Network Syncing (MySQL Required)
