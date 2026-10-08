@@ -9,17 +9,6 @@ A standalone economy plugin for Minecraft Paper.
 
 ---
 
-## Table of Contents
-
-- [Features](#features)
-- [Commands](#commands)
-- [Permissions](#permissions)
-- [Setup](#setup)
-- [Configuration](#configuration)
-- [FAQ](#faq)
-
----
-
 ## Features
 
 ### Economy
