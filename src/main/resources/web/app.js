@@ -1379,11 +1379,35 @@ function openChartModal(stock) {
 
 // ── chart ──────────────────────────────────────────────────────────
 
+/**
+ * Match the canvas backing store to the size it is actually displayed at.
+ *
+ * <p>The element carries a fixed 800x400 backing store but is laid out around
+ * 400px wide, so every pixel was being downscaled by half. That made the whole
+ * chart soft and shrank the axis text to roughly 5px - which is why an earlier
+ * version's date labels overlapped into an unreadable pile. Resizing the
+ * backing store to the displayed size (times the device pixel ratio) means the
+ * coordinates drawChart already derives from canvas.width/canvas.height work
+ * unchanged, while text is rendered at its nominal size and stays sharp.
+ */
+function fitCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+        // Hidden or not laid out yet: leave the backing store alone rather than
+        // collapsing it to 0x0.
+        return;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+}
+
 async function drawChart(canvas, key) {
     if (!canvas) {
         return;
     }
     const ctx = canvas.getContext('2d');
+    fitCanvas(canvas);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const history = (await api('/price-history')) || {};
     const points = history[key] || [];
@@ -1436,11 +1460,15 @@ async function drawChart(canvas, key) {
     ctx.stroke();
 
     // labels
+    // The minimum sits just above the bottom gridline rather than below it.
+    // Once the canvas is sized to its display height there is only about four
+    // pixels between "below the plot" and the date row, and the two collide.
+    // Above the line keeps the date row clear and both rows legible.
     ctx.fillStyle = '#888';
     ctx.font = '11px Inter, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(max.toFixed(2), pad, pad - 8);
-    ctx.fillText(min.toFixed(2), pad, canvas.height - pad + 14);
+    ctx.fillText(min.toFixed(2), pad, canvas.height - pad - 6);
 
     drawTimeAxis(ctx, canvas, pad, points);
 }
