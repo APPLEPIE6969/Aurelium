@@ -753,13 +753,19 @@ public class CloudSyncManager {
     // ── Purchase Polling ─────────────────────────────────────────────
 
     private List<Map<String, Object>> fetchPendingPurchases() throws Exception {
-        String url = baseUrl + "/api/sync?serverId=" + serverId;
+        // A GET against the read-only pending-purchases route. This used to POST a
+        // stub body {"serverId":...} to /api/sync, but that route publishes the
+        // snapshot, so every poll overwrote the server's real market data with an
+        // empty object and the dashboard showed no items. The dashboard never sent
+        // a pendingPurchases field back on that route either, so the poll found
+        // nothing and only did damage.
+        String url = baseUrl + "/api/" + java.net.URLEncoder.encode(serverId, java.nio.charset.StandardCharsets.UTF_8)
+                + "/pending-purchases";
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
                 .header("X-Api-Key", apiKey)
-                .POST(HttpRequest.BodyPublishers.ofString(
-                        "{\"serverId\":\"" + escJson(serverId) + "\"}"))
+                .GET()
                 .timeout(Duration.ofSeconds(60))
                 .build();
 
