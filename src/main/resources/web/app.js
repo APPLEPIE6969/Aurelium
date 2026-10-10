@@ -1402,76 +1402,212 @@ function fitCanvas(canvas) {
     canvas.height = Math.round(rect.height * dpr);
 }
 
-async function drawChart(canvas, key) {
-    if (!canvas) {
-        return;
-    }
-    const ctx = canvas.getContext('2d');
-    fitCanvas(canvas);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const history = (await api('/price-history')) || {};
-    const points = history[key] || [];
+let priceHistoryCache = null;
 
-    if (points.length < 2) {
-        ctx.fillStyle = '#888';
-        ctx.font = '14px Inter, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Not enough history yet', canvas.width / 2, canvas.height / 2);
-        return;
-    }
+/**
+ * Price history, fetched once per page load.
+ *
+ * <p>This is the whole server's history for every item, so it is large: on a
+ * server with a full market catalogue it runs to megabytes. Fetching it per chart
+ * open meant opening the chart on a slow connection stalled for seconds. The data
+ * changes only when the server syncs, so a page-load fetch is recent enough for a
+ * chart.
+ */
+async function loadPriceHistory() {
+      if (priceHistoryCache) {
+          return priceHistoryCache;
+      }
+      priceHistoryCache = (await api('/price-history')) || {};
+      return priceHistoryCache;
+  }
 
-    const prices = points.map((p) => Number(p.b ?? p.s ?? 0));
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const span = max - min || 1;
-    const pad = 24;
+  async function drawChart(canvas, key) {
+      if (!canvas) {
+          return;
+      }
+      const ctx = canvas.getContext('2d');
+      fitCanvas(canvas);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const history = await loadPriceHistory();
+      const points = history[key] || [];
 
-    const x = (i) => pad + (i / (points.length - 1)) * (canvas.width - pad * 2);
-    const y = (v) => canvas.height - pad - ((v - min) / span) * (canvas.height - pad * 2);
+      if (points.length < 2) {
+          ctx.fillStyle = '#888';
+          ctx.font = '14px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Not enough history yet', canvas.width / 2, canvas.height / 2);
+          return;
+      }
 
-    // grid
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 1;
-    for (let g = 0; g <= 4; g++) {
-        const gy = pad + (g / 4) * (canvas.height - pad * 2);
-        ctx.beginPath();
-        ctx.moveTo(pad, gy);
-        ctx.lineTo(canvas.width - pad, gy);
-        ctx.stroke();
-    }
+      const prices = points.map((p) => Number(p.b ?? p.s ?? 0));
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      const span = max - min || 1;
+      const pad = 24;
 
-    // area
-    const grad = ctx.createLinearGradient(0, pad, 0, canvas.height - pad);
-    grad.addColorStop(0, 'rgba(245,158,11,0.35)');
-    grad.addColorStop(1, 'rgba(245,158,11,0.02)');
-    ctx.beginPath();
-    ctx.moveTo(x(0), canvas.height - pad);
-    points.forEach((p, i) => ctx.lineTo(x(i), y(prices[i])));
-    ctx.lineTo(x(points.length - 1), canvas.height - pad);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
+      const x = (i) => pad + (i / (points.length - 1)) * (canvas.width - pad * 2);
+      const y = (v) => canvas.height - pad - ((v - min) / span) * (canvas.height - pad * 2);
 
-    // line
-    ctx.beginPath();
-    points.forEach((p, i) => (i ? ctx.lineTo(x(i), y(prices[i])) : ctx.moveTo(x(i), y(prices[i]))));
-    ctx.strokeStyle = '#f59e0b';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+      // Kept so the hover handler can map a pointer position back to a data point
+      // without recomputing the layout.
+      canvas._chart = { points, prices, x, y, pad, min, max, key };
 
-    // labels
-    // The minimum sits just above the bottom gridline rather than below it.
-    // Once the canvas is sized to its display height there is only about four
-    // pixels between "below the plot" and the date row, and the two collide.
-    // Above the line keeps the date row clear and both rows legible.
-    ctx.fillStyle = '#888';
-    ctx.font = '11px Inter, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(max.toFixed(2), pad, pad - 8);
-    ctx.fillText(min.toFixed(2), pad, canvas.height - pad - 6);
+      drawChartPlot(canvas);
+  }
 
-    drawTimeAxis(ctx, canvas, pad, points);
-}
+  /**
+   * Repaint the static plot: grid, area, line and labels.
+   *
+   * <p>Split out so the hover handler can clear its crosshair and repaint without
+   * going back through drawChart, which would re-read the cached history and
+   * recurse.
+   */
+  function drawChartPlot(canvas) {
+      const chart = canvas && canvas._chart;
+      const ctx = canvas && canvas.getContext('2d');
+      if (!chart || !ctx) {
+          return;
+      }
+      const { points, prices, x, y, pad, min, max } = chart;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // grid
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      for (let g = 0; g <= 4; g++) {
+          const gy = pad + (g / 4) * (canvas.height - pad * 2);
+          ctx.beginPath();
+          ctx.moveTo(pad, gy);
+          ctx.lineTo(canvas.width - pad, gy);
+          ctx.stroke();
+      }
+
+      // area
+      const grad = ctx.createLinearGradient(0, pad, 0, canvas.height - pad);
+      grad.addColorStop(0, 'rgba(245,158,11,0.35)');
+      grad.addColorStop(1, 'rgba(245,158,11,0.02)');
+      ctx.beginPath();
+      ctx.moveTo(x(0), canvas.height - pad);
+      points.forEach((p, i) => ctx.lineTo(x(i), y(prices[i])));
+      ctx.lineTo(x(points.length - 1), canvas.height - pad);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // line
+      ctx.beginPath();
+      points.forEach((p, i) => (i ? ctx.lineTo(x(i), y(prices[i])) : ctx.moveTo(x(i), y(prices[i]))));
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // labels
+      // The minimum sits just above the bottom gridline rather than below it.
+      // Once the canvas is sized to its display height there is only about four
+      // pixels between "below the plot" and the date row, and the two collide.
+      // Above the line keeps the date row clear and both rows legible.
+      ctx.fillStyle = '#888';
+      ctx.font = '11px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(max.toFixed(2), pad, pad - 8);
+      ctx.fillText(min.toFixed(2), pad, canvas.height - pad - 6);
+
+      drawTimeAxis(ctx, canvas, pad, points);
+  }
+
+  /**
+   * Redraw with a crosshair and tooltip at the pointer.
+   *
+   * <p>The README advertises hover tooltips but no hover handling existed, so the
+   * chart was a static line with no way to read a value at a given time. This
+   * snaps to the nearest point by pointer x, which is the behaviour you want on a
+   * dense series: the exact pixel will almost never land on a point, and snapping
+   * is what makes the value readable.
+   */
+  function chartHover(canvas, clientX) {
+      const chart = canvas && canvas._chart;
+      const ctx = canvas && canvas.getContext('2d');
+      if (!chart || !ctx) {
+          return;
+      }
+      const { points, prices, x, y, min, max } = chart;
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width) {
+          return;
+      }
+      // The backing store is scaled by devicePixelRatio, so convert through the
+      // ratio rather than comparing CSS pixels to canvas pixels directly.
+      const scale = canvas.width / rect.width;
+      const px = (clientX - rect.left) * scale;
+
+      let best = 0;
+      let bestDist = Infinity;
+      for (let i = 0; i < points.length; i++) {
+          const d = Math.abs(x(i) - px);
+          if (d < bestDist) {
+              bestDist = d;
+              best = i;
+          }
+      }
+
+      // Repaint the clean plot first, which drops the previous crosshair.
+      drawChartPlot(canvas);
+
+      const cx = x(best);
+      const cy = y(prices[best]);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(245,158,11,0.6)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(cx, chart.pad);
+      ctx.lineTo(cx, canvas.height - chart.pad);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fill();
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+
+      // Tooltip, flipped to whichever side has room so it cannot run off.
+      const ts = Number(points[best] && points[best].t);
+      const when = Number.isFinite(ts)
+          ? new Date(ts).toLocaleString(undefined, {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+            })
+          : '';
+      const label = `${money(prices[best], '', '')}`;
+      ctx.save();
+      ctx.font = '12px Inter, sans-serif';
+      const w = Math.max(ctx.measureText(label).width, ctx.measureText(when).width) + 16;
+      const h = 40;
+      let tx = cx + 10;
+      if (tx + w > canvas.width) {
+          tx = cx - 10 - w;
+      }
+      const ty = Math.max(2, cy - h - 8);
+      ctx.fillStyle = 'rgba(20,20,20,0.94)';
+      ctx.strokeStyle = 'rgba(245,158,11,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(tx, ty, w, h, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#f5f5f5';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, tx + 8, ty + 16);
+      ctx.fillStyle = '#a3a3a3';
+      ctx.fillText(when, tx + 8, ty + 31);
+      ctx.restore();
+  }
 
 /**
  * Draw the first and last date under the chart.
@@ -1776,19 +1912,44 @@ async function confirmOrderFill() {
  * marks it done. Poll until then so the toast reflects what actually happened.
  */
 async function awaitPurchase(purchaseId, onDone) {
-    for (let i = 0; i < 20; i++) {
-        await sleep(1000);
-        const data = await api(`/purchase-status?id=${encodeURIComponent(purchaseId)}`).catch(() => null);
-        if (!data) {
-            continue;
-        }
-        if (data.status === 'completed' || data.status === 'failed') {
-            onDone(data.result);
-            return;
-        }
-    }
-    toast('error', 'Timed out waiting for the server to confirm.');
-}
+      // The server confirms asynchronously, so this polls. The budget is generous
+      // because a large snapshot sync can delay it, but it is still bounded: a
+      // player should not watch a spinner indefinitely.
+      const maxAttempts = 60;
+      for (let i = 0; i < maxAttempts; i++) {
+          await sleep(1000);
+          let resp = null;
+          try {
+              resp = await fetch(`${API_BASE}/purchase-status?id=${encodeURIComponent(purchaseId)}`, {
+                  headers: authHeaders(),
+              });
+          } catch (_) {
+              continue; // transient network error, keep waiting
+          }
+          if (resp.status === 404) {
+              // The purchase was never recorded, so no confirmation is coming.
+              // Waiting out the full budget would be pointless and reads as a hang.
+              toast('error', 'The dashboard did not record that purchase.');
+              return;
+          }
+          if (resp.status === 401) {
+              showError('Session expired. Use /web in-game to get a new link.');
+              return;
+          }
+          if (!resp.ok) {
+              continue;
+          }
+          const data = await resp.json().catch(() => null);
+          if (!data) {
+              continue;
+          }
+          if (data.status === 'completed' || data.status === 'failed') {
+              onDone(data.result);
+              return;
+          }
+      }
+      toast('error', 'Still waiting on the server. It will finish shortly, check your inventory.');
+  }
 
 // ── page switching ─────────────────────────────────────────────────
 
@@ -1882,10 +2043,28 @@ function bindDeclarativeHandlers() {
 function bindEvents() {
     bindDeclarativeHandlers();
     bindIconFallbacks();
-    // Card/row/canvas clicks are delegated: the payload rides in data-obj (HTML
-    // escaped) instead of an inline onclick, which breaks as soon as a value
-    // contains a quote.
-    document.addEventListener('click', (ev) => {
+// Card/row/canvas clicks are delegated: the payload rides in data-obj (HTML
+      // escaped) instead of an inline onclick, which breaks as soon as a value
+      // contains a quote.
+      //
+      // Hover on the chart canvas is delegated here too, for the same reason: an
+      // inline onmousemove would need a script-src hash under the strict policy.
+      // The chart's own data lives on the canvas element, so no payload attribute
+      // is needed and this is attached once rather than per chart open.
+      document.addEventListener('mousemove', (ev) => {
+          const canvas = ev.target.closest && ev.target.closest('#chart-modal-canvas');
+          if (canvas && canvas._chart) {
+              chartHover(canvas, ev.clientX);
+          }
+      });
+      document.addEventListener('mouseleave', (ev) => {
+          const canvas = ev.target.closest && ev.target.closest('#chart-modal-canvas');
+          if (canvas && canvas._chart) {
+              drawChartPlot(canvas);
+          }
+      }, true);
+
+      document.addEventListener('click', (ev) => {
         const el = ev.target.closest('[data-action][data-obj]');
         if (!el) {
             return;
