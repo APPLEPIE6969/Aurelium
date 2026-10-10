@@ -890,6 +890,7 @@ jobs:
           echo "Contents of plugins/:"
           ls -la plugins/
       - name: Generate unique server-id for fresh registration test
+        id: reg
         run: |
           mkdir -p plugins/Aurelium
           UNIQUE_ID="ci-fresh-$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-12)-$(date +%s)"
@@ -902,6 +903,12 @@ jobs:
           EOF
           echo "Generated unique server-id: $UNIQUE_ID"
           echo "Generated unique api-key: $UNIQUE_KEY"
+          # Published as step outputs so the cleanup step can deregister this
+          # server even when the test fails partway through. Without it every
+          # run leaves a server row and its snapshot blob behind on the live
+          # dashboard, which is how it filled with hundreds of dead entries.
+          echo "server_id=$UNIQUE_ID" >> "$GITHUB_OUTPUT"
+          echo "api_key=$UNIQUE_KEY" >> "$GITHUB_OUTPUT"
       - name: Warm up cloud dashboard
         run: |
           echo "Warming up cloud dashboard..."
@@ -1019,6 +1026,12 @@ jobs:
           name: cloud-registration-log
           path: logs/latest.log
           retention-days: 7
+      - name: Deregister the test server from the dashboard
+        if: always()
+        run: |
+          bash ci/cleanup-registration.sh \
+            '${{ steps.reg.outputs.server_id }}' \
+            '${{ steps.reg.outputs.api_key }}'
 
   mineflayer-ingame-test:
     runs-on: ubuntu-latest
@@ -1243,6 +1256,25 @@ jobs:
             echo "Dashboard not ready yet, waiting... ($i/10)"
             sleep 5
           done
+      - name: Pin a known server-id so this test can be cleaned up
+        id: reg
+        run: |
+          # This job wrote no cloud config, so the plugin generated a random
+          # id on first run. Those cannot be cleaned up afterwards because
+          # nothing records what the id was. Pinning it lets the cleanup step
+          # deregister this server however the test ends.
+          UNIQUE_ID="ci-restart-$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -c1-12)-$(date +%s)"
+          UNIQUE_KEY="$(uuidgen | tr -d '-' | tr '[:upper:]' '[:lower:]')"
+          mkdir -p plugins/Aurelium
+          cat > plugins/Aurelium/config.yml << EOF
+          web:
+            cloud:
+              server-id: "$UNIQUE_ID"
+              api-key: "$UNIQUE_KEY"
+          EOF
+          echo "Pinned server-id: $UNIQUE_ID"
+          echo "server_id=$UNIQUE_ID" >> "$GITHUB_OUTPUT"
+          echo "api_key=$UNIQUE_KEY" >> "$GITHUB_OUTPUT"
       - name: First server start
         run: |
           echo "eula=true" > eula.txt
@@ -1346,3 +1378,9 @@ jobs:
           name: restart-cycle-test-log
           path: logs/latest.log
           retention-days: 7
+      - name: Deregister the test server from the dashboard
+        if: always()
+        run: |
+          bash ci/cleanup-registration.sh \
+            '${{ steps.reg.outputs.server_id }}' \
+            '${{ steps.reg.outputs.api_key }}'
