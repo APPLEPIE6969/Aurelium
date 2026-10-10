@@ -1641,18 +1641,51 @@ function drawTimeAxis(ctx, canvas, pad, points) {
 // ── modals ─────────────────────────────────────────────────────────
 
 function openModal(id) {
-    const el = document.getElementById(id);
-    if (el) {
-        el.style.display = 'flex';
-    }
-}
+      const el = document.getElementById(id);
+      if (!el) {
+          return;
+      }
+      // Clear any leftover closing state so reopening does not inherit it, then
+      // force a reflow so the entry animation replays instead of being skipped
+      // because the element was already in its final state.
+      const panel = el.querySelector('.modal') || el;
+      el.classList.remove('closing');
+      panel.classList.remove('closing');
+      el.style.display = 'flex';
+      void el.offsetWidth;
+  }
+
+// Closing plays an exit animation rather than snapping the element away.
+//
+// Setting display:none directly removes the element from rendering in the same
+// frame, so any exit transition or animation is skipped entirely and the modal
+// just vanishes. Instead the closing class is added, the animationend event
+// hides it for real, and a timer is a backstop in case that event never fires
+// (reduced motion, or the element being hidden by other means mid-animation).
+const MODAL_EXIT_MS = 200;
 
 function closeModal(id) {
-    const el = document.getElementById(id);
-    if (el) {
-        el.style.display = 'none';
-    }
-}
+      const el = document.getElementById(id);
+      if (!el) {
+          return;
+      }
+      const panel = el.querySelector('.modal') || el;
+      el.classList.add('closing');
+      panel.classList.add('closing');
+      let done = false;
+      const hide = () => {
+          if (done) {
+              return;
+          }
+          done = true;
+          el.classList.remove('closing');
+          panel.classList.remove('closing');
+          el.style.display = 'none';
+      };
+      el.addEventListener('animationend', hide, { once: true });
+      panel.addEventListener('animationend', hide, { once: true });
+      setTimeout(hide, MODAL_EXIT_MS + 60);
+  }
 
 let modalItem = null;
 let modalAuction = null;

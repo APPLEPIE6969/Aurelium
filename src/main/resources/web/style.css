@@ -390,9 +390,9 @@ header {
 }
 
 .modal-large {
-   max-width: 720px;
-   width: 100%;
-}
+    max-width: 720px;
+    width: 100%;
+ }
 
 .modal-error {
    border-color: var(--danger, #ef4444);
@@ -1604,18 +1604,44 @@ header {
 /* ── Modal ────────────────────────────────────────────────────────── */
 
 .modal-overlay {
-   position: fixed;
-   inset: 0;
-   background: rgba(0, 0, 0, 0.6);
-   backdrop-filter: blur(4px);
-   /* Hidden until openModal() sets display:flex. Without this default every
-      modal in the document paints over the page on first load. */
-   display: none;
-   align-items: center;
-   justify-content: center;
-   z-index: 200;
-   animation: fadeIn 0.2s ease;
-   }
+     position: fixed;
+     inset: 0;
+     background: rgba(0, 0, 0, 0.6);
+     backdrop-filter: blur(4px);
+     /* Hidden until openModal() sets display:flex. Without this default every
+        modal in the document paints over the page on first load. */
+     display: none;
+     align-items: center;
+     justify-content: center;
+     z-index: 200;
+     animation: fadeIn 0.2s ease;
+ }
+
+ /* Exit animation. closeModal() adds .closing rather than setting display:none
+    outright, because removing the element from rendering in the same frame skips
+    any exit animation and the modal vanishes instead of animating. The panel and
+    its backdrop are animated separately: the backdrop fades, the panel slides
+    away, which reads as the window closing rather than the page dimming. */
+ .modal-overlay.closing {
+     animation: fadeOut 0.2s ease forwards;
+ }
+
+ .modal-overlay.closing .modal,
+ .modal.closing {
+     animation: modalSlideOut 0.2s ease forwards;
+ }
+
+ @keyframes modalSlideOut {
+     from {
+         transform: translateY(0);
+         opacity: 1;
+     }
+
+     to {
+         transform: translateY(16px);
+         opacity: 0;
+     }
+ }
 
 @keyframes fadeIn {
     from {
@@ -1652,6 +1678,43 @@ header {
 @keyframes fadeOut {
     from { opacity: 1; }
     to { opacity: 0; }
+}
+
+/* The price chart needs more room than a form modal: a dense seven-day series
+    needs horizontal space to be readable, and the hover tooltip needs somewhere
+    to sit without covering the line it points at.
+
+   These come after the .modal base rule on purpose. Both selectors have the same
+   specificity, so source order decides, and .modal sets max-width: 420px. With
+   these rules earlier in the file the chart rendered at 420px wide no matter
+   what they said. */
+.modal-chart {
+    max-width: 1100px;
+    width: 96%;
+}
+
+.modal-chart .modal-body {
+    padding: 20px 24px;
+}
+
+/* The canvas is sized to its box by fitCanvas() using the device pixel ratio, so
+   its CSS size decides the plotted area. The width/height attributes in the
+   markup are only the initial backing store. */
+#chart-modal-canvas {
+    display: block;
+    width: 100%;
+    height: min(58vh, 520px);
+}
+
+@media (max-width: 720px) {
+    .modal-chart {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    #chart-modal-canvas {
+        height: min(46vh, 380px);
+    }
 }
 
 @keyframes modalSlideOut {
