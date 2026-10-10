@@ -30,7 +30,6 @@ let ordersSearch = '';
 let ordersSort = 'pricePerPiece';
 let ordersDir = 'desc';
 let ordersFilter = 'all';
-let defaultCurrency = '';
 let playerUuid = '';
 let balanceTimer = null;
 let refreshTimer = null;
@@ -593,28 +592,14 @@ function updateBalanceDisplay(player) {
     if (!el) {
         return;
     }
-    defaultCurrency = player.defaultCurrency || defaultCurrency;
-    // Needed to tell your own buy orders apart from other people's.
-    playerUuid = player.uuid || playerUuid;
-    const cur = player.defaultCurrency;
+// Needed to tell your own buy orders apart from other people's.
+      playerUuid = player.uuid || playerUuid;
+      const cur = player.defaultCurrency;
     const bal = player.balances?.[cur] ?? 0;
     el.textContent = `${Number(bal).toLocaleString(undefined, {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     })} ${cur}`;
-}
-
-/**
- * A currency badge for a price, or nothing when the price is already in the
- * default currency. Repeating "Aurels" on every card told the reader nothing
- * they could not see from the header, but a non-default currency still has to be
- * spelled out or the numbers are ambiguous.
- */
-function currencyBadge(currency) {
-    if (!currency || currency === defaultCurrency) {
-        return '';
-    }
-    return `<span class="item-currency">${esc(currency)}</span>`;
 }
 
 // ── auto refresh ───────────────────────────────────────────────────
@@ -837,10 +822,9 @@ function renderItems(items) {
                 <div class="item-name">${esc(item.name)}</div>
             </div>
             <div class="item-card-footer">
-                <div class="item-card-price">
-                    <span class="item-price">${esc(item.priceFormatted)}</span>
-                    ${currencyBadge(item.currency)}
-                </div>
+<div class="item-card-price">
+                      <span class="item-price">${esc(item.priceFormatted)}</span>
+                  </div>
                 <button class="btn-trade trade-buy card-action" type="button">Buy</button>
             </div>
         </div>`

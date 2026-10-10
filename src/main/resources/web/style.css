@@ -641,14 +641,6 @@ header {
     color: var(--accent);
 }
 
-.item-currency {
-    font-size: 11px;
-    color: var(--text-muted);
-    padding: 2px 8px;
-    background: var(--bg-elevated);
-    border-radius: 10px;
-}
-
 /* ── Pagination ──────────────────────────────────────────────────── */
 
 .pagination {
