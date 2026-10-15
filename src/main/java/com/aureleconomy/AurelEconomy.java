@@ -351,19 +351,139 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
         // Deep-copy all user values (including nested sections)
         java.util.Map<String, Object> userValues = deepExtract(oldConfig);
 
-        configFile.delete();
-        saveDefaultConfig();
-        reloadConfig();
+        // Build the replacement entirely in memory first: the shipped defaults
+        // with the owner's values merged over the top.
+        //
+        // This used to delete config.yml and then call saveDefaultConfig(). That
+        // left a window where the file did not exist, so anything that went wrong
+        // between the delete and the rewrite destroyed the owner's config with no
+        // way back. Writing the finished file in one go closes that window.
+        org.bukkit.configuration.file.YamlConfiguration fresh = loadShippedDefaults();
+        if (fresh == null) {
+            // No default resource to merge into. Leaving the existing file alone
+            // is better than overwriting it with something incomplete.
+            getComponentLogger().warn(
+                    "config.yml default resource is missing from the jar; leaving the existing config untouched");
+            return;
+        }
 
         // Deep-merge user values into the new defaults
         for (java.util.Map.Entry<String, Object> entry : userValues.entrySet()) {
             // Always use the new default config-version — it tracks the schema version
             if (entry.getKey().equals("config-version")) continue;
-            deepSet(getConfig(), entry.getKey(), entry.getValue());
+            deepSet(fresh, entry.getKey(), entry.getValue());
         }
-        saveConfig();
+
+        // Keep the previous file before replacing it. The merge is pure
+        // computation by this point, so this is belt and braces, but a move that
+        // fails would otherwise leave the owner with no config at all.
+        keepConfigBackup(configFile);
+
+        // Write to a sibling temp file and move it into place, rather than writing
+        // over config.yml directly. A direct write truncates first, so anything
+        // reading the file at that moment, including the plugin itself on a
+        // concurrent task, can observe it empty. An atomic move swaps the whole
+        // file instead, so a reader sees either the old config or the new one.
+        java.nio.file.Path target = configFile.toPath();
+        java.nio.file.Path staged = new java.io.File(getDataFolder(), "config.yml.new").toPath();
+        boolean replaced = false;
+        try {
+            java.nio.file.Files.writeString(
+                    staged, fresh.saveToString(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            getComponentLogger().error("Could not stage the new config.yml: " + e.getMessage());
+            return;
+        }
+
+        try {
+            try {
+                java.nio.file.Files.move(staged, target,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.io.IOException atomicFailed) {
+                // Windows refuses an atomic replace while any handle is open on the
+                // target, and some filesystems have no atomic move at all. Fall back
+                // to a plain overwrite so the owner still picks up new keys. It is
+                // not atomic, but the original is already sitting in config.yml.bak.
+                java.nio.file.Files.move(staged, target,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            replaced = true;
+        } catch (java.io.IOException e) {
+            getComponentLogger().warn(
+                    "Could not swap in the new config.yml (" + e.getMessage()
+                            + "); falling back to a direct write");
+        }
+
+        if (!replaced) {
+            // Last resort. Truncates before writing, so this is the window the
+            // staged write exists to avoid, but refusing to update at all would
+            // leave the owner permanently missing new settings.
+            try {
+                java.nio.file.Files.copy(staged, target,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                replaced = true;
+            } catch (java.io.IOException e) {
+                getComponentLogger().warn(
+                        "Direct write of config.yml also failed: " + e.getMessage());
+            }
+        }
+
+        // Best effort cleanup. Failing to remove the staged file must not mask a
+        // real error, so this swallow is deliberate.
+        try {
+            java.nio.file.Files.deleteIfExists(staged);
+        } catch (java.io.IOException ignored) {
+            // A stale .new file is harmless and is overwritten next time.
+        }
+
+        if (!replaced) {
+            getComponentLogger().error("Could not write config.yml; the existing config was left in place");
+            return;
+        }
+
+        reloadConfig();
+
         getComponentLogger().info("config.yml updated from version " + oldVersion
                 + " to version " + getConfig().getInt("config-version", 0));
+    }
+
+    /**
+     * Loads the config.yml that ships inside the jar, comments included.
+     *
+     * <p>Returns null if the resource is missing, which the caller treats as
+     * "do not touch the existing config".
+     */
+    private org.bukkit.configuration.file.YamlConfiguration loadShippedDefaults() {
+        java.io.InputStream in = getResource("config.yml");
+        if (in == null) return null;
+        try (java.io.InputStreamReader reader = new java.io.InputStreamReader(
+                in, java.nio.charset.StandardCharsets.UTF_8)) {
+            return org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(reader);
+        } catch (java.io.IOException e) {
+            getComponentLogger().error("Could not read the default config.yml: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Copies config.yml to config.yml.bak, replacing any previous backup.
+     *
+     * <p>Silently does nothing if the copy fails. A backup that cannot be written
+     * is not worth refusing the migration over, since the in-memory copy already
+     * holds everything.
+     */
+    private void keepConfigBackup(java.io.File configFile) {
+        java.io.File backup = new java.io.File(getDataFolder(), "config.yml.bak");
+        try {
+            java.nio.file.Files.copy(
+                    configFile.toPath(), backup.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (java.io.IOException e) {
+            getComponentLogger().warn(
+                    "Could not back up config.yml to config.yml.bak: " + e.getMessage());
+        }
     }
 
     /**
