@@ -491,10 +491,10 @@ public class CloudSyncManager {
                 String displayName = entry.customName != null ? entry.customName
                         : entry.material.name().replace("_", " ");
                 BigDecimal buyPrice = (entry.material == Material.SPAWNER && entry.customName != null)
-                        ? plugin.getMarketManager().getBuyPrice(entry.customName)
+                        ? plugin.getMarketManager().getBuyPrice(plugin.getMarketManager().entryKey(entry))
                         : plugin.getMarketManager().getBuyPrice(entry.material);
                 String currency = (entry.material == Material.SPAWNER && entry.customName != null)
-                        ? plugin.getMarketManager().getCurrency(entry.customName)
+                        ? plugin.getMarketManager().getCurrency(plugin.getMarketManager().entryKey(entry))
                         : plugin.getMarketManager().getCurrency(entry.material);
 
                 json.append("{\"key\":\"").append(escJson(key)).append("\"");
@@ -611,7 +611,7 @@ public class CloudSyncManager {
             }
 
             String currency = (entry.material == Material.SPAWNER && entry.customName != null)
-                    ? plugin.getMarketManager().getCurrency(entry.customName)
+                    ? plugin.getMarketManager().getCurrency(plugin.getMarketManager().entryKey(entry))
                     : plugin.getMarketManager().getCurrency(entry.material);
 
             json.append("{\"key\":\"").append(escJson(priceKey)).append("\"");

@@ -141,8 +141,8 @@ public class MarketGUI extends GUIHolder {
             BigDecimal buyPrice;
             String currency;
             if (entry.material == Material.SPAWNER && entry.customName != null) {
-                buyPrice = plugin.getMarketManager().getBuyPrice(entry.customName);
-                currency = plugin.getMarketManager().getCurrency(entry.customName);
+                buyPrice = plugin.getMarketManager().getBuyPrice(plugin.getMarketManager().entryKey(entry));
+                currency = plugin.getMarketManager().getCurrency(plugin.getMarketManager().entryKey(entry));
             } else {
                 buyPrice = plugin.getMarketManager().getBuyPrice(entry.material);
                 currency = plugin.getMarketManager().getCurrency(entry.material);
@@ -259,8 +259,8 @@ public class MarketGUI extends GUIHolder {
         BigDecimal unitPrice;
         String currency;
         if (entry.material == Material.SPAWNER && entry.customName != null) {
-            unitPrice = plugin.getMarketManager().getBuyPrice(entry.customName);
-            currency = plugin.getMarketManager().getCurrency(entry.customName);
+            unitPrice = plugin.getMarketManager().getBuyPrice(plugin.getMarketManager().entryKey(entry));
+            currency = plugin.getMarketManager().getCurrency(plugin.getMarketManager().entryKey(entry));
         } else {
             unitPrice = plugin.getMarketManager().getBuyPrice(entry.material);
             currency = plugin.getMarketManager().getCurrency(entry.material);
@@ -268,7 +268,7 @@ public class MarketGUI extends GUIHolder {
 
         if (!isBuy) {
             if (entry.material == Material.SPAWNER && entry.customName != null) {
-                unitPrice = plugin.getMarketManager().getSellPrice(entry.customName);
+                unitPrice = plugin.getMarketManager().getSellPrice(plugin.getMarketManager().entryKey(entry));
             } else {
                 unitPrice = plugin.getMarketManager().getSellPrice(entry.material);
             }

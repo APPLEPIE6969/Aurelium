@@ -143,14 +143,11 @@ public class WebSnapshot {
                 if (i > 0) {
                     json.append(",");
                 }
-                boolean customSpawner = entry.material == Material.SPAWNER && entry.customName != null;
-                String key = customSpawner ? entry.customName : entry.material.name();
+                String key = plugin.getMarketManager().entryKey(entry);
                 String displayName = entry.customName != null ? entry.customName
                         : entry.material.name().replace("_", " ");
-                BigDecimal buyPrice = customSpawner ? plugin.getMarketManager().getBuyPrice(entry.customName)
-                        : plugin.getMarketManager().getBuyPrice(entry.material);
-                String currency = customSpawner ? plugin.getMarketManager().getCurrency(entry.customName)
-                        : plugin.getMarketManager().getCurrency(entry.material);
+                BigDecimal buyPrice = plugin.getMarketManager().getBuyPrice(key);
+                String currency = plugin.getMarketManager().getCurrency(key);
 
                 json.append("{\"key\":\"").append(esc(key)).append("\"");
                 json.append(",\"material\":\"").append(esc(entry.material.name().toLowerCase())).append("\"");
@@ -289,9 +286,8 @@ public class WebSnapshot {
             }
             String changeBasis = haveDayAgo ? "24h" : "listing";
 
-            String currency = (entry.material == Material.SPAWNER && entry.customName != null)
-                    ? plugin.getMarketManager().getCurrency(entry.customName)
-                    : plugin.getMarketManager().getCurrency(entry.material);
+            String currency = plugin.getMarketManager().getCurrency(
+                plugin.getMarketManager().entryKey(entry.material, entry.customName));
 
             json.append("{\"key\":\"").append(esc(priceKey)).append("\"");
             json.append(",\"material\":\"").append(esc(entry.material.name().toLowerCase())).append("\"");

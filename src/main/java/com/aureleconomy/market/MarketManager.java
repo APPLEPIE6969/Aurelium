@@ -99,10 +99,7 @@ public class MarketManager {
  }
 
  private void processEntry(MarketEntry entry, FileConfiguration config) {
- String key = entry.material.name();
- if (entry.customName != null) {
- key = entry.material.name() + "_" + entry.customName.replace(" ", "_").toUpperCase();
- }
+ String key = entryKey(entry);
 
  entryCache.put(key, entry);
 
@@ -266,6 +263,40 @@ public class MarketManager {
 
  public BigDecimal getBuyPrice(Material material) {
  return getBuyPrice(material.name());
+ }
+
+ /**
+  * The key an entry is stored under in the price, sell-price and currency maps.
+  *
+  * <p>Plain items are keyed by material alone. An entry with a custom name, which is
+  * how every spawner is defined, needs the material too, otherwise all spawners
+  * would collide on one key since they are all {@link Material#SPAWNER}.
+  *
+  * <p>This exists because the write path and the read path disagreed. Writes built
+  * {@code SPAWNER_IRON_GOLEM_SPAWNER} while reads asked for the display name
+  * {@code Iron Golem Spawner}, so every lookup missed and returned zero, leaving all
+  * 52 spawners unbuyable and valued at nothing on the dashboard. Both sides call this
+  * now, so a change to the format cannot desynchronise them again.
+  */
+ public String entryKey(MarketEntry entry) {
+  if (entry == null) {
+   return "";
+  }
+  if (entry.customName == null) {
+   return entry.material.name();
+  }
+  return entry.material.name() + "_" + entry.customName.replace(" ", "_").toUpperCase();
+ }
+
+ /**
+  * The key an entry is stored under, from its parts, for callers that hold a
+  * material and a display name rather than the entry itself.
+  */
+ public String entryKey(Material material, String customName) {
+  if (customName == null) {
+   return material.name();
+  }
+  return material.name() + "_" + customName.replace(" ", "_").toUpperCase();
  }
 
  public BigDecimal getBuyPrice(String key) {
