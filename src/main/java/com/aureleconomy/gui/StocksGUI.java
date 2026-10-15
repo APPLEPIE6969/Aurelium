@@ -44,8 +44,7 @@ public class StocksGUI extends GUIHolder {
             if (cat == Category.ALL_ITEMS)
                 continue;
             for (MarketEntry entry : MarketItems.getItems(cat)) {
-                String key = (entry.customName != null && entry.material == Material.SPAWNER) ? entry.customName
-                        : entry.material.name();
+                String key = plugin.getMarketManager().entryKey(entry);
                 if (processedKeys.add(key)) {
                     stocks.add(new StockItem(entry));
                 }
@@ -67,9 +66,7 @@ public class StocksGUI extends GUIHolder {
             BigDecimal currentPrice;
             BigDecimal sellPrice;
 
-            String priceKey = (entry.customName != null)
-                    ? entry.customName
-                    : entry.material.name();
+            String priceKey = plugin.getMarketManager().entryKey(entry);
 
             currentPrice = plugin.getMarketManager().getBuyPrice(priceKey);
             sellPrice = plugin.getMarketManager().getSellPrice(priceKey);

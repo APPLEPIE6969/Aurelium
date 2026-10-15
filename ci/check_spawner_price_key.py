@@ -106,6 +106,39 @@ def main():
     else:
         ok("no price or currency lookup is passed entry.customName anywhere")
 
+    # 4b. A key rebuilt by hand from customName. The first fix missed four such
+    # sites in WebSnapshot and CloudSyncManager and three more in the GUIs, all of
+    # which read back as zero for the 205 entries that have a custom name. This is
+    # the shape to catch, so it is checked directly rather than by behaviour.
+    handbuilt = []
+    for path in java:
+        text = path.read_text(encoding="utf-8")
+        for m in re.finditer(r'String\s+\w*[Kk]ey\s*=\s*[^;]*?customName[^;]*?;', text, re.S):
+            # entryKey's own body is the one legitimate place this appears.
+            line_no = text[:m.start()].count(chr(10)) + 1
+            rel = f"{path.relative_to(ROOT)}:{line_no}"
+            if path.name == "MarketManager.java" and 275 <= line_no <= 305:
+                continue
+            handbuilt.append(rel)
+    if handbuilt:
+        bad("price keys still built by hand from customName, use entryKey: "
+            + ", ".join(handbuilt))
+    else:
+        ok("no price key is built by hand from customName outside entryKey")
+
+    # 4c. Trade recording is keyed too. A spawner purchase recorded under the
+    # display name lands in trade_volume and last-sold-price under a key nothing
+    # reads back, so volume silently undercounts every named item.
+    for rel in ("gui/MarketGUI.java", "gui/ShopGUI.java"):
+        p = SRC / rel
+        t = p.read_text(encoding="utf-8")
+        bad_txn = [ln for ln in t.splitlines()
+                   if "onTransaction(" in ln and "entry.customName" in ln]
+        if bad_txn:
+            bad(f"{rel} records a transaction under entry.customName")
+        else:
+            ok(f"{rel} records transactions under the entryKey")
+
     # 5. The files that display spawner prices must go through entryKey.
     for rel in ("gui/MarketGUI.java", "gui/ShopGUI.java", "webstore/WebSnapshot.java"):
         p = SRC / rel

@@ -85,8 +85,7 @@ public class MarketManager {
  }
  }
  for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
- String key = (entry.customName != null) ? entry.material.name() + "_" + entry.customName.replace(" ", "_").toUpperCase()
- : entry.material.name();
+ String key = entryKey(entry);
  if (!entryCache.containsKey(key)) {
  processEntry(entry, config);
  }

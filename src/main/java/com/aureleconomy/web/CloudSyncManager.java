@@ -485,17 +485,11 @@ public class CloudSyncManager {
                 if (i > 0)
                     json.append(",");
 
-                String key = (entry.material == Material.SPAWNER && entry.customName != null)
-                        ? entry.customName
-                        : entry.material.name();
+                String key = plugin.getMarketManager().entryKey(entry);
                 String displayName = entry.customName != null ? entry.customName
                         : entry.material.name().replace("_", " ");
-                BigDecimal buyPrice = (entry.material == Material.SPAWNER && entry.customName != null)
-                        ? plugin.getMarketManager().getBuyPrice(plugin.getMarketManager().entryKey(entry))
-                        : plugin.getMarketManager().getBuyPrice(entry.material);
-                String currency = (entry.material == Material.SPAWNER && entry.customName != null)
-                        ? plugin.getMarketManager().getCurrency(plugin.getMarketManager().entryKey(entry))
-                        : plugin.getMarketManager().getCurrency(entry.material);
+                BigDecimal buyPrice = plugin.getMarketManager().getBuyPrice(key);
+                String currency = plugin.getMarketManager().getCurrency(key);
 
                 json.append("{\"key\":\"").append(escJson(key)).append("\"");
                 json.append(",\"material\":\"").append(escJson(entry.material.name().toLowerCase())).append("\"");
@@ -584,7 +578,7 @@ public class CloudSyncManager {
                 json.append(",");
             }
 
-            String priceKey = (entry.customName != null) ? entry.customName : entry.material.name();
+            String priceKey = plugin.getMarketManager().entryKey(entry);
             String displayName = entry.customName != null ? entry.customName
                     : entry.material.name().replace("_", " ");
 
@@ -610,9 +604,7 @@ public class CloudSyncManager {
                         .divide(basePrice, 4, RoundingMode.HALF_UP);
             }
 
-            String currency = (entry.material == Material.SPAWNER && entry.customName != null)
-                    ? plugin.getMarketManager().getCurrency(plugin.getMarketManager().entryKey(entry))
-                    : plugin.getMarketManager().getCurrency(entry.material);
+            String currency = plugin.getMarketManager().getCurrency(priceKey);
 
             json.append("{\"key\":\"").append(escJson(priceKey)).append("\"");
             json.append(",\"material\":\"").append(escJson(entry.material.name().toLowerCase())).append("\"");
@@ -683,7 +675,7 @@ public class CloudSyncManager {
              var ps = conn.prepareStatement(
                      "INSERT INTO price_history (item_key, buy_price, sell_price, timestamp) VALUES (?, ?, ?, ?)")) {
             for (MarketEntry entry : allItems) {
-                String priceKey = (entry.customName != null) ? entry.customName : entry.material.name();
+                String priceKey = plugin.getMarketManager().entryKey(entry);
                 BigDecimal buyPrice = plugin.getMarketManager().getBuyPrice(priceKey);
                 BigDecimal sellPrice = plugin.getMarketManager().getSellPrice(priceKey);
 

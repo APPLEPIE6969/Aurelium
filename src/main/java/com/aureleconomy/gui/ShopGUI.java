@@ -372,9 +372,7 @@ public class ShopGUI extends GUIHolder {
         }
         buyer.getInventory().addItem(given);
 
-        String key = (entry.material == Material.SPAWNER && entry.customName != null)
-                ? entry.customName
-                : entry.material.name();
+        String key = plugin.getMarketManager().entryKey(entry);
         plugin.getMarketManager().onTransaction(key, true, amount);
 
         String itemName = entry.customName != null ? entry.customName : entry.material.name().replace("_", " ");

@@ -250,7 +250,7 @@ public class WebSnapshot {
             }
             first = false;
 
-            String priceKey = entry.customName != null ? entry.customName : entry.material.name();
+            String priceKey = plugin.getMarketManager().entryKey(entry);
             String displayName = entry.customName != null ? entry.customName
                     : entry.material.name().replace("_", " ");
 
@@ -427,8 +427,8 @@ public class WebSnapshot {
                      "INSERT INTO price_history (item_key, buy_price, sell_price, timestamp)"
                              + " VALUES (?, ?, ?, ?)")) {
             for (MarketEntry entry : items) {
-                String key = entry.customName != null ? entry.customName : entry.material.name();
-                BigDecimal buy = plugin.getMarketManager().getBuyPrice(key);
+                String key = plugin.getMarketManager().entryKey(entry);
+                    BigDecimal buy = plugin.getMarketManager().getBuyPrice(key);
                 BigDecimal sell = plugin.getMarketManager().getSellPrice(key);
                 if (entry.price.compareTo(BigDecimal.ONE) == 0 && buy.compareTo(BigDecimal.ONE) == 0) {
                     continue;

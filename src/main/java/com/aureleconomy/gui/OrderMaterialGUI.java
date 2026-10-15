@@ -114,7 +114,7 @@ public class OrderMaterialGUI extends GUIHolder {
 
             ItemBuilder builder = new ItemBuilder(item);
 
-            String priceKey = (entry.customName != null) ? entry.customName : entry.material.name();
+            String priceKey = plugin.getMarketManager().entryKey(entry);
             BigDecimal marketBuyPrice = plugin.getMarketManager().getBuyPrice(priceKey);
 
             if (marketBuyPrice.compareTo(BigDecimal.ZERO) > 0 && entry.price.compareTo(BigDecimal.ONE) != 0) {

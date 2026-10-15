@@ -306,8 +306,7 @@ public class MarketGUI extends GUIHolder {
                 if (plugin.getEconomyManager().withdrawIfSufficient(player, totalPrice, currency)) {
                     player.getInventory().addItem(item);
 
-                    String key = (entry.material == Material.SPAWNER && entry.customName != null) ? entry.customName
-                            : entry.material.name();
+                    String key = plugin.getMarketManager().entryKey(entry);
                     plugin.getMarketManager().onTransaction(key, true, amount);
 
                     player.sendMessage(Component.text(
