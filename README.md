@@ -168,12 +168,11 @@ A web app with [nearly 100% uptime](https://stats.uptimerobot.com/vzXzS8Op2J):
 ## Setup
 
 1. Download the jar that matches your server's Minecraft version from [Modrinth](https://modrinth.com/plugin/aurelium/versions)
-   - Files ending in `1.21.x` are for Minecraft 1.21 through 1.21.11
-   - Files ending in `26.1.x` are for Minecraft 26.1, 26.1.1 and 26.1.2
-   - Files ending in `26.2.x` are for Minecraft 26.2
+   - Files ending in `1.21.x` are for Minecraft 1.21 through 1.21.11, and need Java 21
+   - Files ending in `26.1.x` are for Minecraft 26.1, 26.1.1 and 26.1.2, and need Java 25
+   - Files ending in `26.2.x` are for Minecraft 26.2, and need Java 25
 2. Place it in your server's `plugins/` folder
 3. Restart the server
-   - Requires Java 25
    - If Vault is not detected, Aurelium automatically extracts and installs it on first run
 
 ---
