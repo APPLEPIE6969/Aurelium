@@ -75,7 +75,7 @@ Automatically discovers custom items from popular third-party plugins:
 
 ### Web Dashboard
 
-A web app with [nearly 100% uptime](https://stats.uptimerobot.com/vzXzS8Op2J):
+<a href="https://stats.uptimerobot.com/yuE5bcmFts?utm_source=status_badge&utm_medium=referral" target="_blank" rel="noopener"><picture><source media="(prefers-color-scheme: dark)" srcset="https://badge.uptimerobot.com/psp/d16cbb693ca830c5ed7050c793ce27a7.svg?style=logo&theme=dark"><img src="https://badge.uptimerobot.com/psp/d16cbb693ca830c5ed7050c793ce27a7.svg?style=logo&theme=light" alt="Aurelium"></picture></a>
 
 - **Server Market** - purchase items from the web, delivered instantly in-game
 
