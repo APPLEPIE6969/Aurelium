@@ -25,6 +25,10 @@
 - **Cloud dashboard has moved** - the dashboard is now hosted at `https://aurelium.alwaysdata.net`, replacing the previous address. Configs pointing at the old address, or at any other dashboard you had configured, are rewritten automatically on startup and the change is logged, so there is nothing to change by hand
 - **RCON reconnection (web)** - the dashboard recovers on its own if the connection to the server drops, instead of requiring a restart
 - **Reloads no longer stall on shutdown (web)** - the dashboard's request threads are now shut down cleanly when the plugin disables, so a `/reload` no longer leaves threads running or holds the port
+- **Spawners are buyable again (market)** - every spawner read back as 0. All 52 spawners are `Material.SPAWNER`, so the material alone cannot tell them apart and each one is stored under a composite key made from the material and the display name, for example `SPAWNER_IRON_GOLEM_SPAWNER`. The fourteen read sites passed the display name on its own, `Iron Golem Spawner`, which is never a key that exists, so `getBuyPrice` returned its zero default. Spawners were unbuyable, valued at nothing on the dashboard, and wrote a flat 0 into price history. `MarketManager.entryKey()` now builds the key for both sides. Two sites that branched on whether an entry was a spawner were simplified rather than patched, since `entryKey` already falls back to the material key when there is no custom name, which removes the shape of the bug instead of leaving two branches to keep in step. No config change is needed
+- **The plugin no longer overwrites dashboard data (cloud)** - the pending-purchase check was posting a 23-byte empty snapshot to `/api/sync`, which is the snapshot-publish route, every 30 seconds. Each poll replaced the server's real data with nothing. It now reads from a new read-only `GET /api/:server_id/pending-purchases`. A second fault was on the receiving end: axum's default body limit is 2 MB and a real snapshot is about 3.3 MB, so even a correct upload was rejected. The limit is now 16 MB, which leaves headroom on a small host without leaving the door open
+- **Player session links are far smaller (cloud)** - the `/player` endpoint returned the entire item snapshot, about 3.3 MB, on every poll, and nothing read it. The snapshot has been removed, taking that response from 3339 KB to 0.3 KB
+- **Purchases confirm without a timeout (cloud)** - the dashboard polls `GET /api/:server_id/purchase-status` to learn whether a purchase landed. That endpoint had never been implemented, so every buy waited the full 20 seconds and then reported a timeout regardless of outcome. It now returns the real state
 
 ### Dashboard Frontend
 
@@ -33,7 +37,11 @@
 - **The price history chart can be opened again (web)** - the trend sparkline next to each item never opened anything, so the chart could not be reached from the dashboard at all, even though the code to draw it was already there. The sparkline is now a button that opens the price history for that item, and it works with the keyboard as well as the mouse. Items without enough history still show `no data` inline instead of opening a modal that has nothing to show
 - **The price history chart is readable now (web)** - the canvas was drawn at half the size it was displayed at, so the axis labels came out about 5 pixels tall and the dates overlapped into an unreadable pile. The chart now draws at its real size, sharp on any display. The first and last dates are labelled, and the lowest price is drawn inside the plot so it no longer collides with them
 - **Missing item icons no longer spam the console (web)** - the fallback that walks a chain of icon URLs when a texture fails to load was being blocked by the content security policy. It now works, and stops after the final attempt instead of retrying
-- Apart from the sparkline now showing a hover and keyboard-focus outline, the dashboard renders identically before and after
+- Apart from the sparkline now showing a hover and keyboard-focus outline, the security work in this release left the dashboard rendering identically before and after
+- **Purchases no longer report a false timeout (web)** - see the purchase-status note above. The dashboard waits for the server to confirm, and the server had nothing to answer with, so a completed purchase still looked like a failure
+- **The chart shows values on hover (web)** - a crosshair follows the pointer with a dot on the line and a tooltip giving the price and time. Price history for a page is fetched once and cached for the rest of the visit, instead of refetching all of it every time a chart opens
+- **The chart window fits the chart (web)** - widened from 420px to 1100px, with the canvas at 1050 by 520
+- **The currency badge is gone from market cards (web)** - it duplicated what was already on the card and pushed the prices out of alignment
 
 ### CI Changes
 
@@ -42,6 +50,8 @@
 - **MySQL verified on every run** - the checks that verify a MySQL-backed server writes correctly were not actually reading the values back, so they passed or failed for the wrong reason. They now check what they claim to, and the MySQL job is green for the first time
 - **New guards against the regressions fixed in this release**: one checks the dashboard's parameter binding so a broken query cannot be mistaken for a database that is not writing, and another checks the local server's bind address, response headers and shutdown so the issues above cannot silently return
 - Explicit timeouts on the long-running jobs, so a stuck server fails the run instead of holding it open
+- **Test servers deregister themselves (ci)** - each CI job that registers a server with the production dashboard now deletes its registration afterwards, run with `if: always()` so it happens even when the job fails. New `DELETE /api/:server_id`, authenticated with the server's own key, plus `ci/cleanup-registration.sh`. It treats 401 and 403 as success, because the API cannot tell a wrong key from an absent server without leaking whether that server exists, and it always exits 0 so cleanup never masks a real failure. A backlog of 295 dead test servers was purged from the dashboard, taking its database from 132 MB to 3.4 MB
+- **The restart cycle test pins its server id (ci)** - it previously let the plugin generate a random one that nothing recorded, so there was no way to clean the registration up afterwards
 
 ---
 
