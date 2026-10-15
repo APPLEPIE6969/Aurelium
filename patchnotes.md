@@ -59,11 +59,11 @@
 
 ### Plugin Changes
 
-- **Paper 26.2 (build 40) Support**: Full compatibility with Paper 26.2 alpha - CI matrix now builds and tests against 26.2, 26.1.2 (build 72), and 1.21.11 (build 132)
+- **Paper 26.2 (build 40) Support**: Full compatibility with Paper 26.2 alpha — CI matrix now builds and tests against 26.2, 26.1.2 (build 72), and 1.21.11 (build 132)
 - **ViaVersion 5.10.1-SNAPSHOT** & **ViaBackwards 5.10.1-SNAPSHOT**: Updated protocol support for cross-version connectivity
 - **Node.js 24** in CI: Updated from Node 22 (deprecated June 2026) for mineflayer test jobs
 - **SQLite Race Condition Fix**: `DatabaseManager.getConnection()` and `close()` now `synchronized` to prevent concurrent access issues on async threads
-- **Cloud Dashboard Registration**: Failure logs now at `ERROR` level (was `WARN`) - registration failures are actionable and should be visible
+- **Cloud Dashboard Registration**: Failure logs now at `ERROR` level (was `WARN`) — registration failures are actionable and should be visible
 - **CI Heredoc Fixes**: Corrected bash heredoc escaping in workflow YAML (`<< \'PROPS\'` vs `<< \\\'PROPS\\\'`) preventing server.properties corruption
 - **MySQL 8.0 Compatibility**: Docker service configured with `mysql_native_password` auth plugin; JDBC URL includes `allowPublicKeyRetrieval=true`
 - **54 In-Game CI Tests**: Full RCON-based test suite covering economy commands, auctions, orders, and web dashboard integration across all 3 Paper versions
@@ -71,10 +71,10 @@
 ### Website Changes ([WebMarketMC](https://github.com/APPLEPIE6969/WebMarketMC))
 
 - **Astra DB Persistence**: Full rewrite of `server.js` with write-through cache, startup cache load from all pages (paginated), and automatic fallback to in-memory mode when no `ASTRA_TOKEN` is set
-- **AES-256-GCM Field-Level Encryption**: All sensitive data stored in Astra DB is encrypted at rest - `api_key`, `session_token`, `player_uuid`, `balances_json`, and `result_json`. Uses deterministic HMAC-SHA256 for session primary keys (stable across restarts) and random-IV AES-256-GCM for everything else. Backward compatible: old plaintext data is read as-is. Server refuses to start with `ASTRA_TOKEN` but no `ENCRYPTION_KEY` (fail-closed)
-- **Write-Through Integrity**: Failed Astra DB writes now return 503 to the caller instead of silently succeeding with cache-only data - no more data loss on restart after a failed write
+- **AES-256-GCM Field-Level Encryption**: All sensitive data stored in Astra DB is encrypted at rest — `api_key`, `session_token`, `player_uuid`, `balances_json`, and `result_json`. Uses deterministic HMAC-SHA256 for session primary keys (stable across restarts) and random-IV AES-256-GCM for everything else. Backward compatible: old plaintext data is read as-is. Server refuses to start with `ASTRA_TOKEN` but no `ENCRYPTION_KEY` (fail-closed)
+- **Write-Through Integrity**: Failed Astra DB writes now return 503 to the caller instead of silently succeeding with cache-only data — no more data loss on restart after a failed write
 - **Transport Error Handling**: `astraFetch()` and `astraQuery()` catch timeout/network errors and return structured `{ ok: false }` instead of throwing into route handlers
-- **Session Cache Consistency**: `sessionCache` keyed by `tokenHash(token)` everywhere - startup load, session creation, lookup, and cleanup all use the same HMAC-based key, so persisted sessions survive restarts
+- **Session Cache Consistency**: `sessionCache` keyed by `tokenHash(token)` everywhere — startup load, session creation, lookup, and cleanup all use the same HMAC-based key, so persisted sessions survive restarts
 - **Input Validation Hardening**: Buy amounts validated with `Number()` + `Number.isInteger()` (no more NaN bypass); auction/order IDs validated with `Number()` + `Number.isFinite()` + `Number.isInteger()` (no more partial parses like `parseInt('12abc')`)
 - **Auction Modal Quantity Selector**: BIN auctions with stacked items now show +/- quantity buttons (1 to remaining), per-unit price, and live total cost calculation
 - **Currency Display**: Uses each item's assigned currency instead of hardcoded dollars
@@ -95,7 +95,7 @@
 
 ### Fixes
 
-- **Market Custom Item Display Names**: Discovered custom items now show their configured display name in the market (alerts, GUI, price lookups) instead of falling back to raw material name. Previously, `MarketManager.addCustomMarketItem()` created `MarketEntry` with only material and price, discarding the display name - auction messages already worked correctly, but market-side name resolution did not.
+- **Market Custom Item Display Names**: Discovered custom items now show their configured display name in the market (alerts, GUI, price lookups) instead of falling back to raw material name. Previously, `MarketManager.addCustomMarketItem()` created `MarketEntry` with only material and price, discarding the display name — auction messages already worked correctly, but market-side name resolution did not.
 
 ---
 
@@ -109,13 +109,13 @@
 
 ## v1.5.0 - Custom Item Scanner & Stability Improvements
 
-**Aurelium now automatically discovers custom items from popular third-party plugins and adds them to your server market, with no manual configuration required.**
+**Aurelium now automatically discovers custom items from popular third-party plugins and integrates them seamlessly into your server market—no manual configuration required.**
 
 ### New - Auto Custom Item Detection (Scanner)
 
 - **UnifiedItemScanner**: Automatically detects custom items from installed third-party plugins on server startup and via `/customitems scan`
   - Supported plugins (via reflection, zero hard dependencies): ItemsAdder, Oraxen, MMOItems, MythicMobs, ExecutableItems, Nexo, SX-Item
-  - Each plugin API is accessed through reflection only, so no compile-time dependencies are required
+  - Each plugin API is accessed via reflection only—no compile-time dependencies required
 - **Cross-Plugin Deduplication**: If the same item is registered by multiple plugins (e.g., ItemsAdder ruby_sword and MMOItems SWORD:RUBY_BLADE), it is deduplicated by canonical ID and stored as a single entry in `custom_items`
 - **Config Override Sync**: Discovered items are written to `config.yml` under `discovered-items:` with source plugin, display name, material type, and default buy/sell prices
   - Server owners can edit prices/flags in config, and changes persist across restarts
@@ -126,18 +126,18 @@
 ### New - /customitems Command
 
 - **Full management commands** for discovered custom items:
-  - `/customitems scan` - Force rescan of all supported plugins
-  - `/customitems list` - View all discovered custom items
-  - `/customitems info <id>` - Show details for a specific item
-  - `/customitems reload` - Reload config overrides from disk
-  - `/customitems toggle <id>` - Enable or disable a discovered item in the market
-  - `/customitems price <id> <buy> [sell]` - Set buy/sell prices for a discovered item
+  - `/customitems scan` — Force rescan of all supported plugins
+  - `/customitems list` — View all discovered custom items
+  - `/customitems info <id>` — Show details for a specific item
+  - `/customitems reload` — Reload config overrides from disk
+  - `/customitems toggle <id>` — Enable or disable a discovered item in the market
+  - `/customitems price <id> <buy> [sell]` — Set buy/sell prices for a discovered item
 
 ### Fixes
 
 - **DatabaseManager DDL Propagation**: `createTables()` now re-throws `SQLException` if `custom_items` table creation fails, preventing schema version mismatch on fresh MySQL installs
 - **Cloud Dashboard Retry Logic**: HTTP 4xx/5xx errors stop retrying immediately (permanent errors); only transient errors (network, DNS) retry with backoff
-- **CustomItemRegistry Concurrency**: Fixed race conditions in `register()`, `upsert()`, and `clear()` - all write operations now use proper read-write locking
+- **CustomItemRegistry Concurrency**: Fixed race conditions in `register()`, `upsert()`, and `clear()` — all write operations now use proper read-write locking
 - **MarketItems Price Clamping**: Fixed inverted floor/ceiling clamping when `buyPrice` was unset (-1 sentinel), preventing price recovery drift toward -1
 - **Auction Display Names**: Auction messages now show custom display names instead of raw material types (uses `PlainTextComponentSerializer` for safe Component handling)
 - **MySQL 8.0.20+ Compatibility**: Replaced deprecated `VALUES(col)` syntax with modern `AS new` alias syntax in all upsert queries
@@ -206,7 +206,7 @@
 
 ### Fixes
 
-- Fixed BungeeCord/Velocity balance sync - player data now refreshes from MySQL on server switch
+- Fixed BungeeCord/Velocity balance sync — player data now refreshes from MySQL on server switch
 - Added proper exception logging to previously empty catch blocks
 
 ---
