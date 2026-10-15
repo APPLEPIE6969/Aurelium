@@ -23,18 +23,24 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
-      # All three supported versions, newest first, matching the CI build matrix.
-      # This used to build only 26.1.2 and 1.21.11, so a release advertised Paper
-      # 26.2 support without shipping the jar.
-      - name: Build all versions
+      # Built to prove the tagged commit still compiles, not to be uploaded.
+      # This is the only workflow that runs on tags, since build.yml triggers on
+      # branch pushes, so removing this step would leave a tag unverified.
+      - name: Verify the tag builds
         run: ./gradlew :v26_2:shadowJar :v26_1_2:shadowJar :v1_21_11:shadowJar
 
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Extract changelog from patchnotes
-        id: changelog
+      # Downloads live on Modrinth, which is the only place jars are published.
+      # This release is a pointer to it, so the body opens with the link.
+      #
+      # The detail below comes from patchnotes.md rather than changelog.md on
+      # purpose. GitHub is the developer-facing surface, so it gets the
+      # format-by-format notes. Modrinth is where server owners read the
+      # plain-language changelog instead.
+      - name: Build the release body
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           if [ -f patchnotes.md ]; then
@@ -53,9 +59,32 @@ jobs:
           else
             CHANGELOG="See commit history for details."
           fi
-          echo "$CHANGELOG" > /tmp/changelog.txt
-          echo "Extracted changelog for v${VERSION}: $(wc -l < /tmp/changelog.txt) lines"
 
+          {
+            echo "## Download"
+            echo
+            echo "Jars are published on Modrinth and are not attached to this release:"
+            echo
+            echo "https://modrinth.com/plugin/aurelium/versions"
+            echo
+            echo "Pick the file that matches your Minecraft version:"
+            echo
+            echo "| File | Minecraft version | Needs Java |"
+            echo "|---|---|---|"
+            echo "| \`Aurelium-${VERSION}-1.21.x.jar\` | 1.21 through 1.21.11 | 21 |"
+            echo "| \`Aurelium-${VERSION}-26.1.x.jar\` | 26.1, 26.1.1, 26.1.2 | 25 |"
+            echo "| \`Aurelium-${VERSION}-26.2.x.jar\` | 26.2 | 25 |"
+            echo
+            echo "## Changes"
+            echo
+            echo "$CHANGELOG"
+          } > /tmp/changelog.txt
+
+          echo "Wrote release body: $(wc -l < /tmp/changelog.txt) lines"
+
+      # No files are attached. Attaching the jars here meant GitHub and Modrinth
+      # could serve different builds of the same version, because the two are not
+      # built in the same environment and jars are not byte reproducible.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -63,8 +92,4 @@ jobs:
           name: "Aurelium v${{ steps.version.outputs.VERSION }}"
           draft: false
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
-          files: |
-            versions/26.2/build/libs/*.jar
-            versions/26.1.2/build/libs/*.jar
-            versions/1.21.11/build/libs/*.jar
           body_path: /tmp/changelog.txt
