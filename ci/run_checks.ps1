@@ -45,7 +45,22 @@ foreach ($suite in @('test_market', 'test_stepper', 'test_currency', 'test_order
 }
 
 Write-Host '== static contracts ==' -ForegroundColor Cyan
-foreach ($check in @('check_web_ui.py', 'check_css_classes.py', 'check_issue_fixes.py')) {
+# Kept in step with the "Static contract checks" step in .github/workflows/build.yml.
+# All nine, not a subset. A check that only CI runs is a check that only finds out
+# in CI, which is how the spawner price key guard went stale against the web
+# purchase paths while still passing locally.
+$contracts = @(
+    'check_web_ui.py',
+    'check_css_classes.py',
+    'check_issue_fixes.py',
+    'check_cloud_url_migration.py',
+    'check_local_web_security.py',
+    'check_spawner_price_key.py',
+    'test_rcon_reconnect.py',
+    'test_db_dialect.py',
+    'test_mysql_binding.py'
+)
+foreach ($check in $contracts) {
     $res = & python "ci\$check" 2>&1
     if ($LASTEXITCODE -ne 0) {
         $failed += $check

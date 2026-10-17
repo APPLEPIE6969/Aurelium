@@ -36,6 +36,45 @@ def ok(msg):
     print(f"PASS: {msg}")
 
 
+def strip_comments(text):
+    """Drop // and /* */ comments.
+
+    A textual guard otherwise trips over its own documentation. The comment
+    explaining why a Material.SPAWNER fallback was removed still contains the
+    string Material.SPAWNER, which is exactly the token being guarded against.
+    String literals are stepped over so a "//" inside one is not read as a
+    comment.
+    """
+    out = []
+    i = 0
+    n = len(text)
+    while i < n:
+        two = text[i:i + 2]
+        if two == "//":
+            j = text.find(chr(10), i)
+            i = n if j < 0 else j
+        elif two == "/*":
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+        elif text[i] in chr(34) + chr(39):
+            quote = text[i]
+            j = i + 1
+            while j < n:
+                if text[j] == chr(92):
+                    j += 2
+                    continue
+                if text[j] == quote:
+                    j += 1
+                    break
+                j += 1
+            out.append(text[i:j])
+            i = j
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out)
+
+
 def bad(msg):
     print(f"FAIL: {msg}")
     failures.append(msg)
@@ -144,23 +183,47 @@ def main():
     # from the entry. Defaulting it to SPAWNER hands a player a raw spawner block
     # when they buy an enchanted book, which is exactly the mistake that made 205
     # items look correct in-game and wrong on the web.
-    cm = SRC / "web" / "CloudSyncManager.java"
-    text = cm.read_text(encoding="utf-8")
-    start = text.find("private void executeMarketWebBuy(")
-    if start < 0:
-        bad("could not find executeMarketWebBuy")
-    else:
+    #
+    # A named item may be resolved by reading the entry cache inline or by calling
+    # MarketItemFactory.entryForKey, which reads the same cache. Both are accepted,
+    # and the factory is checked for itself below, so routing through it cannot
+    # become a way to skip the cache rather than share it.
+    for rel, signature in (
+        ("web/CloudSyncManager.java", "private void executeMarketWebBuy("),
+        ("web/WebPurchaseExecutor.java", "private boolean buy("),
+        ("web/WebPurchaseExecutor.java", "private boolean sell("),
+    ):
+        p = SRC / rel
+        text = p.read_text(encoding="utf-8")
+        where = signature.split("(")[0].split()[-1]
+        start = text.find(signature)
+        if start < 0:
+            bad("could not find %s in %s" % (where, rel))
+            continue
         end = text.find("private ", start + 10)
-        body = text[start:end if end > 0 else len(text)]
+        body = strip_comments(text[start:end if end > 0 else len(text)])
         if "Material.SPAWNER" in body:
-            bad("executeMarketWebBuy falls back to Material.SPAWNER, which delivers "
-                "a spawner block for any named item")
+            bad("%s falls back to Material.SPAWNER, which delivers a spawner block "
+                "for any named item" % where)
         else:
-            ok("executeMarketWebBuy resolves the material from the entry, not a guess")
-        if "getEntryCache().get(itemKey)" in body:
-            ok("executeMarketWebBuy resolves a named item through the entry cache")
+            ok("%s resolves the material from the entry, not a guess" % where)
+        if "getEntryCache().get(itemKey)" in body or "MarketItemFactory.entryForKey(" in body:
+            ok("%s resolves a named item through the entry cache" % where)
         else:
-            bad("executeMarketWebBuy does not resolve a named item through the entry cache")
+            bad("%s does not resolve a named item through the entry cache" % where)
+
+    # 4e. The factory has to actually read the cache, or the call sites above are
+    # only passing it by name.
+    mif = SRC / "market" / "MarketItemFactory.java"
+    if not mif.exists():
+        bad("could not find MarketItemFactory.java")
+    else:
+        factory = strip_comments(mif.read_text(encoding="utf-8"))
+        if "getEntryCache()" in factory:
+            ok("MarketItemFactory.entryForKey reads the entry cache")
+        else:
+            bad("MarketItemFactory.entryForKey does not read the entry cache, so the "
+                "call sites routed through it resolve a key by guessing")
 
     # 5. The files that display spawner prices must go through entryKey.
     for rel in ("gui/MarketGUI.java", "gui/ShopGUI.java", "webstore/WebSnapshot.java"):
