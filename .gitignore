@@ -29,6 +29,15 @@ gitlog.txt
 testimg.png
 to-do_list.md
 Untitled-*.txt
+AURELIUM-FIXPLAN.md
+
+# Secrets: API tokens, keys, local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
 
 # Maven
 apache-maven*/
