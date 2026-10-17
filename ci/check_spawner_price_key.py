@@ -139,6 +139,29 @@ def main():
         else:
             ok(f"{rel} records transactions under the entryKey")
 
+    # 4d. A web purchase arrives as a key and has to be turned back into an item.
+    # Material.valueOf cannot parse a composite key, so the material has to come
+    # from the entry. Defaulting it to SPAWNER hands a player a raw spawner block
+    # when they buy an enchanted book, which is exactly the mistake that made 205
+    # items look correct in-game and wrong on the web.
+    cm = SRC / "web" / "CloudSyncManager.java"
+    text = cm.read_text(encoding="utf-8")
+    start = text.find("private void executeMarketWebBuy(")
+    if start < 0:
+        bad("could not find executeMarketWebBuy")
+    else:
+        end = text.find("private ", start + 10)
+        body = text[start:end if end > 0 else len(text)]
+        if "Material.SPAWNER" in body:
+            bad("executeMarketWebBuy falls back to Material.SPAWNER, which delivers "
+                "a spawner block for any named item")
+        else:
+            ok("executeMarketWebBuy resolves the material from the entry, not a guess")
+        if "getEntryCache().get(itemKey)" in body:
+            ok("executeMarketWebBuy resolves a named item through the entry cache")
+        else:
+            bad("executeMarketWebBuy does not resolve a named item through the entry cache")
+
     # 5. The files that display spawner prices must go through entryKey.
     for rel in ("gui/MarketGUI.java", "gui/ShopGUI.java", "webstore/WebSnapshot.java"):
         p = SRC / rel

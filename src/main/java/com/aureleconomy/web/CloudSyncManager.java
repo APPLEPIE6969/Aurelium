@@ -968,14 +968,31 @@ public class CloudSyncManager {
         String currency;
         Material material;
 
-        try {
-            material = Material.valueOf(itemKey.toUpperCase());
-            buyPrice = plugin.getMarketManager().getBuyPrice(material);
-            currency = plugin.getMarketManager().getCurrency(material);
-        } catch (IllegalArgumentException e) {
+        // Resolve the item from the key the dashboard sent. A named item, which
+        // is every enchantment book and every spawner, is stored under a composite
+        // key, so Material.valueOf cannot parse it and the material has to come
+        // from the entry rather than be guessed.
+        //
+        // The old fallback assumed SPAWNER, which was harmless while spawners
+        // were the only named entries but would have handed a player a raw spawner
+        // block when they bought a Protection I enchanted book.
+        MarketEntry entry = plugin.getMarketManager().getEntryCache().get(itemKey);
+        if (entry != null) {
+            material = entry.material;
             buyPrice = plugin.getMarketManager().getBuyPrice(itemKey);
             currency = plugin.getMarketManager().getCurrency(itemKey);
-            material = Material.SPAWNER;
+        } else {
+            try {
+                material = Material.valueOf(itemKey.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // An unknown key is refused rather than turned into some other
+                // item. Falling through to a default here is how a player ends up
+                // with the wrong thing in their inventory.
+                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Item not for sale");
+                return;
+            }
+            buyPrice = plugin.getMarketManager().getBuyPrice(material);
+            currency = plugin.getMarketManager().getCurrency(material);
         }
 
         if (buyPrice.compareTo(BigDecimal.ZERO) <= 0) {
