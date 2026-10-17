@@ -184,7 +184,13 @@ public class WebPurchaseExecutor {
             return fail(result, "Your inventory is full");
         }
 
-        plugin.getEconomyManager().withdraw(buyer, totalCost, currency);
+        // The charge decides whether the sale happened. Delivering first and
+        // charging second is how a player walks away with a free item whenever the
+        // debit is refused, which is exactly what the honest withdraw now reports.
+        if (!plugin.getEconomyManager().withdraw(buyer, totalCost, currency)) {
+            return fail(result, "Not enough funds. You need "
+            + plugin.getEconomyManager().getFormattedWithSymbol(totalCost, currency));
+        }
         buyer.getInventory().addItem(toGive);
         plugin.getMarketManager().onTransaction(itemKey, true, amount);
 
@@ -246,8 +252,15 @@ public class WebPurchaseExecutor {
             }
             
             BigDecimal payout = sellPrice.multiply(BigDecimal.valueOf(amount));
-            removeFromInventory(seller, expected, amount);
-        plugin.getEconomyManager().deposit(seller, payout, currency);
+        // Paying first, taking second. Removing the items and then paying used to
+        // mean a failed payout ate the seller's spawners for nothing, which is a
+        // real outcome rather than a theoretical one: the scheduled trade volume
+        // query on a shared connection has been observed failing with "the
+        // database has been closed".
+        if (!plugin.getEconomyManager().deposit(seller, payout, currency)) {
+            return fail(result, "The payout failed, so nothing was taken from your inventory");
+        }
+        removeFromInventory(seller, expected, amount);
         // Records the volume and moves the price, exactly like the in-game sell.
         plugin.getMarketManager().onTransaction(itemKey, false, amount);
 

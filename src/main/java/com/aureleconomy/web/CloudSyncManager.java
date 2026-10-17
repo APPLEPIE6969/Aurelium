@@ -1008,7 +1008,13 @@ public class CloudSyncManager {
             return;
         }
 
-        plugin.getEconomyManager().withdraw(player, totalCost, currency);
+        // The charge decides whether the sale happened, same as the local web path.
+        // Delivering first and charging second is how a player walks away with a
+        // free item whenever the debit is refused.
+        if (!plugin.getEconomyManager().withdraw(player, totalCost, currency)) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Not enough funds");
+            return;
+        }
         player.getInventory().addItem(toGive);
         plugin.getMarketManager().onTransaction(itemKey, true, amount);
 

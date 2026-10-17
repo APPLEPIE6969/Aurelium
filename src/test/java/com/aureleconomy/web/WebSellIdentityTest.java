@@ -95,6 +95,10 @@ class WebSellIdentityTest {
                 .thenAnswer(i -> i.<BigDecimal>getArgument(0).toPlainString() + " coins");
         when(economy.getBalance(any(OfflinePlayer.class), anyString()))
                 .thenReturn(BigDecimal.valueOf(500_000));
+        // The payout succeeds unless a test says otherwise. Overridden by
+        // failedPayoutLeavesTheItemsAlone.
+        when(economy.deposit(any(OfflinePlayer.class), any(BigDecimal.class), anyString()))
+                .thenReturn(true);
 
         seller = mock(Player.class);
         inventory = mock(PlayerInventory.class);
@@ -296,6 +300,44 @@ class WebSellIdentityTest {
         assertEquals("1800 coins", result.get("earned").getAsString());
         verify(economy).deposit(eq(seller), eq(BOOK_SELL_PRICE), eq("coins"));
         verify(inventory).setItem(0, null);
+    }
+
+    @Test
+    @DisplayName("a failed payout leaves the seller's items alone")
+    void failedPayoutLeavesTheItemsAlone() throws Exception {
+        ItemStack golem = held(0, Material.SPAWNER, 1, true);
+        when(economy.deposit(any(OfflinePlayer.class), any(BigDecimal.class), anyString()))
+                .thenReturn(false);
+
+        JsonObject result;
+        try (MockedConstruction<ItemStack> scope = intercept(Material.SPAWNER)) {
+            result = sell(seller, SPAWNER_KEY, 1);
+        }
+
+        assertFalse(result.has("success"), "a failed payout must not report a sale");
+        assertTrue(result.has("error"));
+        verify(inventory, never()).setItem(anyInt(), any());
+        verify(golem, never()).setAmount(anyInt());
+    }
+
+    @Test
+    @DisplayName("a refused withdrawal does not stand in for a refused payout")
+    void refusedWithdrawalStillPaysOut() throws Exception {
+        // A sale credits the seller, so it must not be gated on a withdrawal
+        // result. This guards against someone "fixing" the order by making sell
+        // refuse whenever any money call returns false.
+        held(0, Material.SPAWNER, 1, true);
+        when(economy.withdraw(any(OfflinePlayer.class), any(BigDecimal.class), anyString()))
+                .thenReturn(false);
+
+        JsonObject result;
+        try (MockedConstruction<ItemStack> scope = intercept(Material.SPAWNER)) {
+            result = sell(seller, SPAWNER_KEY, 1);
+        }
+
+        assertTrue(result.get("success").getAsBoolean(),
+                "a sale credits the seller and must not depend on a withdrawal");
+        verify(economy).deposit(eq(seller), eq(SPAWNER_SELL_PRICE), eq("coins"));
     }
 
     @Test
