@@ -39,6 +39,10 @@ AURELIUM-FIXPLAN.md
 *.key
 secrets.json
 
+# Private instructions for the repo owner. Local only, never shared.
+CLAUDE.md
+CLAUDE.local.md
+
 # Maven
 apache-maven*/
 mvnw
