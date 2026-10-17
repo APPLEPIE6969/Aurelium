@@ -215,19 +215,17 @@ public class WebPurchaseExecutor {
         String itemKey = purchase.itemKey();
         int amount = purchase.amount();
 
-        Material material;
-        BigDecimal sellPrice;
-        String currency;
-        try {
-            material = Material.valueOf(itemKey.toUpperCase());
-            sellPrice = plugin.getMarketManager().getSellPrice(material);
-            currency = plugin.getMarketManager().getCurrency(material);
-        } catch (IllegalArgumentException e) {
-            // Custom spawner key rather than a material name.
-            sellPrice = plugin.getMarketManager().getSellPrice(itemKey);
-            currency = plugin.getMarketManager().getCurrency(itemKey);
-            material = Material.SPAWNER;
-        }
+        // Resolve through the entry cache rather than guessing a material from the key.
+            // Every market item, plain or named, is cached under the same key its price
+            // is stored under, so a key that misses the cache has no price either.
+            com.aureleconomy.market.MarketItems.MarketEntry entry =
+            com.aureleconomy.market.MarketItemFactory.entryForKey(plugin, itemKey);
+            if (entry == null) {
+            return fail(result, "The market is not buying this item");
+            }
+            Material material = entry.material;
+            BigDecimal sellPrice = plugin.getMarketManager().getSellPrice(itemKey);
+            String currency = plugin.getMarketManager().getCurrency(itemKey);
 
         if (plugin.getMarketManager().isBlacklisted(material)) {
             return fail(result, "This item cannot be sold from the web");
@@ -236,14 +234,19 @@ public class WebPurchaseExecutor {
             return fail(result, "The market is not buying this item");
         }
 
-        int held = countInInventory(seller, material);
-        if (held < amount) {
+        // Count and remove against the item the entry actually is, not just its
+            // material. Every spawner is Material.SPAWNER and every enchanted book is
+            // Material.ENCHANTED_BOOK, so a type check alone lets a bare spawner be
+            // sold as an iron golem spawner at the iron golem spawner price.
+            ItemStack expected = com.aureleconomy.market.MarketItemFactory.build(plugin, entry, 1);
+            int held = countSimilar(seller, expected, amount);
+            if (held < amount) {
             return fail(result, "You only have " + held + "x "
-                    + material.name().replace("_", " "));
-        }
-
-        BigDecimal payout = sellPrice.multiply(BigDecimal.valueOf(amount));
-        removeFromInventory(seller, material, amount);
+            + material.name().replace("_", " "));
+            }
+            
+            BigDecimal payout = sellPrice.multiply(BigDecimal.valueOf(amount));
+            removeFromInventory(seller, expected, amount);
         plugin.getEconomyManager().deposit(seller, payout, currency);
         // Records the volume and moves the price, exactly like the in-game sell.
         plugin.getMarketManager().onTransaction(itemKey, false, amount);
@@ -267,14 +270,14 @@ public class WebPurchaseExecutor {
     }
 
     /** Remove {@code amount} of {@code material} from the player's inventory. */
-    private void removeFromInventory(Player player, Material material, int amount) {
+        private void removeFromInventory(Player player, ItemStack expected, int amount) {
         int left = amount;
         var contents = player.getInventory().getStorageContents();
         for (int slot = 0; slot < contents.length && left > 0; slot++) {
-            ItemStack stack = contents[slot];
-            if (stack == null || stack.getType() != material) {
-                continue;
-            }
+        ItemStack stack = contents[slot];
+        if (stack == null || !stack.isSimilar(expected)) {
+        continue;
+        }
             int take = Math.min(left, stack.getAmount());
             left -= take;
             if (stack.getAmount() == take) {
@@ -375,15 +378,39 @@ public class WebPurchaseExecutor {
         return null;
     }
 
-    private int countInInventory(Player player, Material material) {
+    /**
+         * How many of {@code material} the player is holding. Used only to cap how
+         * much a filler is asked for; the authoritative removal happens in
+         * {@code OrderManager.fillOrder}, which matches the real item.
+         */
+        private int countInInventory(Player player, Material material) {
+            int total = 0;
+            for (ItemStack stack : player.getInventory().getStorageContents()) {
+                if (stack != null && stack.getType() == material) {
+                    total += stack.getAmount();
+                }
+            }
+            return total;
+        }
+
+        /**
+         * How many of {@code expected} the player is holding, counting only stacks
+         * that really are that item, capped at {@code needed} so a refusal cannot
+         * claim more than was asked for.
+         */
+        private int countSimilar(Player player, ItemStack expected, int needed) {
         int total = 0;
         for (ItemStack stack : player.getInventory().getStorageContents()) {
-            if (stack != null && stack.getType() == material) {
-                total += stack.getAmount();
-            }
+        if (stack == null || !stack.isSimilar(expected)) {
+        continue;
+        }
+        total += stack.getAmount();
+        if (total >= needed) {
+        return needed;
+        }
         }
         return total;
-    }
+        }
 
     private boolean fail(JsonObject result, String message) {
         result.addProperty("error", message);
