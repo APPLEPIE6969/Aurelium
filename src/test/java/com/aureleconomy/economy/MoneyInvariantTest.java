@@ -87,6 +87,8 @@ abstract class MoneyInvariantTest {
     EconomyManager economy;
     DatabaseManager databaseManager;
     AurelEconomy plugin;
+    /** Exposed so a test can assert on what the plugin logged. */
+    ComponentLogger logger;
 
     @BeforeEach
     void openLedger() throws SQLException {
@@ -116,7 +118,8 @@ abstract class MoneyInvariantTest {
         plugin = mock(AurelEconomy.class);
         when(plugin.getDatabaseManager()).thenReturn(databaseManager);
         when(plugin.getConfig()).thenReturn(config);
-        when(plugin.getComponentLogger()).thenReturn(mock(ComponentLogger.class));
+        logger = mock(ComponentLogger.class);
+        when(plugin.getComponentLogger()).thenReturn(logger);
 
         economy = new EconomyManager(plugin);
     }

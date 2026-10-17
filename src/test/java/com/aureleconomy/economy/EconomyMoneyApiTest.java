@@ -2,6 +2,7 @@ package com.aureleconomy.economy;
 
 import org.bukkit.OfflinePlayer;
 import org.junit.jupiter.api.DisplayName;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -11,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 
 import static com.aureleconomy.economy.MoneyInvariantTest.assertAmount;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.verify;
 
 /**
  * Covers the money API reporting what actually happened (C3-core).
@@ -207,6 +209,45 @@ class EconomyMoneyApiTest extends MoneyInvariantTest {
                 new BigDecimal("6.00"),
                 sum("SELECT COALESCE(SUM(amount), 0) FROM offline_earnings"));
         assertMoneyMintedBy("a deposit alongside an offline earning", before, new BigDecimal("10.00"));
+    }
+
+    // --- what the operator is told ---------------------------------------------
+
+@Test
+    @DisplayName("a refused withdrawal is logged with the phrase the RCON suite greps for")
+    void refusalIsLoggedWithTheExpectedPhrase() throws Exception {
+        OfflinePlayer player = player("logged");
+        credit(player, "1.00");
+
+        assertFalse(economy.withdraw(player, new BigDecimal("500.00"), CURRENCY));
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(logger).warn(message.capture());
+        assertTrue(message.getValue().contains("Insufficient funds for withdraw"),
+                "test_rcon.py greps the server log for this phrase: " + message.getValue());
+        assertTrue(message.getValue().contains("logged"),
+                "the log should name the player: " + message.getValue());
+    }
+
+    @Test
+    @DisplayName("the refusal logs the database balance, not the stale cached one")
+    void refusalLogsTheDatabaseBalance() throws Exception {
+        OfflinePlayer player = player("divergent-log");
+        credit(player, "100.00");
+        assertAmount("cache primed", new BigDecimal("100.00"), economy.getBalance(player, CURRENCY));
+
+        // Database says no, cache still says yes. The refusal has to be logged with
+        // the number the request was actually judged against.
+        setBehindTheApi(player, "0.00");
+
+        assertFalse(economy.withdraw(player, new BigDecimal("50.00"), CURRENCY));
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(logger).warn(message.capture());
+        String text = message.getValue();
+        assertTrue(text.contains("Insufficient funds for withdraw"), text);
+        assertTrue(text.contains("the database holds 0"),
+                "the logged balance must be the database's 0, not the cache's 100: " + text);
     }
 
     // --- transfer -----------------------------------------------------------

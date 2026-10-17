@@ -176,12 +176,24 @@ public class EconomyManager {
 
             if (debited) {
                 updatePlayerMetadata(player);
-            } else {
-                plugin.getComponentLogger().warn("Refused " + operation + " of " + normalizedAmount
-                        + " " + currency + " for " + player.getName()
-                        + ": the database holds less, or none at all");
             }
+
+            // Refreshed either way, so a refused write cannot leave the cache
+            // claiming money that never moved. Before the warning, so the balance
+            // in the warning is the database's answer rather than the stale value
+            // the request happened to be judged against.
             loadBalance(uuid, currency);
+
+            if (!debited) {
+                // The phrase "Insufficient funds for withdraw" is a contract. The
+                // RCON suite greps the server log for it to prove an operator can
+                // see why a withdrawal was refused, and "withdrawIfSufficient"
+                // contains it as a prefix, so both paths are covered.
+                plugin.getComponentLogger().warn("Insufficient funds for " + operation + ": "
+                        + player.getName() + " tried to withdraw " + normalizedAmount
+                        + " " + currency + " but the database holds "
+                        + getBalanceFromCache(uuid, currency));
+            }
         }
         return debited;
     }
@@ -326,6 +338,25 @@ public class EconomyManager {
 
     public String getFormattedWithSymbol(BigDecimal amount, String currency) {
         return getCurrencySymbol(currency) + format(amount, currency);
+    }
+
+    /**
+     * The cached balance only, with no database call, and zero if it is not cached.
+     *
+     * <p>Not a decision input. Affordability is decided by the guarded UPDATE, so
+     * nothing here can talk a caller into believing a withdrawal happened. Its one
+     * remaining use is reporting the refreshed value after a refusal, by which
+     * point {@link #loadBalance} has already replaced it with the database's.
+     */
+    private BigDecimal getBalanceFromCache(UUID uuid, String currency) {
+        ConcurrentHashMap<String, BigDecimal> userBalances = balanceCache.get(uuid);
+        if (userBalances != null) {
+            BigDecimal cached = userBalances.get(currency);
+            if (cached != null) {
+                return cached;
+            }
+        }
+        return BigDecimal.ZERO;
     }
 
     private void scheduleAsyncWrite(Runnable task) {
