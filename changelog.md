@@ -13,6 +13,8 @@
 
 - Items bought through the dashboard are now built exactly the way they are when you trade through the in-game shop, so a mob spawner arrives with its mob in it and an enchanted book arrives with its spell on it.
 - Selling now only takes the exact item you picked. A plain spawner can no longer be sold as an iron golem spawner, and a plain book can no longer be sold as a named spell.
+- **Buying and selling through the dashboard now check the money actually moved.** Previously the server would hand over the item without confirming the payment had gone through, and would take your items without confirming it could pay you. If a payment fails you now get a clear message and nothing changes hands.
+- **If your server's database is not on the same machine, money commands may feel slightly slower.** Buying, selling, paying and any other money operation now waits for the database to confirm before reporting back, instead of reporting immediately and quietly sorting it out afterwards. That wait is what makes it possible to tell you the truth about whether the money moved. If you notice lag spikes on money operations and your database is remote, this is why.
 - Everything else, including all ordinary blocks, ores, mob drops and crops, behaves exactly as before.
 
 ### What You Need To Do
