@@ -406,25 +406,11 @@ public class ShopGUI extends GUIHolder {
     }
 
     private ItemStack buildTransactionItem(MarketEntry entry) {
-        if (entry.material == Material.SPAWNER && entry.customName != null) {
-            ItemStack spawner = new ItemStack(Material.SPAWNER);
-            BlockStateMeta meta = (BlockStateMeta) spawner.getItemMeta();
-            CreatureSpawner cs = (CreatureSpawner) meta.getBlockState();
-            String mobName = entry.customName.replace(" Spawner", "").toUpperCase().replace(" ", "_");
-            try {
-                cs.setSpawnedType(EntityType.valueOf(mobName));
-                meta.setBlockState(cs);
-            } catch (IllegalArgumentException e) {
-                plugin.getComponentLogger().warn("Failed to set spawner type for mob: " + mobName);
-            }
-            meta.displayName(Component.text(entry.customName, NamedTextColor.AQUA));
-            spawner.setItemMeta(meta);
-            return spawner;
-        } else if (entry.material == Material.ENCHANTED_BOOK && entry.customName != null) {
-            return com.aureleconomy.market.MarketItems.createEnchantedBook(entry.customName);
+        // Shared with the web purchase paths so the three cannot drift. The
+        // spawner block state and the book enchant used to live only here, so the
+        // web paths handed out bare spawners and empty books at the custom price.
+        return com.aureleconomy.market.MarketItemFactory.build(plugin, entry);
         }
-        return new ItemStack(entry.material);
-    }
 
     private void fillGlass(int size) {
         for (int i = 0; i < size; i++) {

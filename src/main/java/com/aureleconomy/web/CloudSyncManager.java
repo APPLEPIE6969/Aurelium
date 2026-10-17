@@ -968,32 +968,22 @@ public class CloudSyncManager {
         String currency;
         Material material;
 
-        // Resolve the item from the key the dashboard sent. A named item, which
-        // is every enchantment book and every spawner, is stored under a composite
-        // key, so Material.valueOf cannot parse it and the material has to come
-        // from the entry rather than be guessed.
-        //
-        // The old fallback assumed SPAWNER, which was harmless while spawners
-        // were the only named entries but would have handed a player a raw spawner
-        // block when they bought a Protection I enchanted book.
-        MarketEntry entry = plugin.getMarketManager().getEntryCache().get(itemKey);
-        if (entry != null) {
+        // Resolve the item from the key the dashboard sent. Every market item, plain or
+            // named, is cached under the same key its price is stored under, so a key
+            // that misses the cache has no price either. An unknown key is refused
+            // rather than turned into some other item, which is how a player ends up
+            // with the wrong thing in their inventory.
+            //
+            // A named item, which is every spawner and every enchanted book, shares one
+            // material across all of them, so the material has to come from the entry.
+            MarketEntry entry = com.aureleconomy.market.MarketItemFactory.entryForKey(plugin, itemKey);
+            if (entry == null) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Item not for sale");
+            return;
+            }
             material = entry.material;
             buyPrice = plugin.getMarketManager().getBuyPrice(itemKey);
             currency = plugin.getMarketManager().getCurrency(itemKey);
-        } else {
-            try {
-                material = Material.valueOf(itemKey.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                // An unknown key is refused rather than turned into some other
-                // item. Falling through to a default here is how a player ends up
-                // with the wrong thing in their inventory.
-                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Item not for sale");
-                return;
-            }
-            buyPrice = plugin.getMarketManager().getBuyPrice(material);
-            currency = plugin.getMarketManager().getCurrency(material);
-        }
 
         if (buyPrice.compareTo(BigDecimal.ZERO) <= 0) {
             confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Item not for sale");
@@ -1007,7 +997,12 @@ public class CloudSyncManager {
             return;
         }
 
-        ItemStack toGive = new ItemStack(material, amount);
+        ItemStack toGive = com.aureleconomy.market.MarketItemFactory
+            .build(plugin, entry, amount);
+            if (toGive == null) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Item not available");
+            return;
+            }
         if (!com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), toGive, amount)) {
             confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Inventory full");
             return;

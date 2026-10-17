@@ -148,19 +148,19 @@ public class WebPurchaseExecutor {
         String itemKey = purchase.itemKey();
         int amount = purchase.amount();
 
-        Material material;
-        BigDecimal buyPrice;
-        String currency;
-        try {
-            material = Material.valueOf(itemKey.toUpperCase());
-            buyPrice = plugin.getMarketManager().getBuyPrice(material);
-            currency = plugin.getMarketManager().getCurrency(material);
-        } catch (IllegalArgumentException e) {
-            // Custom spawner key rather than a material name.
-            buyPrice = plugin.getMarketManager().getBuyPrice(itemKey);
-            currency = plugin.getMarketManager().getCurrency(itemKey);
-            material = Material.SPAWNER;
-        }
+        // Resolve through the entry cache rather than guessing a material from the key.
+            // Every market item, plain or named, is cached under the same key its price
+            // is stored under, so a key that misses the cache has no price either. A
+            // named item is every spawner and every enchanted book, and its material is
+            // the same for all of them, so the material has to come from the entry.
+            com.aureleconomy.market.MarketItems.MarketEntry entry =
+            com.aureleconomy.market.MarketItemFactory.entryForKey(plugin, itemKey);
+            if (entry == null) {
+            return fail(result, "Item not for sale");
+            }
+            Material material = entry.material;
+            BigDecimal buyPrice = plugin.getMarketManager().getBuyPrice(itemKey);
+            String currency = plugin.getMarketManager().getCurrency(itemKey);
 
         if (plugin.getMarketManager().isBlacklisted(material)) {
             return fail(result, "This item cannot be bought from the web");
@@ -175,7 +175,11 @@ public class WebPurchaseExecutor {
                     + plugin.getEconomyManager().getFormattedWithSymbol(totalCost, currency));
         }
 
-        ItemStack toGive = new ItemStack(material, amount);
+        ItemStack toGive = com.aureleconomy.market.MarketItemFactory
+            .build(plugin, entry, amount);
+            if (toGive == null) {
+            return fail(result, "Item not for sale");
+            }
         if (!com.aureleconomy.utils.InventoryUtils.hasSpace(buyer.getInventory(), toGive, amount)) {
             return fail(result, "Your inventory is full");
         }
