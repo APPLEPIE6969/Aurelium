@@ -1,5 +1,35 @@
 # Aurelium - Patch Notes
 
+## v1.5.4.1 - Dashboard Market Item Identity
+
+### Security
+
+- **Web sell may only take the item the entry names (web)** *(fixes H3)* - `WebPurchaseExecutor.sell` resolved the price key to a `Material` and then counted and removed stacks with `getType()`. A key that failed to parse fell back to `Material.SPAWNER`. Every spawner is `Material.SPAWNER` and every enchanted book is `Material.ENCHANTED_BOOK`, so the material carries no identity at all for exactly the entries that need one. A player holding one bare spawner could `POST /sell` with `SPAWNER_IRON_GOLEM_SPAWNER` repeatedly: `countInInventory` counted the bare spawner, `removeFromInventory` took it, and `deposit` paid the iron golem spawner price. This is the mirror of the buy-side half below, and strictly worse, because money left the server rather than the player receiving less. Counting and removal now compare `isSimilar` against the stack the factory builds for the entry, and both use the *same* stack so a stack can never be counted as one item and removed as another. `countSimilar` caps at the amount requested so a refusal cannot claim more than was asked for. `countInInventory` is kept for `startFillOrder`, which uses a material count only as an upper bound and delegates the real removal to `OrderManager.fillOrder`, which already matches the real item.
+- **Unknown price keys are refused rather than guessed at (web)** *(fixes H3)* - both `sell` and `buy` resolved an unparseable key to `Material.SPAWNER`. Every market item, plain or named, is in `MarketManager.entryCache` under the same key `getBuyPrice`/`getSellPrice`/`getCurrency` use, so a key missing from the cache has no price and the caller refuses it on price regardless. The guess could therefore only ever reach a refusal, while still being able to construct an item that is not a market entry at all. Resolution is now `MarketItemFactory.entryForKey`, a single cache lookup, and a miss is refused before any money moves.
+
+### Fixes
+
+- **Web purchases resolve the item from the entry, not the material (web)** *(fixes H3)* - `WebPurchaseExecutor.buy` and `CloudSyncManager.executeMarketWebBuy` both ended in `new ItemStack(material, amount)`. For a named entry that is the wrong item: the spawner's mob lives in its `BlockStateMeta` and the book's enchant lives in its `EnchantmentStorageMeta`, neither of which survives a plain `new ItemStack`. A player was charged the custom price and handed an empty spawner or an empty book. Both now call the factory.
+
+- **`MarketItemFactory` (market, new file)** - extracted from the private `ShopGUI.buildTransactionItem`, which was already correct, which is why the in-game path was unaffected and the two web paths were not. `ShopGUI.buildTransactionItem` is now a one-line delegation, so all three call sites share one implementation and cannot drift apart again. Exposes `build`, `build(plugin, entry, amount)`, `entryForKey` and `buildForKey`. An unresolvable key returns `null` and callers must refuse on it rather than substitute a default.
+
+  `build(plugin, entry, amount)` applies the amount inside the factory rather than via `setAmount` after the fact, because `setAmount` on a stack already at or over the max stack size is clamped silently instead of raising.
+
+  `buildSpawner` writes the mob into the block state and still applies the display name when the name is not a real mob, so a player can see what they bought. Verified against all 80 spawner entries, all of which map to a real `EntityType`, and all 125 enchanted book entries.
+
+### Tests
+
+- **`MarketItemFactoryTest` (market, new file, 13 tests)** - covers the dispatch and the mob type, and walks every spawner and book entry in `MarketItems`. Verified to fail 8 of 13 against the pre-fix behaviour (a bare `new ItemStack(entry.material)`), with the 5 that pass being the plain-stack, null-input and amount cases that legitimately hold either way.
+- **`WebPurchaseExecutorSellTest` (web, new file, 8 tests)** - drives the private `sell` method reflectively, since `PurchaseQueue.Purchase` is package private in `com.aureleconomy.webstore` while `sell` is private in `com.aureleconomy.web`. This matches how `ConfigMigrationTest` reaches `upgradeConfig`. Held stacks report `Material.SPAWNER` from `getType()` regardless of whether they are a bare spawner or an iron golem spawner, which is the actual collision, so only `isSimilar` can tell them apart. Verified to fail 3 of 8 when the two comparisons are reverted to `getType()`: the bare spawner is then accepted, counted towards the total, and removed from a mixed inventory. The other 5 cover the path that has to keep working and pass on both.
+- **`ci/test_currency.js` (ci, rewritten)** - was failing at HEAD and unrelated to H3. Commit `af05452` ("drop the currency badge from market cards") deleted `currencyBadge` from `app.js`, but the test still sliced a region out of `updateBalanceDisplay` and asserted the symbol was stripped from the balance string. The badge was removed deliberately, so asserting on it could never pass again. Rewritten against the current behaviour, which is the shared `money(amount, currency, symbol)` helper that replaced it: the symbol is used when the server sent one and the currency name is spelled out when it did not, since a row for a non-default currency has to name it or the player cannot tell what they are about to be paid in. Decimal-separator assertions are locale-agnostic, because `toLocaleString` groups per the viewer's locale and the suite previously would have failed on a comma-decimal machine.
+
+### Notes
+
+- Both test classes intercept `new ItemStack` with `Mockito.mockConstruction` rather than really constructing stacks. `new ItemStack` reaches `Material.asItemType` and then `org.bukkit.Registry`, which throws `IllegalStateException: No RegistryAccess implementation found` with no server running. Every existing test in this suite already mocks `ItemStack` for the same reason; `MarketItemFactoryTest` was the first to try a real one and was what surfaced the gap. A stub `RegistryAccess` was considered and rejected: it would have made the enchantment assertions pass against a fake, which is worse than not testing them.
+- `MarketItems.createEnchantedBook` is pre-existing code reached through the factory and is not retested here. Parsing it needs real `Enchantment` instances, and the fix is only that the factory reaches it at all with the entry's stored name, which is what the two web paths never did.
+- No config or schema change. `config-version` stays at 2 and `LATEST_SCHEMA_VERSION` stays at 6.
+- Version bumped to `1.5.4.1` in `build.gradle.kts`, in `plugin.yml`, and in all three module build files, which each hardcode the release string three times (`version`, `archiveBaseName`, and the `Implementation-Version` manifest attribute). `versions/1.21.11/src/main/resources/plugin.yml` shadows the shared one and needed the bump separately.
+
 ## v1.5.4 - Version Checker & Cloud Dashboard Hardening
 
 ### Breaking Changes

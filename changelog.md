@@ -1,5 +1,24 @@
 # Aurelium - Changelog
 
+## v1.5.4.1 - Dashboard Market Item Fix
+
+*Aurelium builds each market item at the moment you buy or sell it, so the item you end up with always matches the item the dashboard showed you. This release finishes that for the two kinds of item that share one base item between them: mob spawners and enchanted books. The developer patch notes cover the same change file by file and are at [patchnotes.md](https://github.com/APPLEPIE6969/Aurelium/blob/v1.5.4.1/patchnotes.md).*
+
+### What Was Wrong
+
+- **Buying a mob spawner from the dashboard gave you an empty spawner** - every mob spawner is the same basic item, with the specific mob stored inside it. When you bought through the dashboard that detail was dropped, so you paid the iron golem spawner price and received a spawner with nothing in it. Enchanted books had the same problem: you paid the price of the spell you picked and received a book with no spell on it.
+- **Selling a spawner or an enchanted book paid out the most expensive price** - this was the more serious half. When you sold through the dashboard, the check only confirmed you were holding something of the same basic kind, so one empty spawner could be sold over and over as the most valuable spawner in the game, and one empty book could be sold as the most valuable spell. **If you sold any mob spawner or enchanted book through the dashboard, it is worth checking your balance.**
+
+### What Changed
+
+- Items bought through the dashboard are now built exactly the way they are when you trade through the in-game shop, so a mob spawner arrives with its mob in it and an enchanted book arrives with its spell on it.
+- Selling now only takes the exact item you picked. A plain spawner can no longer be sold as an iron golem spawner, and a plain book can no longer be sold as a named spell.
+- Everything else, including all ordinary blocks, ores, mob drops and crops, behaves exactly as before.
+
+### What You Need To Do
+
+Nothing. This replaces your current download, your prices are unchanged, and no configuration needs editing. Take the download that matches your Minecraft version, the same as always.
+
 ## v1.5.4 - Version Checker & Cloud Dashboard Hardening
 
 *Want the detail behind these changes? The developer patch notes cover the same
