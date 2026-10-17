@@ -3,6 +3,7 @@ package com.aureleconomy.economy;
 import com.aureleconomy.AurelEconomy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -74,126 +75,211 @@ public class EconomyManager {
         deposit(player, amount, getDefaultCurrency());
     }
 
-    public void deposit(OfflinePlayer player, BigDecimal amount, String currency) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0)
-            return;
+    /**
+     * Credits {@code amount} and reports whether the database accepted it.
+     *
+     * <p>The result is the row count of the write itself, not the cache and not an
+     * intention to write later. A caller that is about to hand something over has
+     * to check it.
+     */
+    public boolean deposit(OfflinePlayer player, BigDecimal amount, String currency) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)
+            return false;
 
         UUID uuid = player.getUniqueId();
         BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
-        BigDecimal current = getBalanceFromCache(uuid, currency);
-        BigDecimal newBalance = current.add(normalizedAmount);
-        balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
+        boolean credited;
+        synchronized (plugin.getDatabaseManager().getWriteLock()) {
+            try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+                    plugin.getDatabaseManager().isMySQL()
+                            ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = player_balances.balance + new.balance"
+                            : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
 
-        scheduleAsyncWrite(() -> {
-            synchronized (plugin.getDatabaseManager().getWriteLock()) {
-                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
-                        plugin.getDatabaseManager().isMySQL()
-                                ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = player_balances.balance + new.balance"
-                                : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
-
-                    ps.setString(1, uuid.toString());
-                    ps.setString(2, currency);
-                    ps.setBigDecimal(3, normalizedAmount);
-                    if (!plugin.getDatabaseManager().isMySQL()) {
-                        ps.setBigDecimal(4, normalizedAmount);
-                    }
-                    ps.executeUpdate();
-
-                    loadBalance(uuid, currency);
-                    updatePlayerMetadata(player);
-                } catch (SQLException e) {
-                    plugin.getComponentLogger().error("Database error in EconomyManager while depositing", e);
+                ps.setString(1, uuid.toString());
+                ps.setString(2, currency);
+                ps.setBigDecimal(3, normalizedAmount);
+                if (!plugin.getDatabaseManager().isMySQL()) {
+                    ps.setBigDecimal(4, normalizedAmount);
                 }
+                // An upsert that really changed the value always reports at least one
+                // row: MySQL gives 2 for an update and 1 for an insert, SQLite gives 1
+                // for both. Anything below 1 means nothing reached the database.
+                credited = ps.executeUpdate() >= 1;
+            } catch (SQLException e) {
+                plugin.getComponentLogger().error("Database error in EconomyManager while depositing", e);
+                credited = false;
             }
-        });
+
+            if (credited) {
+                updatePlayerMetadata(player);
+            }
+            // Refreshed either way, so a refused write cannot leave the cache
+            // claiming money that was never credited.
+            loadBalance(uuid, currency);
+        }
+        return credited;
     }
 
     public void withdraw(OfflinePlayer player, BigDecimal amount) {
         withdraw(player, amount, getDefaultCurrency());
     }
 
-    public void withdraw(OfflinePlayer player, BigDecimal amount, String currency) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0)
-            return;
-
-        UUID uuid = player.getUniqueId();
-        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
-
-        BigDecimal currentBalance = getBalanceFromCache(uuid, currency);
-        if (currentBalance.compareTo(normalizedAmount) < 0) {
-            plugin.getComponentLogger().warn("Insufficient funds for withdraw: " + player.getName() +
-                    " tried to withdraw " + normalizedAmount + " but only has " + currentBalance);
-            return;
-        }
-
-        BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
-        balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
-
-        scheduleAsyncWrite(() -> {
-            synchronized (plugin.getDatabaseManager().getWriteLock()) {
-                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
-                        "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
-                    ps.setBigDecimal(1, normalizedAmount);
-                    ps.setString(2, uuid.toString());
-                    ps.setString(3, currency);
-                    ps.setBigDecimal(4, normalizedAmount);
-
-                    int affectedRows = ps.executeUpdate();
-                    if (affectedRows == 0) {
-                        loadBalance(uuid, currency);
-                    } else {
-                        updatePlayerMetadata(player);
-                    }
-
-                    loadBalance(uuid, currency);
-                } catch (SQLException e) {
-                    plugin.getComponentLogger().error("Database error in EconomyManager while withdrawing", e);
-                }
-            }
-        });
+    /**
+     * Debits {@code amount} and reports whether the database accepted it.
+     *
+     * <p>See {@link #deposit(OfflinePlayer, BigDecimal, String)}. This used to
+     * decide affordability from the cache, write asynchronously, and return void,
+     * so a caller could not tell a real debit from a refused one.
+     */
+    public boolean withdraw(OfflinePlayer player, BigDecimal amount, String currency) {
+        return debit(player, amount, currency, "withdraw");
     }
 
+    /**
+     * The same debit, kept because callers use this name to mean "refuse rather
+     * than go negative".
+     *
+     * <p>It no longer behaves differently from {@link #withdraw}: the guarded
+     * UPDATE is the only authority on affordability, so both refuse exactly when
+     * the database says the player cannot pay.
+     */
     public boolean withdrawIfSufficient(OfflinePlayer player, BigDecimal amount, String currency) {
-        if (amount.compareTo(BigDecimal.ZERO) <= 0)
+        return debit(player, amount, currency, "withdrawIfSufficient");
+    }
+
+    private boolean debit(OfflinePlayer player, BigDecimal amount, String currency, String operation) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)
             return false;
 
         UUID uuid = player.getUniqueId();
         BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
 
-        BigDecimal currentBalance = getBalance(player, currency);
+        boolean debited;
+        synchronized (plugin.getDatabaseManager().getWriteLock()) {
+            try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+                    "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
+                ps.setBigDecimal(1, normalizedAmount);
+                ps.setString(2, uuid.toString());
+                ps.setString(3, currency);
+                ps.setBigDecimal(4, normalizedAmount);
 
-        if (currentBalance.compareTo(normalizedAmount) < 0) {
-            return false;
+                // The only authority. The cache is deliberately not consulted to
+                // decide whether the player can afford this, because a cache that
+                // disagrees with the database is precisely the case that used to
+                // report a withdrawal that never happened.
+                debited = ps.executeUpdate() >= 1;
+            } catch (SQLException e) {
+                plugin.getComponentLogger().error("Database error in EconomyManager while " + operation, e);
+                debited = false;
+            }
+
+            if (debited) {
+                updatePlayerMetadata(player);
+            } else {
+                plugin.getComponentLogger().warn("Refused " + operation + " of " + normalizedAmount
+                        + " " + currency + " for " + player.getName()
+                        + ": the database holds less, or none at all");
+            }
+            loadBalance(uuid, currency);
         }
+        return debited;
+    }
 
-        BigDecimal newBalance = currentBalance.subtract(normalizedAmount).max(BigDecimal.ZERO);
-        balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, newBalance);
+    /**
+     * Moves {@code amount} from one player to another, or moves nothing at all.
+     *
+     * <p>Both legs run in a single transaction on the shared connection while
+     * holding the write lock, so no other writer can interleave between them and a
+     * failure on either leg rolls the other back. A transfer to yourself is a
+     * successful no-op, because there is nothing to lose.
+     *
+     * <p>A caller that is about to hand something over has to check the result.
+     */
+    public boolean transfer(OfflinePlayer from, OfflinePlayer to, BigDecimal amount, String currency) {
+        if (from == null || to == null)
+            return false;
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)
+            return false;
 
-        scheduleAsyncWrite(() -> {
-            synchronized (plugin.getDatabaseManager().getWriteLock()) {
-                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
-                        "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
-                    ps.setBigDecimal(1, normalizedAmount);
-                    ps.setString(2, uuid.toString());
-                    ps.setString(3, currency);
-                    ps.setBigDecimal(4, normalizedAmount);
+        UUID fromId = from.getUniqueId();
+        UUID toId = to.getUniqueId();
+        if (fromId.equals(toId))
+            return true;
 
-                    int affectedRows = ps.executeUpdate();
-                    if (affectedRows == 0) {
-                        loadBalance(uuid, currency);
-                    } else {
-                        updatePlayerMetadata(player);
-                        loadBalance(uuid, currency);
-                    }
-                } catch (SQLException e) {
-                    plugin.getComponentLogger().error("Database error in withdrawIfSufficient", e);
-                    loadBalance(uuid, currency);
+        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+        Connection connection = plugin.getDatabaseManager().getConnection();
+        boolean committed = false;
+
+        synchronized (plugin.getDatabaseManager().getWriteLock()) {
+            boolean previousAutoCommit = true;
+            try {
+                previousAutoCommit = connection.getAutoCommit();
+                connection.setAutoCommit(false);
+
+                if (debitRow(connection, fromId, currency, normalizedAmount) >= 1
+                        && creditRow(connection, toId, currency, normalizedAmount) >= 1) {
+                    connection.commit();
+                    committed = true;
+                } else {
+                    // Either the payer could not cover it or the payee could not be
+                    // credited. Nothing may be left half done.
+                    connection.rollback();
+                }
+            } catch (SQLException e) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackFailure) {
+                    plugin.getComponentLogger().error("Could not roll back a failed transfer", rollbackFailure);
+                }
+                plugin.getComponentLogger().error("Database error in EconomyManager while transferring", e);
+            } finally {
+                try {
+                    connection.setAutoCommit(previousAutoCommit);
+                } catch (SQLException restoreFailure) {
+                    plugin.getComponentLogger()
+                            .error("Could not restore autocommit after a transfer", restoreFailure);
                 }
             }
-        });
 
-        return true;
+            if (committed) {
+                updatePlayerMetadata(from);
+                updatePlayerMetadata(to);
+            }
+            // Both sides are refreshed either way, so the cache can never keep
+            // showing a balance the database did not agree to.
+            loadBalance(fromId, currency);
+            loadBalance(toId, currency);
+        }
+        return committed;
+    }
+
+    private int debitRow(Connection connection, UUID uuid, String currency, BigDecimal amount)
+            throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(
+                "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
+            ps.setBigDecimal(1, amount);
+            ps.setString(2, uuid.toString());
+            ps.setString(3, currency);
+            ps.setBigDecimal(4, amount);
+            return ps.executeUpdate();
+        }
+    }
+
+    private int creditRow(Connection connection, UUID uuid, String currency, BigDecimal amount)
+            throws SQLException {
+        try (PreparedStatement ps = connection.prepareStatement(
+                plugin.getDatabaseManager().isMySQL()
+                        ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = player_balances.balance + new.balance"
+                        : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, currency);
+            ps.setBigDecimal(3, amount);
+            if (!plugin.getDatabaseManager().isMySQL()) {
+                ps.setBigDecimal(4, amount);
+            }
+            return ps.executeUpdate();
+        }
     }
 
     private void updatePlayerMetadata(OfflinePlayer player) {
@@ -240,18 +326,6 @@ public class EconomyManager {
 
     public String getFormattedWithSymbol(BigDecimal amount, String currency) {
         return getCurrencySymbol(currency) + format(amount, currency);
-    }
-
-    // get balance from cache only (no db call), returns zero if not cached
-    private BigDecimal getBalanceFromCache(UUID uuid, String currency) {
-        ConcurrentHashMap<String, BigDecimal> userBalances = balanceCache.get(uuid);
-        if (userBalances != null) {
-            BigDecimal cached = userBalances.get(currency);
-            if (cached != null) {
-                return cached;
-            }
-        }
-        return BigDecimal.ZERO;
     }
 
     private void scheduleAsyncWrite(Runnable task) {
