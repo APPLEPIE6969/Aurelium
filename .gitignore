@@ -29,7 +29,13 @@ gitlog.txt
 testimg.png
 to-do_list.md
 Untitled-*.txt
+
+# Planning documents. Working notes for the repo owner, not part of the plugin.
+# These are untracked, not merely ignored: AURELIUM-FIXPLAN.md is listed here but
+# is still tracked in git, so its ignore rule does nothing and it ships to every
+# clone. PLAN.md is properly untracked. Worth fixing the fixplan the same way.
 AURELIUM-FIXPLAN.md
+PLAN.md
 
 # Secrets: API tokens, keys, local credentials
 .env
