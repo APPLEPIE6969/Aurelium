@@ -14,6 +14,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.UUID;
+import java.sql.Connection;
 
 public class JoinListener implements Listener {
 
@@ -30,8 +31,8 @@ public class JoinListener implements Listener {
         plugin.getEconomyManager().invalidateCache(uuid);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
-                    .prepareStatement("SELECT uuid, amount, item_display, timestamp FROM offline_earnings WHERE uuid = ?")) {
+            try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("SELECT uuid, amount, item_display, timestamp FROM offline_earnings WHERE uuid = ?")) {
                 ps.setString(1, uuid.toString());
                 ResultSet rs = ps.executeQuery();
 
@@ -71,8 +72,8 @@ public class JoinListener implements Listener {
     }
 
     private void deleteAllRecordsForUUID(UUID uuid) {
-        try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
-                .prepareStatement("DELETE FROM offline_earnings WHERE uuid = ?")) {
+        try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("DELETE FROM offline_earnings WHERE uuid = ?")) {
             ps.setString(1, uuid.toString());
             ps.executeUpdate();
         } catch (SQLException e) {

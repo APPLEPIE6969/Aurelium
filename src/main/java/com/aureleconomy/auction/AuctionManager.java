@@ -17,6 +17,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import java.util.Base64;
+import java.sql.Connection;
 
 public class AuctionManager {
 
@@ -60,8 +61,8 @@ public class AuctionManager {
    }
 
  private void loadAuctions() {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("SELECT id, seller_uuid, item_data, price, currency, is_bin, expiration, highest_bidder_uuid, ended, collected, listing_fee, start_time, purchase_mode FROM auctions WHERE ended = 0")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("SELECT id, seller_uuid, item_data, price, currency, is_bin, expiration, highest_bidder_uuid, ended, collected, listing_fee, start_time, purchase_mode FROM auctions WHERE ended = 0")) {
  ResultSet rs = ps.executeQuery();
  while (rs.next()) {
  activeAuctions.add(mapResultSet(rs));
@@ -133,7 +134,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
   // CustomItemRegistry already synchronize on this monitor; without it a
   // concurrent balance write can make this INSERT throw and lose the listing.
   synchronized (plugin.getDatabaseManager().getWriteLock()) {
-  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+  try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
   "INSERT INTO auctions (seller_uuid, item_data, price, currency, is_bin, expiration, listing_fee, start_time, purchase_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
   java.sql.Statement.RETURN_GENERATED_KEYS)) {
   ps.setString(1, seller.toString());
@@ -191,8 +193,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  final String cachedDisplayName = getItemDisplayName(auction.getItem());
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auctions SET highest_bidder_uuid = ?, price = ? WHERE id = ? AND (price < ? OR highest_bidder_uuid IS NULL)")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET highest_bidder_uuid = ?, price = ? WHERE id = ? AND (price < ? OR highest_bidder_uuid IS NULL)")) {
  ps.setString(1, bidder.toString());
  ps.setBigDecimal(2, amount);
  ps.setInt(3, auction.getId());
@@ -321,8 +323,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
   // This used to call getWriteLock() without synchronizing on it, which locked
   // nothing and raced every other writer on the shared Connection.
   synchronized (plugin.getDatabaseManager().getWriteLock()) {
-  try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
-  .prepareStatement("UPDATE auctions SET item_data = ?, price = ? WHERE id = ?")) {
+  try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET item_data = ?, price = ? WHERE id = ?")) {
   ItemStack updatedStack = auction.getItem().clone();
   updatedStack.setAmount(remaining);
   ps.setString(1, itemToBase64(updatedStack));
@@ -374,8 +376,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  final BigDecimal finalRefund = refund;
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auctions SET ended = 1 WHERE id = ? AND ended = 0")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET ended = 1 WHERE id = ? AND ended = 0")) {
  ps.setInt(1, ai.getId());
  int rows = ps.executeUpdate();
 
@@ -417,8 +419,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  final String cachedDisplayName = getItemDisplayName(auction.getItem());
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auctions SET ended = 1 WHERE id = ?")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET ended = 1 WHERE id = ?")) {
  ps.setInt(1, auction.getId());
  ps.executeUpdate();
  com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
@@ -453,7 +455,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 
  private void logOfflineEarning(UUID uuid, BigDecimal amount, ItemStack item, String displayName) {
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "INSERT INTO offline_earnings (uuid, amount, item_display, timestamp) VALUES (?, ?, ?, ?)")) {
  ps.setString(1, uuid.toString());
  ps.setBigDecimal(2, amount);
@@ -499,7 +502,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 
  public List<com.aureleconomy.auction.AuctionItem> getCollectionBin(UUID playerUUID) {
  List<com.aureleconomy.auction.AuctionItem> items = new ArrayList<>();
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "SELECT id, seller_uuid, item_data, price, currency, is_bin, expiration, highest_bidder_uuid, ended, collected, listing_fee, start_time, purchase_mode FROM auctions WHERE collected = 0 AND ended = 1 AND ((seller_uuid = ? AND highest_bidder_uuid IS NULL) OR (highest_bidder_uuid = ?))")) {
  ps.setString(1, playerUUID.toString());
  ps.setString(2, playerUUID.toString());
@@ -516,7 +520,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  public void getOffersForSeller(UUID seller, Consumer<List<Offer>> callback) {
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  List<Offer> offers = new ArrayList<>();
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "SELECT o.id, o.auction_id, o.bidder_uuid, o.amount, o.currency, o.status, o.timestamp FROM auction_offers o JOIN auctions a ON o.auction_id = a.id WHERE a.seller_uuid = ? AND o.status = 'PENDING'")) {
  ps.setString(1, seller.toString());
  ResultSet rs = ps.executeQuery();
@@ -550,7 +555,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  final String cachedDisplayName = getItemDisplayName(ai.getItem());
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "INSERT INTO auction_offers (auction_id, bidder_uuid, amount, status, timestamp) VALUES (?, ?, ?, ?, ?)")) {
  ps.setInt(1, ai.getId());
  ps.setString(2, bidder.getUniqueId().toString());
@@ -576,8 +582,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  try {
  Offer offer = null;
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("SELECT id, auction_id, bidder_uuid, amount, currency, status, timestamp FROM auction_offers WHERE id = ?")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("SELECT id, auction_id, bidder_uuid, amount, currency, status, timestamp FROM auction_offers WHERE id = ?")) {
  ps.setInt(1, offerId);
  ResultSet rs = ps.executeQuery();
  if (rs.next()) {
@@ -641,8 +647,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  }
 
  public boolean claimAuctionAtomic(int id) {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auctions SET ended = 1 WHERE id = ? AND ended = 0")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET ended = 1 WHERE id = ? AND ended = 0")) {
  ps.setInt(1, id);
  return ps.executeUpdate() > 0;
  } catch (SQLException e) {
@@ -652,8 +658,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  }
 
  public boolean updateOfferStatusAtomic(int offerId, OfferStatus newStatus) {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auction_offers SET status = ? WHERE id = ? AND status = 'PENDING'")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auction_offers SET status = ? WHERE id = ? AND status = 'PENDING'")) {
  ps.setString(1, newStatus.name());
  ps.setInt(2, offerId);
  return ps.executeUpdate() > 0;
@@ -665,8 +671,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 
  public void updateOfferStatus(int offerId, OfferStatus status) {
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auction_offers SET status = ? WHERE id = ?")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auction_offers SET status = ? WHERE id = ?")) {
  ps.setString(1, status.name());
  ps.setInt(2, offerId);
  ps.executeUpdate();
@@ -677,8 +683,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  }
 
  public boolean markCollectedAtomic(int id) {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auctions SET collected = 1 WHERE id = ? AND collected = 0")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET collected = 1 WHERE id = ? AND collected = 0")) {
  ps.setInt(1, id);
  int rowsUpdated = ps.executeUpdate();
  return rowsUpdated > 0;
@@ -690,8 +696,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 
  public void markCollected(int id) {
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
- .prepareStatement("UPDATE auctions SET collected = 1 WHERE id = ? AND collected = 0")) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET collected = 1 WHERE id = ? AND collected = 0")) {
  ps.setInt(1, id);
  ps.executeUpdate();
  } catch (SQLException e) {
@@ -702,7 +708,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 
  public void sendToCollectionBin(UUID playerUUID, ItemStack item) {
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "INSERT INTO auctions (seller_uuid, item_data, price, currency, is_bin, expiration, listing_fee, start_time, ended, collected) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
  ps.setString(1, playerUUID.toString());
  ps.setString(2, itemToBase64(item));

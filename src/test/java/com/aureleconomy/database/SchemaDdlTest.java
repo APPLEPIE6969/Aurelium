@@ -23,6 +23,7 @@ import com.aureleconomy.database.types.SQLTypes;
 import com.aureleconomy.database.types.SQLiteTypes;
 
 import net.kyori.adventure.text.logger.slf4j.ComponentLogger;
+import java.sql.Connection;
 
 /**
  * Exercises the real Schema classes and DatabaseManager migrations against temporary SQLite
@@ -324,14 +325,16 @@ class SchemaDdlTest {
 
         DatabaseManager first = new DatabaseManager(mockPlugin(dataFolder));
         assertTrue(first.initialize());
-        try (Statement stmt = first.getConnection().createStatement()) {
+        try (Connection conn = first.getConnection();
+        Statement stmt = conn.createStatement()) {
             stmt.execute("INSERT INTO player_balances VALUES ('u1', 'Aurels', 42.0)");
         }
         first.close();
 
         DatabaseManager second = new DatabaseManager(mockPlugin(dataFolder));
         assertTrue(second.initialize());
-        try (Statement stmt = second.getConnection().createStatement();
+        try (Connection conn = second.getConnection();
+        Statement stmt = conn.createStatement();
                 ResultSet rs = stmt.executeQuery("SELECT balance FROM player_balances WHERE uuid = 'u1'")) {
             assertTrue(rs.next(), "Balance did not survive the restart");
             assertEquals(42.0, rs.getDouble("balance"), 0.0001);

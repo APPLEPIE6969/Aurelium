@@ -148,7 +148,11 @@ public class DatabaseManager {
 
     public synchronized Connection getConnection() {
         try {
-            return database.getConnection();
+            // Borrow handle, not the physical connection: a caller's close() must not
+            // kill the handle other threads are holding. Bound to whatever connection
+            // exists right now, since SQLiteDatabase rebuilds it on the next borrow.
+            // close() below and plugin disable still close the real one.
+            return SharedConnectionHandle.wrap(database.getConnection());
         } catch (SQLException e) {
             plugin.getComponentLogger().error(
                     "Failed to re-establish " + settings.getType().getValue() + " database connection!", e);

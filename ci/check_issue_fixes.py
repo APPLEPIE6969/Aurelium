@@ -139,13 +139,23 @@ check(
 )
 
 # purchaseUnits used to call getWriteLock() without synchronizing, locking nothing.
+# The guard asserts the two things that matter, separately: that the monitor is
+# taken, and that the item_data write is inside the block it opened. It previously
+# pinned the exact try-with-resources header too, which broke when the connection
+# was added to that header for ownership (H1 commit 1). The header's shape is not
+# the contract; the lock and the write being inside it are.
+_pu_src = method_body(auction_mgr, auction_mgr.find('public int purchaseUnits('))
+_pu_lock_start = _pu_src.find('synchronized (plugin.getDatabaseManager().getWriteLock())')
 check(
     '#33 AuctionManager.purchaseUnits synchronizes on the write lock',
-    re.search(
-        r'synchronized\s*\(\s*plugin\.getDatabaseManager\(\)\.getWriteLock\(\)\s*\)\s*\{\s*try \(PreparedStatement ps = plugin\.getDatabaseManager\(\)\.getConnection\(\)\s*\.prepareStatement\("UPDATE auctions SET item_data',
-        auction_mgr,
-    ) is not None,
+    _pu_lock_start != -1,
     'a bare getWriteLock() call returns the monitor without locking it',
+)
+check(
+    '#33 AuctionManager.purchaseUnits writes item_data inside that lock',
+    _pu_lock_start != -1
+    and 'UPDATE auctions SET item_data' in method_body(_pu_src, _pu_lock_start),
+    'the item_data update must be inside the lock, not merely after it',
 )
 check(
     '#33 AuctionManager no longer notifies a lock it never held',

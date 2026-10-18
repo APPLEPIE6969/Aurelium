@@ -91,7 +91,8 @@ public class EconomyManager {
 
         boolean credited;
         synchronized (plugin.getDatabaseManager().getWriteLock()) {
-            try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+            try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
                     plugin.getDatabaseManager().isMySQL()
                             ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = player_balances.balance + new.balance"
                             : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = balance + ?")) {
@@ -157,7 +158,8 @@ public class EconomyManager {
 
         boolean debited;
         synchronized (plugin.getDatabaseManager().getWriteLock()) {
-            try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+            try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
                     "UPDATE player_balances SET balance = balance - ? WHERE uuid = ? AND currency = ? AND balance >= ?")) {
                 ps.setBigDecimal(1, normalizedAmount);
                 ps.setString(2, uuid.toString());
@@ -220,38 +222,47 @@ public class EconomyManager {
             return true;
 
         BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
-        Connection connection = plugin.getDatabaseManager().getConnection();
         boolean committed = false;
 
         synchronized (plugin.getDatabaseManager().getWriteLock()) {
-            boolean previousAutoCommit = true;
-            try {
-                previousAutoCommit = connection.getAutoCommit();
-                connection.setAutoCommit(false);
-
-                if (debitRow(connection, fromId, currency, normalizedAmount) >= 1
-                        && creditRow(connection, toId, currency, normalizedAmount) >= 1) {
-                    connection.commit();
-                    committed = true;
-                } else {
-                    // Either the payer could not cover it or the payee could not be
-                    // credited. Nothing may be left half done.
-                    connection.rollback();
-                }
-            } catch (SQLException e) {
+            // Borrowed inside the write lock and released as soon as the
+            // transaction resolves, so the connection is not held across the
+            // metadata write and the two balance reloads below.
+            try (Connection connection = plugin.getDatabaseManager().getConnection()) {
+                boolean previousAutoCommit = true;
                 try {
-                    connection.rollback();
-                } catch (SQLException rollbackFailure) {
-                    plugin.getComponentLogger().error("Could not roll back a failed transfer", rollbackFailure);
-                }
-                plugin.getComponentLogger().error("Database error in EconomyManager while transferring", e);
-            } finally {
+                    previousAutoCommit = connection.getAutoCommit();
+                    connection.setAutoCommit(false);
+
+                    if (debitRow(connection, fromId, currency, normalizedAmount) >= 1
+                            && creditRow(connection, toId, currency, normalizedAmount) >= 1) {
+                        connection.commit();
+                        committed = true;
+                    } else {
+                        // Either the payer could not cover it or the payee could not be
+                        // credited. Nothing may be left half done.
+                        connection.rollback();
+                    }
+                } catch (SQLException e) {
+                    try {
+                        connection.rollback();
+                    } catch (SQLException rollbackFailure) {
+                        plugin.getComponentLogger().error("Could not roll back a failed transfer", rollbackFailure);
+                    }
+                    plugin.getComponentLogger().error("Database error in EconomyManager while transferring", e);
+                } finally {
+            }
                 try {
                     connection.setAutoCommit(previousAutoCommit);
                 } catch (SQLException restoreFailure) {
                     plugin.getComponentLogger()
                             .error("Could not restore autocommit after a transfer", restoreFailure);
                 }
+            } catch (SQLException e) {
+                // Reaching here means the borrow itself failed, or the handle could not
+                // be returned. Neither leg ran, so nothing moved.
+                plugin.getComponentLogger().error(
+                        "Database error in EconomyManager while borrowing a connection to transfer", e);
             }
 
             if (committed) {
@@ -300,7 +311,8 @@ public class EconomyManager {
             return;
         UUID uuid = player.getUniqueId();
 
-        try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+        try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
                 plugin.getDatabaseManager().isMySQL()
                         ? "INSERT INTO players (uuid, name) VALUES (?, ?) AS new ON DUPLICATE KEY UPDATE name = new.name"
                         : "INSERT INTO players (uuid, name) VALUES (?, ?) ON CONFLICT(uuid) DO UPDATE SET name = ?")) {
@@ -368,8 +380,8 @@ public class EconomyManager {
     }
 
     private BigDecimal loadBalance(UUID uuid, String currency) {
-        try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
-                .prepareStatement("SELECT balance FROM player_balances WHERE uuid = ? AND currency = ?")) {
+        try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("SELECT balance FROM player_balances WHERE uuid = ? AND currency = ?")) {
             ps.setString(1, uuid.toString());
             ps.setString(2, currency);
             ResultSet rs = ps.executeQuery();
@@ -388,8 +400,8 @@ public class EconomyManager {
         double startBalRaw = plugin.getConfig().getDouble("economy.currencies." + currency + ".starting-balance",
                 plugin.getConfig().getDouble("economy.starting-balance", DEFAULT_STARTING_BALANCE));
         BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
-        try (PreparedStatement ps = plugin.getDatabaseManager().getConnection()
-                .prepareStatement(
+        try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
                         plugin.getDatabaseManager().isMySQL()
                                 ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
                                 : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
@@ -417,7 +429,8 @@ public class EconomyManager {
 
         scheduleAsyncWrite(() -> {
             synchronized (plugin.getDatabaseManager().getWriteLock()) {
-                try (PreparedStatement ps = plugin.getDatabaseManager().getConnection().prepareStatement(
+                try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement(
                         plugin.getDatabaseManager().isMySQL()
                                 ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
                                 : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {

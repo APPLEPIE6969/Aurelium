@@ -9,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.database.DatabaseManager;
+import com.aureleconomy.database.SharedConnectionHandle;
 import com.aureleconomy.database.schema.BuyOrderSchema;
 import com.aureleconomy.database.schema.OfflineEarningSchema;
 import com.aureleconomy.database.schema.PlayerBalanceSchema;
@@ -103,7 +104,11 @@ abstract class MoneyInvariantTest {
         }
 
         databaseManager = mock(DatabaseManager.class);
-        when(databaseManager.getConnection()).thenReturn(connection);
+        // A borrow handle, not the raw connection: production hands out borrows whose
+        // close() is inert, and EconomyManager now closes the connection it is given.
+        // Returning the raw handle here would close it on the first call and fail the
+        // rest of the class, which would be testing a provider the plugin does not have.
+        when(databaseManager.getConnection()).thenReturn(SharedConnectionHandle.wrap(connection));
         when(databaseManager.getWriteLock()).thenReturn(new Object());
         when(databaseManager.isMySQL()).thenReturn(false);
 

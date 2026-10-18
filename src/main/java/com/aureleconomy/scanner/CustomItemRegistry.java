@@ -16,6 +16,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.sql.Connection;
 
 /**
  * The deduplication core. Maintains the canonical registry of all discovered
@@ -303,7 +304,8 @@ public class CustomItemRegistry {
  * Load previously discovered items from database.
  */
  public void loadFromDatabase(DatabaseManager dbManager) {
- try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
+ try (Connection conn = dbManager.getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "SELECT * FROM custom_items WHERE enabled = 1")) {
  ResultSet rs = ps.executeQuery();
  int loaded = 0;
@@ -396,7 +398,8 @@ public class CustomItemRegistry {
  String methodsStr = methods.stream().map(DiscoveryMethod::name).reduce((a, b) -> a + "," + b).orElse("");
 
  if (dbManager.isMySQL()) {
- try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
+ try (Connection conn = dbManager.getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "INSERT INTO custom_items (canonical_id, source_plugin, display_name, item_data, pdc_key, " +
  "model_data_key, lore_hash, plugin_native_id, category, buy_price, sell_price, enabled, " +
  "discovery_methods, first_discovered, last_seen) " +
@@ -424,7 +427,8 @@ public class CustomItemRegistry {
  ps.executeUpdate();
  }
  } else {
- try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
+ try (Connection conn = dbManager.getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "INSERT OR REPLACE INTO custom_items (canonical_id, source_plugin, display_name, item_data, " +
  "pdc_key, model_data_key, lore_hash, plugin_native_id, category, buy_price, sell_price, " +
  "enabled, discovery_methods, first_discovered, last_seen) " +
@@ -432,7 +436,8 @@ public class CustomItemRegistry {
  long now = System.currentTimeMillis();
  // For SQLite INSERT OR REPLACE, preserve first_discovered if item exists
  long firstDiscovered = now;
- try (PreparedStatement lookup = dbManager.getConnection().prepareStatement(
+ try (Connection lookupConn = dbManager.getConnection();
+        PreparedStatement lookup = lookupConn.prepareStatement(
  "SELECT first_discovered FROM custom_items WHERE canonical_id = ?")) {
  lookup.setString(1, canonicalId);
  ResultSet rs = lookup.executeQuery();
@@ -478,7 +483,8 @@ public class CustomItemRegistry {
  }
  org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  synchronized (dbManager.getWriteLock()) {
- try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
+ try (Connection conn = dbManager.getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "DELETE FROM custom_items WHERE canonical_id = ?")) {
  ps.setString(1, canonicalId);
  ps.executeUpdate();
@@ -495,7 +501,8 @@ public class CustomItemRegistry {
  public void updateCustomItemPrice(DatabaseManager dbManager, String canonicalId, double buyPrice, double sellPrice) {
  org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  synchronized (dbManager.getWriteLock()) {
- try (PreparedStatement ps = dbManager.getConnection().prepareStatement(
+ try (Connection conn = dbManager.getConnection();
+        PreparedStatement ps = conn.prepareStatement(
  "UPDATE custom_items SET buy_price = ?, sell_price = ? WHERE canonical_id = ?")) {
  ps.setDouble(1, buyPrice);
  ps.setDouble(2, sellPrice);
