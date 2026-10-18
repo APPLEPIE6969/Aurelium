@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.aureleconomy"
-version = "1.5.4.1-26.2.x"
+version = "1.5.5-26.2.x"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(25))
@@ -126,12 +126,12 @@ tasks.test {
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
-    archiveBaseName = "Aurelium-1.5.4.1-26.2.x"
+    archiveBaseName = "Aurelium-1.5.5-26.2.x"
     archiveVersion = ""
     archiveClassifier = ""
 
     manifest {
         attributes("Main-Class" to "com.aureleconomy.AurelEconomy")
-        attributes("Implementation-Version" to "1.5.4.1-26.2.x")
+        attributes("Implementation-Version" to "1.5.5-26.2.x")
     }
 }

@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.aureleconomy"
-  version = "1.5.4"
+  version = "1.5.5"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
