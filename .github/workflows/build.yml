@@ -1,5 +1,28 @@
 name: CI
 
+# Every job below pins ubuntu-24.04 rather than ubuntu-latest, deliberately.
+#
+# GitHub is rolling the ubuntu-latest label forward from 24.04 to 26.04 between
+# 19 October and 19 November 2026 (actions/runner-images#14748). The rollout is
+# gradual, so during that window ubuntu-latest means different things on
+# different days and two runs a week apart can land on different Ubuntu
+# versions. A run that goes red because the runner image changed underneath it
+# looks exactly like a regression, and this repo has already lost time twice to
+# CI that was not saying what it appeared to be saying.
+#
+# What the migration actually threatens here is Python, not Java. The JDK is
+# pinned explicitly by setup-java in all ten jobs, so the image's default Java
+# is irrelevant. The nine contract checks run under an unpinned python3 across
+# thirteen call sites and inherit whatever the image ships, which is where a
+# stdlib change would surface.
+#
+# Pinning is ten lines and zero code risk. Move to ubuntu-26.04 deliberately,
+# after a green run on it, rather than being moved by the label.
+#
+# Note that the announcement's own version table is known to be wrong in places
+# (it lists Java 17 as the 26.04 default when the image ships 25, and omits the
+# Docker 28 to 29 bump), so do not treat it as authoritative when planning the move.
+
 on:
   push:
     branches: ["1.4.3", main, "Latest", "fix/mysql-compat-and-auction-displayname", "feature/custom-item-scanner"]
@@ -38,7 +61,7 @@ jobs:
             jdk: 21
             gradle_task: ":v1_21_11:shadowJar"
             artifact_name: aurelium-1-21-11
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -115,7 +138,7 @@ jobs:
           retention-days: 7
 
   config-migration-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: build
     steps:
@@ -236,7 +259,7 @@ jobs:
           retention-days: 7
 
   config-migration-test-152-to-153:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: build
     steps:
@@ -355,7 +378,7 @@ jobs:
           retention-days: 7
 
   vault-autoinstall-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: build
     steps:
@@ -463,7 +486,7 @@ jobs:
           retention-days: 7
 
   smoke-and-ingame-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: build
     steps:
@@ -612,7 +635,7 @@ jobs:
           retention-days: 7
 
   mysql-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     needs: build
     steps:
@@ -734,7 +757,7 @@ jobs:
           retention-days: 7
 
   scanner-mysql-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: build
     steps:
@@ -851,7 +874,7 @@ jobs:
           retention-days: 7
 
   cloud-registration-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: build
     steps:
@@ -1034,7 +1057,7 @@ jobs:
             '${{ steps.reg.outputs.api_key }}'
 
   mineflayer-ingame-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     # Raised from 30: this job now runs both the mineflayer GUI suite and the
     # long RCON suite, and the RCON suite stretches past 30 minutes whenever the
@@ -1220,7 +1243,7 @@ jobs:
           retention-days: 7
 
   restart-cycle-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     timeout-minutes: 60
     steps:
