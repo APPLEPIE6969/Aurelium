@@ -31,11 +31,15 @@ to-do_list.md
 Untitled-*.txt
 
 # Planning documents. Working notes for the repo owner, not part of the plugin.
-# These are untracked, not merely ignored: AURELIUM-FIXPLAN.md is listed here but
-# is still tracked in git, so its ignore rule does nothing and it ships to every
-# clone. PLAN.md is properly untracked. Worth fixing the fixplan the same way.
+# Verified untracked: none of these is in the index, and no commit in any ref has
+# ever touched AURELIUM-FIXPLAN.md or PLAN.md (`git ls-files`, `git log --all --
+# <path>`). An earlier note here claimed AURELIUM-FIXPLAN.md was still tracked and
+# shipped to every clone; that was wrong, and there is nothing to untrack.
 AURELIUM-FIXPLAN.md
 PLAN.md
+# Agent routing notes for this repo. They point at the fixplan above, so they stay
+# local alongside it.
+AGENTS.md
 
 # Secrets: API tokens, keys, local credentials
 .env
@@ -59,6 +63,9 @@ dependency-reduced-pom.xml
 .agent/
 .agents/
 kilo.json
+
+# opencode
+opencode.json
 
 # Backup directories
 _aurelium_*/
