@@ -187,13 +187,44 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  });
  }
 
- public void bid(com.aureleconomy.auction.AuctionItem auction, UUID bidder, BigDecimal amount) {
+ /**
+  * Places a bid, charging for it before the bid is committed.
+  *
+  * <p>C1: this method used to verify funds with a cache read and never charge the
+  * new bidder at all, so every winner collected their item for free, every
+  * outbid player was refunded money they never spent, and the seller was paid out
+  * of nothing. The charge lives here now, through the honest money API, and the
+  * outcome is returned so no caller can announce a bid the database refused.
+  *
+  * <p>The whole decision is one critical section per auction. The refund has to
+  * return exactly the bid this bid displaced, and two bidders reading the same
+  * "previous bidder" would both refund them.
+  *
+  * @return what happened; only {@link BidResult#SUCCESS} commits anything
+  */
+ public BidResult bid(com.aureleconomy.auction.AuctionItem auction, UUID bidder, BigDecimal amount) {
  String currency = auction.getCurrency();
 
  final String cachedDisplayName = getItemDisplayName(auction.getItem());
 
- Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- int affectedRows = 0;
+ synchronized (auction) {
+ UUID previousBidder = auction.getHighestBidder();
+ BigDecimal previousPrice = auction.getPrice();
+
+ // Refused here rather than at the database, so a bid that cannot win never
+ // costs the bidder a charge it would only have to hand back.
+ if (previousBidder != null && previousPrice.compareTo(amount) >= 0) {
+ return BidResult.OUTBID;
+ }
+
+ // The guarded UPDATE inside withdraw() is the sole authority on whether the
+ // bidder can pay. A refused charge means nothing has changed anywhere, so
+ // there is nothing to undo and no caller may proceed as if it had.
+ if (!plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(bidder), amount, currency)) {
+ return BidResult.INSUFFICIENT_FUNDS;
+ }
+
+ int affectedRows;
  try (Connection conn = plugin.getDatabaseManager().getConnection();
         PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET highest_bidder_uuid = ?, price = ? WHERE id = ? AND (price < ? OR highest_bidder_uuid IS NULL)")) {
  ps.setString(1, bidder.toString());
@@ -204,22 +235,24 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  affectedRows = ps.executeUpdate();
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error during bidding", e);
- return;
+ affectedRows = -1;
  }
 
- // The refund is a second borrow (deposit()), and the SQLite pool holds one
- // connection, so the update above has to be released before it runs. The
- // result is captured first so nothing here depends on the open statement.
- if (affectedRows > 0) {
- synchronized (auction) {
- UUID previousBidder = auction.getHighestBidder();
- BigDecimal previousPrice = auction.getPrice();
+ if (affectedRows <= 0) {
+ // Either the row moved under us, which only a writer outside this JVM can
+ // do now that the decision is serialised above, or the update failed. Hand
+ // the charge back: a bid that did not take the row must not cost anything.
+ refund(auction, bidder, amount, currency, cachedDisplayName);
+ return affectedRows < 0 ? BidResult.ERROR : BidResult.OUTBID;
+ }
 
  auction.setPrice(amount);
  auction.setHighestBidder(bidder);
 
  if (previousBidder != null) {
- plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(previousBidder), previousPrice, currency);
+ // After the bid is committed, never before: refunding first would pay a
+ // bidder that this bid then failed to displace.
+ refund(auction, previousBidder, previousPrice, currency, cachedDisplayName);
  Player prev = Bukkit.getPlayer(previousBidder);
  if (prev != null) {
  String formatted = plugin.getEconomyManager().getFormattedWithSymbol(previousPrice, currency);
@@ -227,14 +260,49 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  }
  }
  }
+
  com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
- } else {
- Player p = Bukkit.getPlayer(bidder);
- if (p != null) {
- p.sendMessage(Component.text("Your bid was too late! Someone else already bid higher.", NamedTextColor.RED));
+ return BidResult.SUCCESS;
  }
+
+ /**
+  * Returns money a bid took and did not keep, naming the debt if even that
+  * fails. A refund the database refuses has to leave a record somewhere: the
+  * alternative is a silent burn of a player's money.
+  */
+ private void refund(com.aureleconomy.auction.AuctionItem auction, UUID playerId, BigDecimal amount, String currency, String cachedDisplayName) {
+ if (plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(playerId), amount, currency)) {
+ return;
  }
- });
+ plugin.getComponentLogger().error("Refund of " + amount + " " + currency + " to " + playerId
+ + " failed while bidding on auction " + auction.getId() + "; recorded as an offline earning so it is not lost.");
+ logOfflineEarning(playerId, amount, auction.getItem(), cachedDisplayName);
+ }
+
+ /** What a bid did. Every caller has to handle all four; only SUCCESS commits anything. */
+ public enum BidResult {
+ /** The bid stands: the bidder was charged and the bid it displaced was refunded. */
+ SUCCESS,
+ /** The database refused the charge. The bidder cannot pay and nothing changed. */
+ INSUFFICIENT_FUNDS,
+ /** Someone else holds the auction at this price or higher. Nothing was charged. */
+ OUTBID,
+ /** The database could not be reached, or the row moved under us. Nothing was charged. */
+ ERROR;
+
+ /**
+  * The line a player should see when their bid did not go through, or null when
+  * it did. Kept with the result so the six call sites cannot each invent their
+  * own wording for a refusal.
+  */
+ public String playerMessage() {
+ return switch (this) {
+ case SUCCESS -> null;
+ case INSUFFICIENT_FUNDS -> "Insufficient funds!";
+ case OUTBID -> "Your bid was too late! Someone else already bid higher.";
+ case ERROR -> "Your bid could not be placed. Nothing was charged.";
+ };
+ }
  }
 
  /**

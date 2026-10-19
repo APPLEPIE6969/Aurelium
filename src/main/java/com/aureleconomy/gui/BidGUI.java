@@ -2,6 +2,7 @@ package com.aureleconomy.gui;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
+import com.aureleconomy.auction.AuctionManager;
 import com.aureleconomy.utils.ItemBuilder;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -123,7 +124,15 @@ public class BidGUI extends GUIHolder {
                     return;
                 }
                 if (plugin.getEconomyManager().has(player, bidAmount, auction.getCurrency())) {
-                    plugin.getAuctionManager().bid(auction, player.getUniqueId(), bidAmount);
+                    // The charge happens inside bid() now (C1), so the success
+                    // line only follows a bid the database accepted.
+                    AuctionManager.BidResult result = plugin
+                            .getAuctionManager().bid(auction, player.getUniqueId(), bidAmount);
+                    if (result != AuctionManager.BidResult.SUCCESS) {
+                        player.sendMessage(Component.text(result.playerMessage(), NamedTextColor.RED));
+                        open();
+                        return;
+                    }
                     player.sendMessage(Component.text("Bid placed successfully!", NamedTextColor.GREEN));
                     new AuctionGUI(plugin, player, false).open();
                 } else {

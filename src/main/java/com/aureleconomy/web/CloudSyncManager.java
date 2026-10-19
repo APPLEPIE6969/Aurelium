@@ -1,6 +1,7 @@
 package com.aureleconomy.web;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.auction.AuctionManager;
 import com.aureleconomy.market.MarketItems;
 import com.aureleconomy.market.MarketItems.Category;
 import com.aureleconomy.market.MarketItems.MarketEntry;
@@ -882,8 +883,15 @@ public class CloudSyncManager {
                 return;
             }
 
-            plugin.getEconomyManager().withdraw(player, totalCost, currency);
-            plugin.getAuctionManager().bid(auction, player.getUniqueId(), totalCost);
+            // The separate withdraw that used to sit here is gone: bid() charges
+            // the buyer itself now (C1), and charging here as well would take the
+            // same purchase out of the balance twice.
+            AuctionManager.BidResult bidResult = plugin
+                    .getAuctionManager().bid(auction, player.getUniqueId(), totalCost);
+            if (bidResult != AuctionManager.BidResult.SUCCESS) {
+                confirmPurchase(purchaseId, false, BigDecimal.ZERO, bidResult.playerMessage());
+                return;
+            }
             plugin.getAuctionManager().endAuction(auction);
             player.getInventory().addItem(auction.getItem().clone());
             plugin.getAuctionManager().markCollectedAtomic(auction.getId());
@@ -930,7 +938,11 @@ public class CloudSyncManager {
             confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Bid must be higher than current price");
             return;
         }
-        plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
+        AuctionManager.BidResult bidResult = plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
+        if (bidResult != AuctionManager.BidResult.SUCCESS) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, bidResult.playerMessage());
+            return;
+        }
         player.sendMessage(MM.deserialize("<green><bold>✔</bold> Web bid placed: <gold>"
                 + plugin.getEconomyManager().getFormattedWithSymbol(amount, auction.getCurrency()) + "</gold> on <white>"
                 + auction.getItem().getType().name().replace("_", " ") + "</white></green>"));

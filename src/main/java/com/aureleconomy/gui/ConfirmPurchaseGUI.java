@@ -2,6 +2,7 @@ package com.aureleconomy.gui;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
+import com.aureleconomy.auction.AuctionManager;
 import com.aureleconomy.utils.ItemBuilder;
 import com.aureleconomy.utils.InventoryUtils;
 import java.math.BigDecimal;
@@ -94,7 +95,15 @@ public class ConfirmPurchaseGUI extends GUIHolder {
         }
 
         if (isBid) {
-            plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
+            // bid() charges the bidder now (C1), so a refusal has to stop here,
+            // not after a success message.
+            AuctionManager.BidResult result = plugin
+                    .getAuctionManager().bid(auction, player.getUniqueId(), amount);
+            if (result != AuctionManager.BidResult.SUCCESS) {
+                player.sendMessage(Component.text(result.playerMessage(), NamedTextColor.RED));
+                new AuctionGUI(plugin, player, false).open();
+                return;
+            }
             player.sendMessage(Component.text("Bid placed successfully!", NamedTextColor.GREEN));
             new AuctionGUI(plugin, player, false).open();
         } else {
@@ -105,9 +114,19 @@ public class ConfirmPurchaseGUI extends GUIHolder {
             }
 
             if (plugin.getAuctionManager().claimAuctionAtomic(auction.getId())) {
-                plugin.getEconomyManager().withdraw(player, amount, auction.getCurrency());
-                
-                plugin.getAuctionManager().bid(auction, player.getUniqueId(), amount);
+                // The separate withdraw that used to sit here is gone: bid()
+                // charges the buyer itself now (C1), and charging here as well
+                // would take the same purchase out of the balance twice.
+                AuctionManager.BidResult result = plugin
+                        .getAuctionManager().bid(auction, player.getUniqueId(), amount);
+                if (result != AuctionManager.BidResult.SUCCESS) {
+                    // No payout, no item and no collection: the bid is the whole
+                    // sale, and the sale did not happen.
+                    player.sendMessage(Component.text(result.playerMessage(), NamedTextColor.RED));
+                    new AuctionGUI(plugin, player, false).open();
+                    return;
+                }
+
                 plugin.getAuctionManager().endAuction(auction);
 
                 player.getInventory().addItem(auction.getItem().clone());

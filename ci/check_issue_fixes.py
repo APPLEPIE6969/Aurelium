@@ -342,6 +342,42 @@ check(
     'slimes spawn on peaceful and ignore spawn-monsters once they exist',
 )
 
+# --------------------------------------------------------------------------
+# C1: bid() charges the bidder, so no caller withdraws for the same bid
+# --------------------------------------------------------------------------
+# bid() used to decide affordability from the balance cache and never withdraw
+# anything, and every caller withdrew before bidding. Now that bid() owns the
+# charge, a caller that still withdraws takes the same purchase out of the
+# balance twice. The in-game buy-now path has a unit test that would catch it
+# (AuctionManagerMoneyTest); the web and cloud paths post to the backend and
+# cannot be driven in a unit test, so the shape is checked here instead.
+CALLERS = (
+    'src/main/java/com/aureleconomy/gui/BidGUI.java',
+    'src/main/java/com/aureleconomy/gui/ConfirmPurchaseGUI.java',
+    'src/main/java/com/aureleconomy/web/WebPurchaseExecutor.java',
+    'src/main/java/com/aureleconomy/web/CloudSyncManager.java',
+)
+for rel in CALLERS:
+    caller = strip_comments(read(rel))
+    caller_name = rel.rsplit('/', 1)[-1]
+    check(
+        f'C1 {caller_name} does not withdraw for a bid it then places',
+        not [
+            m.start() for m in re.finditer(r'withdraw\(', caller)
+            if '.bid(' in caller[m.start():m.start() + 240]
+        ],
+        'bid() charges the bidder now, so a withdraw first charges twice',
+    )
+    bid_calls = caller.count('.bid(')
+    handled = len(re.findall(
+        r'[!=]=\s*AuctionManager\.BidResult\.SUCCESS', caller))
+    check(
+        f'C1 {caller_name} acts on the result of every bid',
+        bid_calls > 0 and handled >= bid_calls,
+        f'{bid_calls} bid call(s) but {handled} result check(s): a refused bid '
+        'must not be announced or followed by a delivery',
+    )
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

@@ -2,6 +2,7 @@ package com.aureleconomy.web;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
+import com.aureleconomy.auction.AuctionManager;
 import com.aureleconomy.orders.BuyOrder;
 import com.aureleconomy.webstore.PurchaseQueue;
 import com.google.gson.JsonObject;
@@ -349,7 +350,12 @@ public class WebPurchaseExecutor {
                     + plugin.getEconomyManager().getFormattedWithSymbol(amount, ai.getCurrency()));
         }
 
-        plugin.getAuctionManager().bid(ai, bidder.getUniqueId(), amount);
+        AuctionManager.BidResult bidResult = plugin.getAuctionManager().bid(ai, bidder.getUniqueId(), amount);
+        if (bidResult != AuctionManager.BidResult.SUCCESS) {
+            // The bid charges the bidder now (C1), so a refusal is reported
+            // instead of answering success for a bid that never happened.
+            return fail(result, bidResult.playerMessage());
+        }
 
         result.addProperty("success", true);
         result.addProperty("amount", amount.doubleValue());
