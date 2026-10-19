@@ -436,8 +436,9 @@ public class CustomItemRegistry {
  long now = System.currentTimeMillis();
  // For SQLite INSERT OR REPLACE, preserve first_discovered if item exists
  long firstDiscovered = now;
- try (Connection lookupConn = dbManager.getConnection();
-        PreparedStatement lookup = lookupConn.prepareStatement(
+ // Same connection on purpose: borrowing a second one would stack two
+ // borrows on the single-connection SQLite pool and time out.
+ try (PreparedStatement lookup = conn.prepareStatement(
  "SELECT first_discovered FROM custom_items WHERE canonical_id = ?")) {
  lookup.setString(1, canonicalId);
  ResultSet rs = lookup.executeQuery();

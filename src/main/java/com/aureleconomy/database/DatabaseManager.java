@@ -146,16 +146,23 @@ public class DatabaseManager {
         }
     }
 
-    public synchronized Connection getConnection() {
+    /**
+     * Borrows a connection from the pool. The caller owns it: closing it returns it
+     * to the pool, and not closing it leaks a slot.
+     *
+     * <p>The null-on-failure contract is deliberate and unchanged. A failed borrow,
+     * including a pool timeout, is logged with its cause and reported as null; the
+     * call sites were written against that shape, and several treat a null as a
+     * refused operation rather than letting an exception escape. The pool timeout
+     * is a SQLException like any other here, so a leaked slot surfaces through the
+     * same path as an unreachable server.
+     */
+    public Connection getConnection() {
         try {
-            // Borrow handle, not the physical connection: a caller's close() must not
-            // kill the handle other threads are holding. Bound to whatever connection
-            // exists right now, since SQLiteDatabase rebuilds it on the next borrow.
-            // close() below and plugin disable still close the real one.
-            return SharedConnectionHandle.wrap(database.getConnection());
+            return database.getConnection();
         } catch (SQLException e) {
             plugin.getComponentLogger().error(
-                    "Failed to re-establish " + settings.getType().getValue() + " database connection!", e);
+                    "Failed to borrow a " + settings.getType().getValue() + " database connection!", e);
             return null;
         }
     }
@@ -248,10 +255,10 @@ public class DatabaseManager {
 
             for (int i = currentVersion + 1; i <= LATEST_SCHEMA_VERSION; i++) {
                 plugin.getComponentLogger().info("Applying database migration v" + i + "...");
-                applyMigration(i);
+                applyMigration(connection, i);
             }
 
-            updateDatabaseVersion(LATEST_SCHEMA_VERSION);
+            updateDatabaseVersion(connection, LATEST_SCHEMA_VERSION);
             connection.commit();
             plugin.getComponentLogger().info("Database migration completed successfully.");
         } catch (SQLException e) {
@@ -267,6 +274,15 @@ public class DatabaseManager {
             } catch (SQLException ex) {
                 /* ignored */
             }
+            // Returned to the pool, not closed: transferring the connection out of
+            // the pool for good is what the pool exists to prevent. The rollback
+            // above has already run by this point, so a failed migration cannot be
+            // committed by the reset.
+            try {
+                connection.close();
+            } catch (SQLException ex) {
+                /* ignored */
+            }
         }
     }
 
@@ -275,7 +291,8 @@ public class DatabaseManager {
         if (conn == null) {
             return 0;
         }
-        try (Statement statement = conn.createStatement();
+        try (conn;
+                Statement statement = conn.createStatement();
                 ResultSet rs = statement.executeQuery("SELECT version FROM database_info LIMIT 1")) {
             if (rs.next())
                 return rs.getInt("version");
@@ -285,58 +302,68 @@ public class DatabaseManager {
         return 0;
     }
 
-    private void updateDatabaseVersion(int version) throws SQLException {
-        Connection conn = requireConnection("the schema version update");
+    private void updateDatabaseVersion(Connection conn, int version) throws SQLException {
         try (Statement statement = conn.createStatement()) {
             statement.execute("DELETE FROM database_info;");
             statement.execute("INSERT INTO database_info (version) VALUES (" + version + ");");
         }
     }
 
-    private void applyMigration(int version) throws SQLException {
+    private void applyMigration(Connection conn, int version) throws SQLException {
         switch (version) {
             case 1:
-                addColumnIfNotExists("players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
-                addColumnIfNotExists("auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
-                addColumnIfNotExists("auctions", "start_time", database.getTypes().time());
-                addColumnIfNotExists("auctions", "currency", "VARCHAR(32)");
-                addColumnIfNotExists("offline_earnings", "currency", "VARCHAR(32)");
-                addColumnIfNotExists("buy_orders", "currency", "VARCHAR(32)");
-                addColumnIfNotExists("auction_offers", "currency", "VARCHAR(32)");
+                addColumnIfNotExists(conn, "players", "gui_style", "VARCHAR(16) DEFAULT 'MODERN'");
+                addColumnIfNotExists(conn, "auctions", "listing_fee", "DOUBLE DEFAULT 0.0");
+                addColumnIfNotExists(conn, "auctions", "start_time", database.getTypes().time());
+                addColumnIfNotExists(conn, "auctions", "currency", "VARCHAR(32)");
+                addColumnIfNotExists(conn, "offline_earnings", "currency", "VARCHAR(32)");
+                addColumnIfNotExists(conn, "buy_orders", "currency", "VARCHAR(32)");
+                addColumnIfNotExists(conn, "auction_offers", "currency", "VARCHAR(32)");
                 break;
             case 2:
                 // Fix: propagate DDL failure — throw instead of swallowing
-                database.execute(new CustomItemSchema(database.getTypes()).create());
+                execute(conn, new CustomItemSchema(database.getTypes()).create());
                 break;
             case 3:
-                addColumnIfNotExists("auctions", "purchase_mode", "VARCHAR(16) DEFAULT 'STACK'");
+                addColumnIfNotExists(conn, "auctions", "purchase_mode", "VARCHAR(16) DEFAULT 'STACK'");
                 break;
             case 4:
                 // MySQL/MariaDB alias LONG to MEDIUMTEXT, so timestamp columns written by
                 // earlier versions hold epoch millis as text. Convert them to BIGINT.
-                convertTimeColumnToBigInt("auctions", "expiration");
-                convertTimeColumnToBigInt("auctions", "start_time");
-                convertTimeColumnToBigInt("auction_offers", "timestamp");
-                convertTimeColumnToBigInt("offline_earnings", "timestamp");
-                convertTimeColumnToBigInt("price_history", "timestamp");
+                convertTimeColumnToBigInt(conn, "auctions", "expiration");
+                convertTimeColumnToBigInt(conn, "auctions", "start_time");
+                convertTimeColumnToBigInt(conn, "auction_offers", "timestamp");
+                convertTimeColumnToBigInt(conn, "offline_earnings", "timestamp");
+                convertTimeColumnToBigInt(conn, "price_history", "timestamp");
                 break;
             case 5:
                 // Per-trade log backing the dashboard's volume column and sort.
-                database.execute(new TradeVolumeSchema(database.getTypes()).create());
+                execute(conn, new TradeVolumeSchema(database.getTypes()).create());
                 break;
             case 6:
                 // The dashboard reads the price as it was 24h ago, and both of
                 // these tables are pruned by time. Without these indexes each is
                 // a full table scan, and price_history grows by one row per
                 // tradeable item on every snapshot.
-                addIndexIfNotExists("price_history", "idx_price_history_timestamp", "timestamp");
-                addIndexIfNotExists("trade_volume", "idx_trade_volume_trade_at", "trade_at");
+                addIndexIfNotExists(conn, "price_history", "idx_price_history_timestamp", "timestamp");
+                addIndexIfNotExists(conn, "trade_volume", "idx_trade_volume_trade_at", "trade_at");
                 break;
         }
     }
 
-    private void addColumnIfNotExists(String table, String column, String type) throws SQLException {
-        Connection conn = requireConnection("migration");
+    /**
+     * Runs one migration statement on the connection the migration transaction
+     * already holds. Borrowing a second connection here would deadlock against the
+     * single-connection SQLite pool.
+     */
+    private static void execute(Connection conn, String sql) throws SQLException {
+        try (Statement statement = conn.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
+    private void addColumnIfNotExists(Connection conn, String table, String column, String type)
+            throws SQLException {
         try (Statement statement = conn.createStatement()) {
             if (columnExists(statement, table, column)) {
                 return;
@@ -349,11 +376,10 @@ public class DatabaseManager {
      * Retypes a timestamp column to BIGINT on MySQL/MariaDB. A no-op on SQLite, where
      * {@code LONG} already carries numeric affinity, and on columns that do not exist.
      */
-    private void convertTimeColumnToBigInt(String table, String column) throws SQLException {
+    private void convertTimeColumnToBigInt(Connection conn, String table, String column) throws SQLException {
         if (settings.getType() != DatabaseType.MYSQL) {
             return;
         }
-        Connection conn = requireConnection("migration");
         try (Statement statement = conn.createStatement()) {
             if (!columnExists(statement, table, column)) {
                 return;
@@ -368,8 +394,8 @@ public class DatabaseManager {
      * <p>Cannot use {@code CREATE INDEX IF NOT EXISTS}: SQLite accepts it but
      * MySQL rejects the syntax outright, so the index list is probed instead.
      */
-    private void addIndexIfNotExists(String table, String index, String columns) throws SQLException {
-        Connection conn = requireConnection("migration");
+    private void addIndexIfNotExists(Connection conn, String table, String index, String columns)
+            throws SQLException {
         try (Statement statement = conn.createStatement()) {
             if (indexExists(statement, table, index)) {
                 return;
@@ -422,9 +448,8 @@ public class DatabaseManager {
             return;
         legacyBalancesChecked = true;
 
-        Connection conn = requireConnection("the legacy balance migration");
-
-        try (Statement statement = conn.createStatement()) {
+        try (Connection conn = requireConnection("the legacy balance migration");
+                Statement statement = conn.createStatement()) {
             // Only the probe may fail silently: a missing balance column means there is nothing
             // to migrate. Everything after it is a real migration step whose failure must surface.
             if (!columnExists(statement, "players", "balance")) {

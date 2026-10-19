@@ -395,6 +395,11 @@ class SchemaDdlTest {
         assertNotNull(reopened, "getConnection() must reopen after close()");
         assertFalse(reopened.isClosed());
 
+        // A borrow belongs to its borrower: a pooled connection is only released
+        // when it is returned, and until then it keeps the database file open.
+        // The pre-pool provider closed the file out from under an in-flight query
+        // instead, which is the H1 bug; this test owns what it borrows now.
+        reopened.close();
         manager.close();
     }
 }

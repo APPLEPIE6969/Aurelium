@@ -1,7 +1,6 @@
 package com.aureleconomy.database.impl;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -9,24 +8,42 @@ import com.aureleconomy.database.DatabaseSettings;
 import com.aureleconomy.database.DatabaseType;
 import com.aureleconomy.database.types.MySQLTypes;
 import com.aureleconomy.database.types.SQLTypes;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 
 /**
- * MySQL and MariaDB, both via the shaded MySQL Connector/J driver. The driver registers itself
- * through the JDBC ServiceLoader, so no explicit {@code Class.forName} is needed.
+ * MySQL and MariaDB, both via the shaded MySQL Connector/J driver, through a
+ * HikariCP pool.
+ *
+ * <p>The pool replaces the old cached single connection and its
+ * {@code SELECT 1} probe. Hikari validates with {@link Connection#isValid(int)}
+ * on borrow and on its idle checks, retires connections at {@code maxLifetime},
+ * and pings idle ones with {@code keepaliveTime}; the hand-written probe and its
+ * thirty-second rate limit were a local approximation of exactly that.
  */
 public class MySQLDatabase implements Database {
 
     /**
-     * How long a cached handle is trusted before being probed with {@code SELECT 1}. Short enough
-     * that a server-side disconnect is noticed well within a typical {@code wait_timeout}, long
-     * enough that a burst of queries does not each pay for a round trip.
+     * Enough for the async writers and dashboard reads to overlap without
+     * queueing, while staying far below a MySQL server's default connection cap.
      */
-    private static final long VALIDATION_INTERVAL_MS = 30_000L;
+    private static final int POOL_SIZE = 6;
+
+    /** How long a borrow waits before reporting that no connection became free. */
+    private static final long CONNECTION_TIMEOUT_MS = 30_000L;
+
+    /** How long a validation probe may take before the connection is discarded. */
+    private static final long VALIDATION_TIMEOUT_MS = 5_000L;
+
+    /** Log a stack trace when a borrow is held longer than this. */
+    private static final long LEAK_DETECTION_THRESHOLD_MS = 60_000L;
+
+    /** Ping an idle connection before the server's {@code wait_timeout} can drop it. */
+    private static final long KEEPALIVE_TIME_MS = 120_000L;
 
     private final DatabaseSettings settings;
     private final MySQLTypes types = new MySQLTypes();
-    private Connection connection;
-    private long lastValidatedAt;
+    private HikariDataSource dataSource;
 
     public MySQLDatabase(DatabaseSettings settings) {
         this.settings = settings;
@@ -44,90 +61,88 @@ public class MySQLDatabase implements Database {
         String url = "jdbc:mysql://" + settings.getHost() + ":" + settings.getPort() + "/"
                 + settings.getDatabase()
                 + "?sslMode=" + settings.getSslMode().name()
-                // Keep the server from closing an idle connection out from under us, and let the
-                // driver validate/reconnect it on its own. validateConnection() below is the
-                // authoritative check; these just reduce how often it has to fire.
+                // Keep the server from closing an idle connection out from under us; the
+                // driver's own timeouts sit below Hikari's keepalive/lifetime checks.
                 + "&connectTimeout=10000"
                 + "&socketTimeout=60000"
                 + "&tcpKeepAlive=true";
-        connection = DriverManager.getConnection(url, settings.getUsername(), settings.getPassword());
-        lastValidatedAt = System.currentTimeMillis();
-    }
 
-    @Override
-    public Connection getConnection() throws SQLException {
-        connect();
-        return connection;
+        HikariConfig config = new HikariConfig();
+        config.setPoolName("Aurelium-MySQL");
+        // Named rather than left to DriverManager: the driver is shaded into the
+        // jar, and asking for it by name reports a missing one at startup instead
+        // of a borrow-time "no suitable driver".
+        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        config.setJdbcUrl(url);
+        config.setUsername(settings.getUsername());
+        config.setPassword(settings.getPassword());
+        config.setMaximumPoolSize(POOL_SIZE);
+        config.setMinimumIdle(1);
+        config.setConnectionTimeout(CONNECTION_TIMEOUT_MS);
+        config.setValidationTimeout(VALIDATION_TIMEOUT_MS);
+        config.setLeakDetectionThreshold(LEAK_DETECTION_THRESHOLD_MS);
+        config.setKeepaliveTime(KEEPALIVE_TIME_MS);
+
+        try {
+            // Fails fast: the constructor opens and validates one connection, so an
+            // unreachable server is reported here rather than on the first query.
+            dataSource = new HikariDataSource(config);
+        } catch (RuntimeException e) {
+            // Hikari reports startup failures as a RuntimeException. initialize()
+            // treats a SQLException as "this database is unusable" and disables the
+            // plugin, so translate rather than crash out of onEnable.
+            throw new SQLException("Could not open the MySQL connection pool at "
+                    + settings.getHost() + ":" + settings.getPort(), e);
+        }
     }
 
     /**
-     * Proves the cached handle is still usable, not merely un-closed.
-     *
-     * <p>{@link Connection#isClosed()} only reports the client's view of the socket. When the
-     * server closes an idle connection - MySQL's {@code wait_timeout}, a proxy reset, a container
-     * restart - the client still believes it is open, so a plain {@code !isClosed()} check reports
-     * healthy and every subsequent query fails with "No operations allowed after connection closed".
-     * Issuing a trivial statement is the only reliable way to make the server confirm the socket.
-     *
-     * <p>The probe costs a round trip, and {@link #getConnection()} runs for nearly every query, so
-     * it is rate limited: a handle younger than {@link #VALIDATION_INTERVAL_MS} is trusted. Any
-     * query that actually fails still surfaces its own error to the caller.
-     *
-     * <p>A failed validation discards the handle so {@link #connect()} rebuilds it.
+     * Borrows a pooled connection. Closing the returned handle returns it to the
+     * pool; it does not close the database. A borrow that times out surfaces as a
+     * {@link SQLException}, which {@code DatabaseManager.getConnection()} turns
+     * into its documented null.
      */
-    private void validateConnection() {
-        if (connection == null) {
-            return;
+    @Override
+    public Connection getConnection() throws SQLException {
+        connect();
+        // Captured rather than read twice: a concurrent disconnect() during plugin
+        // shutdown would otherwise leave the second read null and surface as a
+        // NullPointerException instead of the timeout-or-closed SQLException.
+        HikariDataSource pool = dataSource;
+        if (pool == null) {
+            throw new SQLException("The MySQL connection pool was closed.");
         }
-        long now = System.currentTimeMillis();
-        if (lastValidatedAt != 0 && now - lastValidatedAt < VALIDATION_INTERVAL_MS) {
-            return;
-        }
-        try {
-            if (connection.isClosed()) {
-                connection = null;
-                return;
-            }
-            try (Statement statement = connection.createStatement()) {
-                statement.execute("SELECT 1");
-            }
-            lastValidatedAt = now;
-        } catch (SQLException e) {
-            // Stale or broken: drop it so the next connect() rebuilds.
-            connection = null;
-        }
+        return pool.getConnection();
     }
 
     @Override
     public void execute(String sql) throws SQLException {
-        try (Statement statement = getConnection().createStatement()) {
+        try (Connection connection = getConnection();
+                Statement statement = connection.createStatement()) {
             statement.execute(sql);
         }
     }
 
     @Override
     public boolean isConnected() {
-        try {
-            if (connection == null || connection.isClosed()) {
-                connection = null;
-                return false;
-            }
-        } catch (SQLException e) {
-            connection = null;
+        if (dataSource == null) {
             return false;
         }
-        // isClosed() said the client-side handle is fine; confirm with the server.
-        validateConnection();
-        return connection != null;
+        if (dataSource.isRunning()) {
+            return true;
+        }
+        // Closed by disconnect() or by a failed startup: report the truth and let
+        // connect() build a new pool on the next borrow.
+        dataSource = null;
+        return false;
     }
 
     @Override
     public void disconnect() throws SQLException {
-        if (connection != null && !connection.isClosed()) {
-            connection.close();
+        if (dataSource != null) {
+            dataSource.close();
+            dataSource = null;
         }
-        connection = null;
-        lastValidatedAt = 0;
     }
 
     @Override

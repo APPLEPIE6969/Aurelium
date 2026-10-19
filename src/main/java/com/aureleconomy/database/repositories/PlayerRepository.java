@@ -1,5 +1,6 @@
 package com.aureleconomy.database.repositories;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -38,7 +39,8 @@ public class PlayerRepository extends Repository {
                 : "INSERT INTO " + Table.PLAYERS + " (uuid, name) VALUES (?, ?) "
                         + "ON CONFLICT(uuid) DO UPDATE SET name = excluded.name";
 
-        try (PreparedStatement ps = database.getConnection().prepareStatement(sql)) {
+        try (Connection conn = database.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, uuid.toString());
             ps.setString(2, name);
             ps.executeUpdate();
@@ -46,8 +48,9 @@ public class PlayerRepository extends Repository {
     }
 
     public void setGuiStyle(UUID uuid, String style) throws SQLException {
-        try (PreparedStatement ps = database.getConnection()
-                .prepareStatement("UPDATE " + Table.PLAYERS + " SET gui_style = ? WHERE uuid = ?")) {
+        try (Connection conn = database.getConnection();
+                PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE " + Table.PLAYERS + " SET gui_style = ? WHERE uuid = ?")) {
             ps.setString(1, style);
             ps.setString(2, uuid.toString());
             ps.executeUpdate();
@@ -60,8 +63,9 @@ public class PlayerRepository extends Repository {
      * data.
      */
     private Optional<String> findColumn(UUID uuid, String column) throws SQLException {
-        try (PreparedStatement ps = database.getConnection()
-                .prepareStatement("SELECT " + column + " FROM " + Table.PLAYERS + " WHERE uuid = ?")) {
+        try (Connection conn = database.getConnection();
+                PreparedStatement ps = conn.prepareStatement(
+                        "SELECT " + column + " FROM " + Table.PLAYERS + " WHERE uuid = ?")) {
             ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {

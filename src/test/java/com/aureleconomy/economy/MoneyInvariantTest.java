@@ -9,7 +9,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.database.DatabaseManager;
-import com.aureleconomy.database.SharedConnectionHandle;
 import com.aureleconomy.database.schema.BuyOrderSchema;
 import com.aureleconomy.database.schema.OfflineEarningSchema;
 import com.aureleconomy.database.schema.PlayerBalanceSchema;
@@ -94,7 +93,8 @@ abstract class MoneyInvariantTest {
     @BeforeEach
     void openLedger() throws SQLException {
         File dbFile = tempDir.resolve("ledger.db").toFile();
-        connection = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
+        String jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath();
+        connection = DriverManager.getConnection(jdbcUrl);
 
         SQLiteTypes types = new SQLiteTypes();
         try (Statement st = connection.createStatement()) {
@@ -104,11 +104,11 @@ abstract class MoneyInvariantTest {
         }
 
         databaseManager = mock(DatabaseManager.class);
-        // A borrow handle, not the raw connection: production hands out borrows whose
-        // close() is inert, and EconomyManager now closes the connection it is given.
-        // Returning the raw handle here would close it on the first call and fail the
-        // rest of the class, which would be testing a provider the plugin does not have.
-        when(databaseManager.getConnection()).thenReturn(SharedConnectionHandle.wrap(connection));
+        // One fresh connection per borrow, like production: EconomyManager closes
+        // the connection it is given, and handing back a single shared handle would
+        // close it on the first call and fail the rest of the class. The test's own
+        // handle above is kept for seeding and for the invariant queries.
+        when(databaseManager.getConnection()).thenAnswer(call -> DriverManager.getConnection(jdbcUrl));
         when(databaseManager.getWriteLock()).thenReturn(new Object());
         when(databaseManager.isMySQL()).thenReturn(false);
 
@@ -251,23 +251,17 @@ abstract class MoneyInvariantTest {
      * @see MoneyInvariantTest
      */
     BigDecimal totalMoney() throws SQLException {
-        return sum("SELECT COALESCE(SUM(balance), 0) FROM player_balances")
-                .add(sum("SELECT COALESCE(SUM(amount), 0) FROM offline_earnings"))
-                .add(orderEscrow());
+        return MoneyInvariants.totalMoney(connection);
     }
 
     /** The unfilled remainder of every active buy order. */
     BigDecimal orderEscrow() throws SQLException {
-        return sum("SELECT COALESCE(SUM(price_per_piece * (amount_requested - amount_filled)), 0) "
-                + "FROM buy_orders WHERE status = 'ACTIVE'");
+        return MoneyInvariants.orderEscrow(connection);
     }
 
     /** A query returning a single SUM, treating no rows as zero. */
     BigDecimal sum(String sql) throws SQLException {
-        try (PreparedStatement ps = connection.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            return rs.next() ? rs.getBigDecimal(1) : ZERO;
-        }
+        return MoneyInvariants.sum(connection, sql);
     }
 
     /**
@@ -276,12 +270,7 @@ abstract class MoneyInvariantTest {
      * {@code equals} would fail on the formatting rather than the value.
      */
     static void assertAmount(String what, BigDecimal expected, BigDecimal actual) {
-        if (actual == null) {
-            assertEquals(null, expected, what + ": expected " + expected + " but found no row");
-            return;
-        }
-        assertEquals(0, expected.stripTrailingZeros().compareTo(actual.stripTrailingZeros()),
-                what + ": expected " + expected + " but was " + actual);
+        MoneyInvariants.assertAmount(what, expected, actual);
     }
 
     /**
@@ -289,25 +278,16 @@ abstract class MoneyInvariantTest {
      * between accounts.
      */
     void assertMoneyUnchanged(String phase, BigDecimal before) throws SQLException {
-        BigDecimal after = totalMoney();
-        assertEquals(0, before.stripTrailingZeros().compareTo(after.stripTrailingZeros()),
-                "money appeared or vanished during " + phase
-                        + " (before " + before + ", after " + after + ")");
+        MoneyInvariants.assertMoneyUnchanged(connection, phase, before);
     }
 
     /** Rule 2, for a test that deliberately mints: the sum must rise by exactly this. */
     void assertMoneyMintedBy(String phase, BigDecimal before, BigDecimal minted) throws SQLException {
-        BigDecimal after = totalMoney();
-        assertEquals(0, before.add(minted).stripTrailingZeros().compareTo(after.stripTrailingZeros()),
-                "the mint during " + phase + " was not " + minted
-                        + " (before " + before + ", after " + after + ")");
+        MoneyInvariants.assertMoneyMintedBy(connection, phase, before, minted);
     }
 
     /** Rule 2, for a test that deliberately burns: the sum must fall by exactly this. */
     void assertMoneyBurnedBy(String phase, BigDecimal before, BigDecimal burned) throws SQLException {
-        BigDecimal after = totalMoney();
-        assertEquals(0, before.subtract(burned).stripTrailingZeros().compareTo(after.stripTrailingZeros()),
-                "the burn during " + phase + " was not " + burned
-                        + " (before " + before + ", after " + after + ")");
+        MoneyInvariants.assertMoneyBurnedBy(connection, phase, before, burned);
     }
 }

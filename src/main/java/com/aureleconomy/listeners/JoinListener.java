@@ -31,12 +31,12 @@ public class JoinListener implements Listener {
         plugin.getEconomyManager().invalidateCache(uuid);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean hasEarnings = false;
             try (Connection conn = plugin.getDatabaseManager().getConnection();
         PreparedStatement ps = conn.prepareStatement("SELECT uuid, amount, item_display, timestamp FROM offline_earnings WHERE uuid = ?")) {
                 ps.setString(1, uuid.toString());
                 ResultSet rs = ps.executeQuery();
 
-                boolean hasEarnings = false;
                 while (rs.next()) {
                     hasEarnings = true;
                     BigDecimal amount = rs.getBigDecimal("amount");
@@ -50,15 +50,18 @@ public class JoinListener implements Listener {
 
                 }
 
-                if (hasEarnings) {
-                    deleteAllRecordsForUUID(uuid);
-
-                    event.getPlayer().sendMessage(
-                            Component.text("--------------------------------------------------", NamedTextColor.GOLD));
-                }
-
             } catch (SQLException e) {
                 plugin.getComponentLogger().error("Database error in JoinListener", e);
+            }
+
+            // The delete below borrows its own connection, and the SQLite pool
+            // holds one, so it runs after the read is returned rather than nested
+            // inside it.
+            if (hasEarnings) {
+                deleteAllRecordsForUUID(uuid);
+
+                event.getPlayer().sendMessage(
+                        Component.text("--------------------------------------------------", NamedTextColor.GOLD));
             }
         });
     }

@@ -112,6 +112,11 @@ public class EconomyManager {
                 credited = false;
             }
 
+            // Deliberately after the borrow, not inside it: this method and
+            // loadBalance() both borrow their own connection, and the SQLite pool
+            // holds exactly one. Stacking borrows would time out instead of
+            // finishing. The write lock still spans all three, so no other writer
+            // can interleave.
             if (credited) {
                 updatePlayerMetadata(player);
             }
@@ -176,6 +181,9 @@ public class EconomyManager {
                 debited = false;
             }
 
+            // After the borrow, not inside it, for the same reason as deposit():
+            // both helpers borrow a connection of their own and the SQLite pool
+            // holds one. The write lock still spans all three.
             if (debited) {
                 updatePlayerMetadata(player);
             }
@@ -441,10 +449,12 @@ public class EconomyManager {
                         ps.setBigDecimal(4, normalizedAmount);
                     }
                     ps.executeUpdate();
-                    updatePlayerMetadata(player);
                 } catch (SQLException e) {
                     plugin.getComponentLogger().error("Database error in EconomyManager while saving balance", e);
                 }
+                // Out of the borrow: updatePlayerMetadata() borrows its own
+                // connection, and the SQLite pool holds one.
+                updatePlayerMetadata(player);
             }
         });
     }

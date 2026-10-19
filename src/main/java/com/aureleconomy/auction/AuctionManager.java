@@ -193,6 +193,7 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  final String cachedDisplayName = getItemDisplayName(auction.getItem());
 
  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+ int affectedRows = 0;
  try (Connection conn = plugin.getDatabaseManager().getConnection();
         PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET highest_bidder_uuid = ?, price = ? WHERE id = ? AND (price < ? OR highest_bidder_uuid IS NULL)")) {
  ps.setString(1, bidder.toString());
@@ -200,7 +201,15 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  ps.setInt(3, auction.getId());
  ps.setBigDecimal(4, amount);
 
- int affectedRows = ps.executeUpdate();
+ affectedRows = ps.executeUpdate();
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Database error during bidding", e);
+ return;
+ }
+
+ // The refund is a second borrow (deposit()), and the SQLite pool holds one
+ // connection, so the update above has to be released before it runs. The
+ // result is captured first so nothing here depends on the open statement.
  if (affectedRows > 0) {
  synchronized (auction) {
  UUID previousBidder = auction.getHighestBidder();
@@ -224,9 +233,6 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  if (p != null) {
  p.sendMessage(Component.text("Your bid was too late! Someone else already bid higher.", NamedTextColor.RED));
  }
- }
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error during bidding", e);
  }
  });
  }
