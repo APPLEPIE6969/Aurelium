@@ -4,6 +4,7 @@ import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
 import com.aureleconomy.auction.AuctionManager;
 import com.aureleconomy.utils.ItemBuilder;
+import com.aureleconomy.utils.PriceParser;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -117,7 +118,13 @@ public class BidGUI extends GUIHolder {
                 return;
             }
             try {
-                BigDecimal bidAmount = new BigDecimal(input).setScale(2, RoundingMode.HALF_UP);
+                PriceParser.Parsed parsedBid = PriceParser.parse(input, plugin);
+                if (!parsedBid.ok()) {
+                    player.sendMessage(Component.text(parsedBid.rejection().message(), NamedTextColor.RED));
+                    open();
+                    return;
+                }
+                BigDecimal bidAmount = parsedBid.amount();
                 if (bidAmount.compareTo(auction.getPrice()) <= 0) {
                     player.sendMessage(Component.text("Bid must be strictly higher than current price!", NamedTextColor.RED));
                     open();

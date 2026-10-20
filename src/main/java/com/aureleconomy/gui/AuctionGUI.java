@@ -3,6 +3,7 @@ package com.aureleconomy.gui;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
 import com.aureleconomy.utils.ItemBuilder;
+import com.aureleconomy.utils.PriceParser;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -259,14 +260,13 @@ public class AuctionGUI extends GUIHolder {
   return;
  }
 
- BigDecimal price;
- try {
-  price = new BigDecimal(input);
- } catch (NumberFormatException e) {
-  player.sendMessage(Component.text("Invalid price.", NamedTextColor.RED));
+ PriceParser.Parsed parsedPrice = PriceParser.parse(input, plugin);
+ if (!parsedPrice.ok()) {
+  player.sendMessage(Component.text(parsedPrice.rejection().message(), NamedTextColor.RED));
   open();
   return;
  }
+ BigDecimal price = parsedPrice.amount();
  if (price.compareTo(BigDecimal.ZERO) <= 0) {
   player.sendMessage(Component.text("Invalid price.", NamedTextColor.RED));
   open();
@@ -459,7 +459,13 @@ refresh();
  return;
  }
  try {
- BigDecimal offerAmount = new BigDecimal(input);
+ PriceParser.Parsed parsedOffer = PriceParser.parse(input, plugin);
+ if (!parsedOffer.ok()) {
+ player.sendMessage(Component.text(parsedOffer.rejection().message(), NamedTextColor.RED));
+ open();
+ return;
+ }
+ BigDecimal offerAmount = parsedOffer.amount();
  if (offerAmount.compareTo(BigDecimal.ZERO) <= 0)
  throw new NumberFormatException();
 

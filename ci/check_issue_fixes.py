@@ -378,6 +378,54 @@ for rel in CALLERS:
         'must not be announced or followed by a delivery',
     )
 
+# --------------------------------------------------------------------------
+# H5: player-typed prices go through PriceParser, never straight to BigDecimal
+# --------------------------------------------------------------------------
+# new BigDecimal("1e999999999") keeps the exponent as a scale and the first
+# setScale(2) in the economy layer expands it to a billion digits on the calling
+# thread. A tiny exponent (5e-999999999) is below every ceiling and only explodes
+# later, so the shape check has to run before the constructor, not after it.
+PARSER = 'src/main/java/com/aureleconomy/utils/PriceParser.java'
+parser = strip_comments(read(PARSER))
+shape_at = parser.find('SHAPE.matcher')
+construct_at = parser.find('new BigDecimal(text)')
+check(
+    'H5 PriceParser checks the shape before building a number',
+    shape_at != -1 and construct_at != -1 and shape_at < construct_at,
+    'an exponent must be refused as a string, before new BigDecimal(...) sees it',
+)
+
+PRICE_SITES = (
+    'src/main/java/com/aureleconomy/commands/AuctionCommand.java',
+    'src/main/java/com/aureleconomy/commands/EconomyCommand.java',
+    'src/main/java/com/aureleconomy/commands/OrdersCommand.java',
+    'src/main/java/com/aureleconomy/gui/AuctionGUI.java',
+    'src/main/java/com/aureleconomy/gui/BidGUI.java',
+    'src/main/java/com/aureleconomy/gui/OrderMaterialGUI.java',
+)
+for rel in PRICE_SITES:
+    site = strip_comments(read(rel))
+    site_name = rel.rsplit('/', 1)[-1]
+    check(
+        f'H5 {site_name} parses player prices through PriceParser',
+        'PriceParser.parse(' in site,
+        'this file takes a price from chat or a command argument',
+    )
+    check(
+        f'H5 {site_name} builds no number from raw text',
+        not re.search(r'new BigDecimal\(\s*(?!")', site),
+        'only PriceParser may build a number from text a player typed',
+    )
+
+config_text = read('src/main/resources/config.yml')
+version_match = re.search(r'^config-version:\s*(\d+)', config_text, re.M)
+check(
+    'H5 the price ceiling is in the shipped config',
+    'max-transaction-price' in config_text
+    and version_match is not None and int(version_match.group(1)) >= 3,
+    'a new key needs config-version bumped in the same change',
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

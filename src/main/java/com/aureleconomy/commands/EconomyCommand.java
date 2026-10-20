@@ -1,6 +1,7 @@
 package com.aureleconomy.commands;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.utils.PriceParser;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -154,13 +155,12 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  return;
  }
 
- BigDecimal amount;
- try {
- amount = new BigDecimal(args[1]);
- } catch (NumberFormatException e) {
- player.sendMessage(Component.text("Invalid amount."));
+ PriceParser.Parsed parsedAmount = PriceParser.parse(args[1], plugin);
+ if (!parsedAmount.ok()) {
+ player.sendMessage(Component.text(parsedAmount.rejection().message(), NamedTextColor.RED));
  return;
  }
+ BigDecimal amount = parsedAmount.amount();
 
  if (amount.compareTo(BigDecimal.ZERO) <= 0) {
  player.sendMessage(Component.text("Amount must be positive.", NamedTextColor.RED));
@@ -253,15 +253,14 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  return;
  }
 
- BigDecimal amount;
- try {
- amount = new BigDecimal(args[2]);
- if (amount.compareTo(BigDecimal.ZERO) <= 0) {
- sender.sendMessage(Component.text("Amount must be positive.", NamedTextColor.RED));
+ PriceParser.Parsed parsedAmount = PriceParser.parse(args[2], plugin);
+ if (!parsedAmount.ok()) {
+ sender.sendMessage(Component.text(parsedAmount.rejection().message(), NamedTextColor.RED));
  return;
  }
- } catch (NumberFormatException e) {
- sender.sendMessage(Component.text("Invalid amount."));
+ BigDecimal amount = parsedAmount.amount();
+ if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+ sender.sendMessage(Component.text("Amount must be positive.", NamedTextColor.RED));
  return;
  }
 

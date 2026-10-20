@@ -1,7 +1,7 @@
 # Aurelium Configuration (v1.5.3)
 
 # Don't touch this, used for auto-migration
-config-version: 2
+config-version: 3
 
 # --- Database ---
 database:
@@ -43,6 +43,11 @@ economy:
   # -1 = no cap
   max-balance: -1
   min-pay-amount: 0.01
+
+  # Ceiling for any amount a player types: /pay, auction prices, bids, offers,
+  # buy-order prices. At most two decimals are accepted, and exponent notation
+  # (1e12) is refused rather than parsed.
+  max-transaction-price: 1.0e12
 
   # Messages (MiniMessage format)
   # Placeholders: %amount%, %symbol%, %player%, %currency%

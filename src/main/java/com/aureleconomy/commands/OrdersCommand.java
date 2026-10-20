@@ -2,6 +2,7 @@ package com.aureleconomy.commands;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.orders.BuyOrder;
+import com.aureleconomy.utils.PriceParser;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.TabExecutor;
@@ -88,12 +89,13 @@ public class OrdersCommand implements TabExecutor {
             return;
         }
 
-        BigDecimal pricePerPiece;
-        try {
-            pricePerPiece = new BigDecimal(args[3]);
-            if (pricePerPiece.compareTo(BigDecimal.ZERO) <= 0)
-                throw new NumberFormatException();
-        } catch (NumberFormatException e) {
+        PriceParser.Parsed parsedPrice = PriceParser.parse(args[3], plugin);
+        if (!parsedPrice.ok()) {
+            player.sendMessage(Component.text(parsedPrice.rejection().message(), NamedTextColor.RED));
+            return;
+        }
+        BigDecimal pricePerPiece = parsedPrice.amount();
+        if (pricePerPiece.compareTo(BigDecimal.ZERO) <= 0) {
             player.sendMessage(Component.text("Price must be a positive number.", NamedTextColor.RED));
             return;
         }

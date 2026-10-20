@@ -3,6 +3,7 @@ package com.aureleconomy.gui;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.market.MarketItems.MarketEntry;
 import com.aureleconomy.utils.ItemBuilder;
+import com.aureleconomy.utils.PriceParser;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -226,18 +227,21 @@ public class OrderMaterialGUI extends GUIHolder {
                                 player.sendMessage(Component.text("Order creation cancelled.", NamedTextColor.RED));
                                 return;
                             }
-                            try {
-                                BigDecimal pricePerPiece = new BigDecimal(priceStr);
-                                if (pricePerPiece.compareTo(BigDecimal.ZERO) <= 0)
-                                    throw new NumberFormatException();
-
-                                plugin.getOrderManager().createOrder(player, entry.material, amount, pricePerPiece,
-                                        plugin.getEconomyManager().getDefaultCurrency());
-
-                            } catch (NumberFormatException ex) {
+                            PriceParser.Parsed parsedPrice = PriceParser.parse(priceStr, plugin);
+                            if (!parsedPrice.ok()) {
+                                player.sendMessage(
+                                        Component.text(parsedPrice.rejection().message(), NamedTextColor.RED));
+                                return;
+                            }
+                            BigDecimal pricePerPiece = parsedPrice.amount();
+                            if (pricePerPiece.compareTo(BigDecimal.ZERO) <= 0) {
                                 player.sendMessage(
                                         Component.text("Invalid price. Order creation cancelled.", NamedTextColor.RED));
+                                return;
                             }
+
+                            plugin.getOrderManager().createOrder(player, entry.material, amount, pricePerPiece,
+                                    plugin.getEconomyManager().getDefaultCurrency());
                         });
 
                     } catch (NumberFormatException ex) {

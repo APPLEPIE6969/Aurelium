@@ -215,7 +215,8 @@ class ConfigMigrationTest {
                 "database.mysql.ssl-mode",
                 "web.mode",
                 "web.local.host",
-                "web-queue.type"}) {
+                "web-queue.type",
+                "economy.max-transaction-price"}) {
             assertTrue(result.contains(key),
                     "new default key " + key + " did not appear after migration");
         }
@@ -232,7 +233,7 @@ class ConfigMigrationTest {
 
         assertTrue(defaults.contains("config-version"),
                 "shipped config.yml has no config-version");
-        assertEquals(2, defaults.getInt("config-version"),
+        assertEquals(3, defaults.getInt("config-version"),
                 "config-version changed; upgradeConfig must be able to recognise it");
     }
 

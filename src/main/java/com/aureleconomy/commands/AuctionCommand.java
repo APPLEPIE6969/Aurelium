@@ -3,6 +3,7 @@ package com.aureleconomy.commands;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
 import com.aureleconomy.gui.AuctionGUI;
+import com.aureleconomy.utils.PriceParser;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -80,13 +81,17 @@ public class AuctionCommand implements TabExecutor {
  }
  try {
  int id = Integer.parseInt(args[1]);
- BigDecimal amount = new BigDecimal(args[2]);
+ PriceParser.Parsed parsed = PriceParser.parse(args[2], plugin);
+ if (!parsed.ok()) {
+ player.sendMessage(Component.text(parsed.rejection().message(), NamedTextColor.RED));
+ return true;
+ }
  AuctionItem ai = plugin.getAuctionManager().getAuctionById(id);
  if (ai == null) {
  player.sendMessage(Component.text("Auction not found.", NamedTextColor.RED));
  return true;
  }
- plugin.getAuctionManager().makeOffer(ai, player, amount);
+ plugin.getAuctionManager().makeOffer(ai, player, parsed.amount());
  } catch (NumberFormatException e) {
  player.sendMessage(Component.text("Invalid ID or amount.", NamedTextColor.RED));
  }
@@ -110,13 +115,12 @@ public class AuctionCommand implements TabExecutor {
  return true;
  }
 
- BigDecimal price;
- try {
- price = new BigDecimal(args[1]);
- } catch (NumberFormatException e) {
- player.sendMessage(Component.text("Invalid price.", NamedTextColor.RED));
+ PriceParser.Parsed parsedPrice = PriceParser.parse(args[1], plugin);
+ if (!parsedPrice.ok()) {
+ player.sendMessage(Component.text(parsedPrice.rejection().message(), NamedTextColor.RED));
  return true;
  }
+ BigDecimal price = parsedPrice.amount();
 
  if (price.compareTo(BigDecimal.ZERO) <= 0) {
  player.sendMessage(Component.text("Price must be positive.", NamedTextColor.RED));
