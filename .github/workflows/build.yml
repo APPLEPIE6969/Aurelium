@@ -79,6 +79,11 @@ jobs:
           # into a BrokenPipeError.
           echo "=== ci/test_rcon_reconnect.py ==="
           python3 ci/test_rcon_reconnect.py
+          # The log audit reads the whole run, not logs/latest.log, because
+          # Paper rolls that file at midnight and a run that straddles the
+          # rollover used to report a healthy server as not enabled.
+          echo "=== ci/test_rcon_log_audit.py ==="
+          python3 ci/test_rcon_log_audit.py
           # The suite verifies persisted state directly, and does so against
           # SQLite or MySQL depending on AURELIUM_DB_HOST. This checks the dialect
           # selection so a silent no-read cannot pass as success again.

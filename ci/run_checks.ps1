@@ -57,6 +57,7 @@ $contracts = @(
     'check_local_web_security.py',
     'check_spawner_price_key.py',
     'test_rcon_reconnect.py',
+    'test_rcon_log_audit.py',
     'test_db_dialect.py',
     'test_mysql_binding.py'
 )

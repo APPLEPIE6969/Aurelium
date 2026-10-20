@@ -87,6 +87,10 @@ push_*.py
 add_*.py
 update_*.py
 verify_*.py
+
+# The CI harness is source, not scratch. A blanket *.py above would swallow a new
+# check on `git add`, leaving it to run locally and never in CI.
+!ci/*.py
 wire_*.py
 dl_*.py
 merge_*.py

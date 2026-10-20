@@ -44,6 +44,7 @@ Environment overrides: AURELIUM_SERVER_DIR, AURELIUM_RCON_HOST,
 AURELIUM_RCON_PORT, AURELIUM_RCON_PASSWORD.
 """
 
+import gzip
 import json
 import os
 import re
@@ -62,8 +63,62 @@ RCON_PASSWORD = os.environ.get('AURELIUM_RCON_PASSWORD', 'test')
 
 PLUGIN_DIR = os.path.join(SERVER_DIR, 'plugins', 'Aurelium')
 CONFIG_PATH = os.path.join(PLUGIN_DIR, 'config.yml')
-LOG_PATH = os.path.join(SERVER_DIR, 'logs', 'latest.log')
+LOG_DIR = os.path.join(SERVER_DIR, 'logs')
+LOG_PATH = os.path.join(LOG_DIR, 'latest.log')
 STATE_PATH = os.path.join(PLUGIN_DIR, '.rcon_test_state.json')
+
+# Paper's log4j2 configuration rolls logs/latest.log once a day
+# (TimeBasedTriggeringPolicy): at midnight the log written so far becomes
+# logs/<date>-<n>.log.gz and latest.log starts empty. A suite that begins before
+# midnight and ends after it therefore saw only the tail of the run, and the boot
+# line that proves the plugin enabled was in the rolled file. CI run 39341533768
+# reported "plugin is enabled in the log" as a failure on four healthy servers
+# for exactly that reason. The audit reads the run, not one file in it.
+RUN_STARTED = time.time()
+ROLLED_LOG_RE = re.compile(r'^\d{4}-\d{2}-\d{2}-\d+\.log(?:\.gz)?$')
+
+
+def run_log_files():
+    """This run's log files, oldest first.
+
+    Rolled files are frozen and latest.log keeps growing, so modification order
+    reconstructs the run. Anything not written since the run started is left out:
+    a reused server directory must not feed an older run's stack traces to the
+    audit. Copies such as logs/pre-shutdown.log are ignored as well, because only
+    latest.log and Paper's own dated rollovers belong to the run.
+    """
+    if not os.path.isdir(LOG_DIR):
+        return []
+    cutoff = RUN_STARTED - 60
+    files = []
+    for name in os.listdir(LOG_DIR):
+        if name != 'latest.log' and not ROLLED_LOG_RE.match(name):
+            continue
+        path = os.path.join(LOG_DIR, name)
+        try:
+            if name == 'latest.log' or os.path.getmtime(path) >= cutoff:
+                files.append(path)
+        except OSError:
+            continue
+    return sorted(files, key=lambda p: (os.path.getmtime(p), p))
+
+
+def read_run_log():
+    """Everything the run has logged: rolled files first, then latest.log."""
+    parts = []
+    for path in run_log_files():
+        try:
+            if path.endswith('.gz'):
+                with gzip.open(path, 'rt', encoding='utf-8', errors='replace') as fh:
+                    parts.append(fh.read())
+            else:
+                with open(path, 'r', encoding='utf-8', errors='replace') as fh:
+                    parts.append(fh.read())
+        except (OSError, EOFError):
+            # A log is diagnostic: losing one file must not crash the audit. The
+            # checks below still report on what is readable.
+            continue
+    return ''.join(parts)
 
 PLAYER = 'AureliumBot'
 PLAYER2 = 'AureliumTwo'
@@ -914,13 +969,11 @@ class Suite:
         return self.balance(name, currency)
 
     def log_text(self):
-        if not os.path.isfile(LOG_PATH):
-            return ''
-        with open(LOG_PATH, 'r', encoding='utf-8', errors='replace') as fh:
-            return fh.read()
+        return read_run_log()
 
     def log_size(self):
-        return os.path.getsize(LOG_PATH) if os.path.isfile(LOG_PATH) else 0
+        # Characters, not bytes: the offset is a slice position in log_text().
+        return len(read_run_log())
 
 
 # ── individual sections ─────────────────────────────────────────────
@@ -929,7 +982,7 @@ def sec_health(t):
     t.head('1. environment and plugin health')
     t.check(os.path.isdir(PLUGIN_DIR), 'plugin data folder exists', PLUGIN_DIR)
     t.check(os.path.isfile(CONFIG_PATH), 'config.yml exists', CONFIG_PATH)
-    t.check(os.path.isfile(LOG_PATH), 'server log exists', LOG_PATH)
+    t.check(bool(run_log_files()), 'server log exists', LOG_DIR)
 
     log = t.log_text()
     t.check('AurelEconomy has been enabled' in log, 'plugin reports enabled')
@@ -1398,12 +1451,11 @@ def iter_log_records(text):
 
 def sec_log_audit(t):
     t.head('10. server log audit')
-    if not os.path.isfile(LOG_PATH):
+    log = read_run_log()
+    if not log:
         t.skip('log audit', 'log file missing')
         return
 
-    with open(LOG_PATH, 'r', encoding='utf-8', errors='replace') as fh:
-        log = fh.read()
     offset = t._inj_offset or 0
     regions = (('before the adversarial section', log[:offset], True),
                ('during the adversarial section', log[offset:], False))
