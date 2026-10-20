@@ -426,6 +426,67 @@ check(
     'a new key needs config-version bumped in the same change',
 )
 
+# --------------------------------------------------------------------------
+# F1: the ledger is written by the money primitives, so no feature can move
+# money without appearing in it, and it cannot refuse or crash a movement.
+# --------------------------------------------------------------------------
+ledger_schema = strip_comments(read('src/main/java/com/aureleconomy/database/schema/LedgerSchema.java'))
+for column in ('id', 'ts', 'actor_uuid', 'counterparty_uuid', 'type', 'item_key',
+               'amount', 'currency', 'balance_after', 'ref_id', 'note'):
+    check(
+        f'F1 transaction_ledger declares {column}',
+        f'"{column} "' in ledger_schema,
+        'the fixplan lists this column by name',
+    )
+
+migration = strip_comments(read('src/main/java/com/aureleconomy/database/DatabaseManager.java'))
+if 'case 7:' in migration:
+    v7 = migration.split('case 7:', 1)[1].split('case 8:', 1)[0]
+else:
+    v7 = ''
+check('F1 migration v7 creates the ledger table', 'new LedgerSchema(' in v7)
+check('F1 migration v7 indexes the ledger by actor and time',
+      'idx_transaction_ledger_actor' in v7)
+check('F1 migration v7 indexes offline_earnings by uuid',
+      'idx_offline_earnings_uuid' in v7)
+check('F1 migration v7 retypes the money columns', 'retypeMoneyColumns(conn)' in v7)
+
+money_types = strip_comments(read('src/main/java/com/aureleconomy/database/types/SQLTypes.java'))
+check(
+    'F4 money columns are exact, not DOUBLE',
+    'DECIMAL(18,2)' in money_types and 'return "DOUBLE";' not in money_types,
+    'a decimal type here is what stops drift compounding in a balance',
+)
+
+economy = strip_comments(read('src/main/java/com/aureleconomy/economy/EconomyManager.java'))
+check(
+    'F1 all five balance writers record a ledger row',
+    economy.count('recordLedger(') >= 5,
+    'deposit, debit, transfer, setBalance and creditStartingBalance each need one',
+)
+check('F1 a starting balance is recorded as money created',
+      'LedgerReason.STARTING_BALANCE' in economy)
+check('F1 an admin set is recorded as the delta it caused',
+      'LedgerReason.ADMIN_SET' in economy
+      and 'normalizedAmount.subtract(previous)' in economy,
+      'recording the new balance would break the sum of all rows')
+
+service = strip_comments(read('src/main/java/com/aureleconomy/economy/LedgerService.java'))
+check(
+    'F1 the ledger queue is bounded and counts what it drops',
+    'MAX_PENDING' in service and 'dropped.incrementAndGet()' in service,
+    'an unbounded queue turns a database outage into an out-of-memory kill',
+)
+check(
+    'F1 a failed batch is counted, not thrown at the money path',
+    'dropped.addAndGet(batch.size())' in service,
+    'the ledger must never change whether money moved',
+)
+
+command = strip_comments(read('src/main/java/com/aureleconomy/commands/EconomyCommand.java'))
+check('F1 /eco history is wired', 'handleHistory(sender, args)' in command)
+check('F1 /eco history is discoverable', '"history"' in command)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

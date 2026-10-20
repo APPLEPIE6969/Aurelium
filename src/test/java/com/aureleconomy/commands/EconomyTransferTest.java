@@ -193,8 +193,11 @@ class EconomyTransferTest {
         // The divergence the old code could not survive: the balance check says yes
         // but the write is refused. Forcing the one call the command now makes is
         // the smallest way to reach that state.
+        // /pay now names its ledger reason, so the stub has to match the overload
+        // the command actually calls. A stub on the old signature would no longer
+        // intercept anything and the test would pass for the wrong reason.
         doReturn(false).when(economy).transfer(any(OfflinePlayer.class), any(OfflinePlayer.class),
-                any(BigDecimal.class), anyString());
+                any(BigDecimal.class), anyString(), any());
         BigDecimal before = MoneyInvariants.totalMoney(observer);
 
         runPay("target", "100.00");
@@ -218,7 +221,7 @@ class EconomyTransferTest {
         MoneyInvariants.assertMoneyUnchanged(observer, "paying yourself", before);
         assertEquals("You cannot pay yourself.", lastMessage());
         verify(economy, never()).transfer(any(OfflinePlayer.class), any(OfflinePlayer.class),
-                any(BigDecimal.class), anyString());
+                any(BigDecimal.class), anyString(), any());
     }
 
     // -------------------- helpers --------------------

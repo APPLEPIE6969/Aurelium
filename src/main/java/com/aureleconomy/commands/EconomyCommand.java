@@ -1,6 +1,8 @@
 package com.aureleconomy.commands;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.economy.LedgerReason;
+import com.aureleconomy.economy.LedgerService;
 import com.aureleconomy.utils.PriceParser;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -192,7 +194,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  // an unconditional deposit. transfer() moves both legs in one transaction or
  // neither, so a balance that changed after it was read can no longer pay
  // somebody with money that was never taken from the payer.
- if (!plugin.getEconomyManager().transfer(player, target, amount, currency)) {
+ if (!plugin.getEconomyManager().transfer(player, target, amount, currency, LedgerReason.PAY)) {
  // Nothing moved and nothing is half-done. An empty balance and a database
  // fault both land here, and transfer() reports both as false (fixplan C1
  // note 3), so both are named as insufficient funds.
@@ -241,8 +243,13 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  return;
  }
 
+ if (args[0].equalsIgnoreCase("history")) {
+ handleHistory(sender, args);
+ return;
+ }
+
  if (args.length < 3) {
- sender.sendMessage(Component.text("Usage: /eco <give|take|set> <player> <amount> [currency]"));
+ sender.sendMessage(Component.text("Usage: /eco <give|take|set> <player> <amount> [currency] | /eco history <player> [page]"));
  return;
  }
 
@@ -283,7 +290,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
 
  switch (action) {
  case "give":
- plugin.getEconomyManager().deposit(target, amount, currency);
+ plugin.getEconomyManager().deposit(target, amount, currency, LedgerReason.ADMIN_GIVE, null, null);
  Bukkit.getScheduler().runTask(plugin, () ->
  sender.sendMessage(mm.deserialize(prefix +
  plugin.getConfig().getString("economy.admin-give", "Gave %player% %amount% (%currency%)")
@@ -293,7 +300,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  .replace("%symbol%", plugin.getEconomyManager().getCurrencySymbol(currency)))));
  break;
  case "take":
- plugin.getEconomyManager().withdraw(target, amount, currency);
+ plugin.getEconomyManager().withdraw(target, amount, currency, LedgerReason.ADMIN_TAKE, null, null);
  Bukkit.getScheduler().runTask(plugin, () ->
  sender.sendMessage(mm.deserialize(prefix +
  plugin.getConfig().getString("economy.admin-take", "Took %amount% (%currency%) from %player%")
@@ -319,6 +326,98 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  sender.sendMessage(Component.text("An error occurred while executing /eco " + action + ".", NamedTextColor.RED)));
  }
  });
+ }
+
+ /**
+  * F1: reads a player's money history out of the ledger.
+  *
+  * <p>The read happens off the main thread and the output is sent back on it, the
+  * same shape {@code /eco give|take|set} already uses.
+  */
+ private void handleHistory(CommandSender sender, String[] args) {
+  if (args.length < 2) {
+  sender.sendMessage(Component.text("Usage: /eco history <player> [page]"));
+  return;
+  }
+
+  int page;
+  try {
+  page = args.length >= 3 ? Math.max(1, Integer.parseInt(args[2])) : 1;
+  } catch (NumberFormatException e) {
+  sender.sendMessage(Component.text("Page must be a number.", NamedTextColor.RED));
+  return;
+  }
+
+  String targetName = args[1];
+  int requestedPage = page;
+
+  if (plugin.getLedgerService() == null) {
+  sender.sendMessage(Component.text("The ledger is not available.", NamedTextColor.RED));
+  return;
+  }
+
+  sender.sendMessage(Component.text("Processing...", NamedTextColor.GRAY));
+
+  Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+  try {
+  OfflinePlayer target = Bukkit.getOfflinePlayer(targetName);
+  String displayName = target.getName() != null ? target.getName() : targetName;
+  List<LedgerService.Row> rows = plugin.getLedgerService().history(target.getUniqueId(), requestedPage);
+
+  // Resolved off the main thread: a name lookup can hit the usercache or the
+  // database, and the output is only built once it is back.
+  java.util.Map<String, String> names = new java.util.HashMap<>();
+  for (LedgerService.Row row : rows) {
+  String counterparty = row.counterparty();
+  if (counterparty != null && !names.containsKey(counterparty)) {
+  OfflinePlayer other = Bukkit.getOfflinePlayer(java.util.UUID.fromString(counterparty));
+  names.put(counterparty, other.getName() != null ? other.getName() : counterparty.substring(0, 8));
+  }
+  }
+
+  Bukkit.getScheduler().runTask(plugin, () -> sendHistory(sender, displayName, requestedPage, rows, names));
+  } catch (Exception e) {
+  plugin.getComponentLogger().error("Could not read the ledger for " + targetName, e);
+  Bukkit.getScheduler().runTask(plugin, () ->
+  sender.sendMessage(Component.text("The ledger could not be read.", NamedTextColor.RED)));
+  }
+  });
+ }
+
+ /** Two decimals always, because a ledger row is money and "+10" reads like a count. */
+ private String money(java.math.BigDecimal amount) {
+  return amount.setScale(2, java.math.RoundingMode.HALF_EVEN).toPlainString();
+ }
+
+ private void sendHistory(CommandSender sender, String displayName, int page,
+  List<LedgerService.Row> rows, java.util.Map<String, String> names) {
+  if (rows.isEmpty()) {
+  sender.sendMessage(Component.text("No ledger rows for " + displayName
+  + " on page " + page + ".", NamedTextColor.GRAY));
+  return;
+  }
+
+  sender.sendMessage(Component.text(displayName + " - money history, page " + page, NamedTextColor.GOLD));
+  java.time.format.DateTimeFormatter format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+  for (LedgerService.Row row : rows) {
+  boolean paid = row.amount().signum() < 0;
+  StringBuilder line = new StringBuilder();
+  line.append(format.format(java.time.Instant.ofEpochMilli(row.ts())
+  .atZone(java.time.ZoneId.systemDefault())))
+  .append("  ").append(row.type())
+  .append("  ").append(paid ? "" : "+").append(money(row.amount()))
+  .append(" ").append(row.currency());
+  if (row.balanceAfter() != null) {
+  line.append("  balance ").append(money(row.balanceAfter()));
+  }
+  if (row.counterparty() != null) {
+  line.append("  with ").append(names.getOrDefault(row.counterparty(), row.counterparty()));
+  }
+  if (row.refId() != null) {
+  line.append("  #").append(row.refId());
+  }
+  sender.sendMessage(Component.text(line.toString(), paid ? NamedTextColor.RED : NamedTextColor.GREEN));
+  }
  }
 
  @Override
@@ -351,7 +450,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
 
  if (label.equalsIgnoreCase("eco")) {
  if (args.length == 1)
- return List.of("give", "take", "set");
+ return List.of("give", "take", "set", "history");
  if (args.length == 2)
  return null;
  if (args.length == 3)

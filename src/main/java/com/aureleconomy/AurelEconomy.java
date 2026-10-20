@@ -36,6 +36,7 @@ public class AurelEconomy extends JavaPlugin {
     private static AurelEconomy instance;
     private DatabaseManager databaseManager;
     private EconomyManager economyManager;
+    private com.aureleconomy.economy.LedgerService ledgerService;
     private com.aureleconomy.market.MarketManager marketManager;
 private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
     private com.aureleconomy.auction.AuctionManager auctionManager;
@@ -83,6 +84,10 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
         // Check for updates
         VersionChecker.checkVersion(this);
 
+        // Before the economy manager: the money API records into it from its first
+        // call, and a mutation that happened before the ledger existed would be a
+        // permanent hole in the history.
+        ledgerService = new com.aureleconomy.economy.LedgerService(this);
         economyManager = new EconomyManager(this);
         marketManager = new com.aureleconomy.market.MarketManager(this);
         tradeVolumeTracker = new com.aureleconomy.market.TradeVolumeTracker(this);
@@ -90,6 +95,14 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
         chatPromptManager = new com.aureleconomy.utils.ChatPromptManager(this);
         orderManager = new com.aureleconomy.orders.OrderManager(this);
         orderManager.loadOrders();
+
+        // F1: the ledger queue is written in batches. Five seconds is short enough
+        // that a crash loses little and long enough that a burst of trades is one
+        // write.
+        getServer().getScheduler().runTaskTimerAsynchronously(this,
+                () -> {
+                    if (ledgerService != null) ledgerService.flush();
+                }, 100L, 100L);
 
         // Initialize custom item system
         if (getConfig().getBoolean("custom-items.enabled", true)) {
@@ -154,6 +167,9 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
         // Periodic Market Price Persistence (Every 5 minutes)
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (marketManager != null) marketManager.persistPrices();
+        // Queued rows go before the connection closes, so a restart does not lose
+        // the movements that happened in the last few seconds.
+        if (ledgerService != null) ledgerService.flush();
             if (customItemRegistry != null) customItemRegistry.saveToDatabase(databaseManager);
         }, 6000L, 6000L);
 
@@ -305,6 +321,9 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
         if (webServer != null) webServer.stop();
         if (cloudSync != null) cloudSync.stop();
         if (marketManager != null) marketManager.persistPrices();
+        // Queued rows go before the connection closes, so a restart does not lose
+        // the movements that happened in the last few seconds.
+        if (ledgerService != null) ledgerService.flush();
         if (databaseManager != null) databaseManager.close();
         getComponentLogger().info("AurelEconomy has been disabled!");
     }
@@ -312,6 +331,7 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
     public static AurelEconomy getInstance() { return instance; }
     public DatabaseManager getDatabaseManager() { return databaseManager; }
     public EconomyManager getEconomyManager() { return economyManager; }
+    public com.aureleconomy.economy.LedgerService getLedgerService() { return ledgerService; }
     public com.aureleconomy.market.MarketManager getMarketManager() { return marketManager; }
     public com.aureleconomy.market.TradeVolumeTracker getTradeVolumeTracker() { return tradeVolumeTracker; }
     public com.aureleconomy.auction.AuctionManager getAuctionManager() { return auctionManager; }

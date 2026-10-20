@@ -78,11 +78,23 @@ public class EconomyManager {
     /**
      * Credits {@code amount} and reports whether the database accepted it.
      *
+     * <p>See {@link #deposit(OfflinePlayer, BigDecimal, String, LedgerReason, String, String)}
+     * for the contract; this overload records a plain deposit.
+     */
+    public boolean deposit(OfflinePlayer player, BigDecimal amount, String currency) {
+        return deposit(player, amount, currency, LedgerReason.DEPOSIT, null, null);
+    }
+
+    /**
+     * Credits {@code amount}, records why, and reports whether the database accepted
+     * it.
+     *
      * <p>The result is the row count of the write itself, not the cache and not an
      * intention to write later. A caller that is about to hand something over has
      * to check it.
      */
-    public boolean deposit(OfflinePlayer player, BigDecimal amount, String currency) {
+    public boolean deposit(OfflinePlayer player, BigDecimal amount, String currency,
+            LedgerReason reason, String refId, String itemKey) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)
             return false;
 
@@ -123,6 +135,9 @@ public class EconomyManager {
             // Refreshed either way, so a refused write cannot leave the cache
             // claiming money that was never credited.
             loadBalance(uuid, currency);
+            if (credited) {
+                recordLedger(uuid, null, reason, itemKey, normalizedAmount, currency, refId);
+            }
         }
         return credited;
     }
@@ -139,7 +154,15 @@ public class EconomyManager {
      * so a caller could not tell a real debit from a refused one.
      */
     public boolean withdraw(OfflinePlayer player, BigDecimal amount, String currency) {
-        return debit(player, amount, currency, "withdraw");
+        return debit(player, amount, currency, "withdraw", LedgerReason.WITHDRAW, null, null);
+    }
+
+    /**
+     * The same debit, recorded as {@code reason} in the ledger.
+     */
+    public boolean withdraw(OfflinePlayer player, BigDecimal amount, String currency,
+            LedgerReason reason, String refId, String itemKey) {
+        return debit(player, amount, currency, "withdraw", reason, refId, itemKey);
     }
 
     /**
@@ -151,10 +174,11 @@ public class EconomyManager {
      * the database says the player cannot pay.
      */
     public boolean withdrawIfSufficient(OfflinePlayer player, BigDecimal amount, String currency) {
-        return debit(player, amount, currency, "withdrawIfSufficient");
+        return debit(player, amount, currency, "withdrawIfSufficient", LedgerReason.WITHDRAW, null, null);
     }
 
-    private boolean debit(OfflinePlayer player, BigDecimal amount, String currency, String operation) {
+    private boolean debit(OfflinePlayer player, BigDecimal amount, String currency, String operation,
+            LedgerReason reason, String refId, String itemKey) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)
             return false;
 
@@ -193,6 +217,9 @@ public class EconomyManager {
             // in the warning is the database's answer rather than the stale value
             // the request happened to be judged against.
             loadBalance(uuid, currency);
+            if (debited) {
+                recordLedger(uuid, null, reason, itemKey, normalizedAmount.negate(), currency, refId);
+            }
 
             if (!debited) {
                 // The phrase "Insufficient funds for withdraw" is a contract. The
@@ -219,6 +246,14 @@ public class EconomyManager {
      * <p>A caller that is about to hand something over has to check the result.
      */
     public boolean transfer(OfflinePlayer from, OfflinePlayer to, BigDecimal amount, String currency) {
+        return transfer(from, to, amount, currency, LedgerReason.TRANSFER);
+    }
+
+    /**
+     * The same transfer, recorded under {@code reason} (for example {@code PAY}).
+     */
+    public boolean transfer(OfflinePlayer from, OfflinePlayer to, BigDecimal amount, String currency,
+            LedgerReason reason) {
         if (from == null || to == null)
             return false;
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)
@@ -281,6 +316,10 @@ public class EconomyManager {
             // showing a balance the database did not agree to.
             loadBalance(fromId, currency);
             loadBalance(toId, currency);
+            if (committed) {
+                recordLedger(fromId, toId, reason, null, normalizedAmount.negate(), currency, null);
+                recordLedger(toId, fromId, reason, null, normalizedAmount, currency, null);
+            }
         }
         return committed;
     }
@@ -379,6 +418,48 @@ public class EconomyManager {
         return BigDecimal.ZERO;
     }
 
+    /**
+     * Queues one ledger row for a mutation that has already committed.
+     *
+     * <p>Only called after the database accepted the write, and only queues: the
+     * ledger cannot make a movement that happened disappear, and it cannot make one
+     * that did not happen appear.
+     *
+     * <p>{@code signedAmount} is negative when the actor paid and positive when the
+     * actor received. {@code balanceAfter} comes from the cache, which every caller
+     * has just refreshed from the database.
+     */
+    private void recordLedger(UUID actor, UUID counterparty, LedgerReason reason, String itemKey,
+            BigDecimal signedAmount, String currency, String refId) {
+        LedgerService ledger = plugin.getLedgerService();
+        if (ledger == null) {
+            return; // no ledger wired (tests, or the economy API used before boot)
+        }
+        ledger.record(new LedgerService.Entry(
+                System.currentTimeMillis(),
+                actor,
+                counterparty,
+                reason.name(),
+                itemKey,
+                signedAmount,
+                currency,
+                getBalanceFromCache(actor, currency),
+                refId,
+                null));
+    }
+
+    /** The balance as the database holds it, for the admin set's delta. */
+    private BigDecimal readBalance(Connection conn, UUID uuid, String currency) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT balance FROM player_balances WHERE uuid = ? AND currency = ?")) {
+            ps.setString(1, uuid.toString());
+            ps.setString(2, currency);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO.setScale(SCALE, ROUNDING_MODE);
+            }
+        }
+    }
+
     private void scheduleAsyncWrite(Runnable task) {
         if (Bukkit.isPrimaryThread()) {
             Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
@@ -432,6 +513,7 @@ public class EconomyManager {
         double startBalRaw = plugin.getConfig().getDouble("economy.currencies." + currency + ".starting-balance",
                 plugin.getConfig().getDouble("economy.starting-balance", DEFAULT_STARTING_BALANCE));
         BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
+        boolean created = false;
         try (Connection conn = plugin.getDatabaseManager().getConnection();
         PreparedStatement ps = conn.prepareStatement(
                         plugin.getDatabaseManager().isMySQL()
@@ -444,12 +526,16 @@ public class EconomyManager {
                 ps.setBigDecimal(4, startBal);
             }
             ps.executeUpdate();
+            created = true;
             plugin.getComponentLogger().info("Created initial balance for " + uuid + ": " + startBal + " " + currency);
         } catch (SQLException e) {
             plugin.getComponentLogger().error("Database error while creating initial balance for " + uuid, e);
         }
 
         balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, startBal);
+        if (created) {
+            recordLedger(uuid, null, LedgerReason.STARTING_BALANCE, null, startBal, currency, null);
+        }
         return startBal;
     }
 
@@ -461,20 +547,33 @@ public class EconomyManager {
 
         scheduleAsyncWrite(() -> {
             synchronized (plugin.getDatabaseManager().getWriteLock()) {
-                try (Connection conn = plugin.getDatabaseManager().getConnection();
-        PreparedStatement ps = conn.prepareStatement(
-                        plugin.getDatabaseManager().isMySQL()
-                                ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
-                                : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
-                    ps.setString(1, uuid.toString());
-                    ps.setString(2, currency);
-                    ps.setBigDecimal(3, normalizedAmount);
-                    if (!plugin.getDatabaseManager().isMySQL()) {
-                        ps.setBigDecimal(4, normalizedAmount);
+                Connection conn = plugin.getDatabaseManager().getConnection();
+                if (conn == null) {
+                    plugin.getComponentLogger().error(
+                            "No database connection; an admin balance set was not saved.");
+                } else {
+                    try (conn) {
+                        // The ledger records what the balance moved by, so the previous
+                        // value is read from the database, not from the cache the write
+                        // is about to overwrite.
+                        BigDecimal previous = readBalance(conn, uuid, currency);
+                        try (PreparedStatement ps = conn.prepareStatement(
+                                plugin.getDatabaseManager().isMySQL()
+                                        ? "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) AS new ON DUPLICATE KEY UPDATE player_balances.balance = new.balance"
+                                        : "INSERT INTO player_balances (uuid, currency, balance) VALUES (?, ?, ?) ON CONFLICT(uuid, currency) DO UPDATE SET balance = ?")) {
+                            ps.setString(1, uuid.toString());
+                            ps.setString(2, currency);
+                            ps.setBigDecimal(3, normalizedAmount);
+                            if (!plugin.getDatabaseManager().isMySQL()) {
+                                ps.setBigDecimal(4, normalizedAmount);
+                            }
+                            ps.executeUpdate();
+                        }
+                        recordLedger(uuid, null, LedgerReason.ADMIN_SET, null,
+                                normalizedAmount.subtract(previous), currency, null);
+                    } catch (SQLException e) {
+                        plugin.getComponentLogger().error("Database error in EconomyManager while saving balance", e);
                     }
-                    ps.executeUpdate();
-                } catch (SQLException e) {
-                    plugin.getComponentLogger().error("Database error in EconomyManager while saving balance", e);
                 }
                 // Out of the borrow: updatePlayerMetadata() borrows its own
                 // connection, and the SQLite pool holds one.
