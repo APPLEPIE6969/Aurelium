@@ -1,6 +1,7 @@
 package com.aureleconomy.gui;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.economy.LedgerReason;
 import com.aureleconomy.market.MarketItems;
 import com.aureleconomy.market.MarketItems.Category;
 import com.aureleconomy.market.MarketItems.MarketEntry;
@@ -303,7 +304,8 @@ public class MarketGUI extends GUIHolder {
             item.setAmount(amount);
 
             if (com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), item, amount)) {
-                if (plugin.getEconomyManager().withdrawIfSufficient(player, totalPrice, currency)) {
+                if (plugin.getEconomyManager().withdrawIfSufficient(player, totalPrice, currency,
+                    LedgerReason.MARKET_BUY, null, null)) {
                     player.getInventory().addItem(item);
 
                     String key = plugin.getMarketManager().entryKey(entry);

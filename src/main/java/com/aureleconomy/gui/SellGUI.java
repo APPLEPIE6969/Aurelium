@@ -1,6 +1,7 @@
 package com.aureleconomy.gui;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.economy.LedgerReason;
 import com.aureleconomy.utils.ItemBuilder;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -228,7 +229,8 @@ public class SellGUI extends GUIHolder {
             }
 
             for (Map.Entry<String, BigDecimal> entry : cachedTotals.entrySet()) {
-                plugin.getEconomyManager().deposit(player, entry.getValue(), entry.getKey());
+                plugin.getEconomyManager().deposit(player, entry.getValue(), entry.getKey(),
+                    LedgerReason.MARKET_SELL, null, null);
                 player.sendMessage(Component.text()
                         .append(Component.text("Sold items for ", NamedTextColor.GREEN))
                         .append(Component.text(plugin.getEconomyManager().getFormattedWithSymbol(entry.getValue(), entry.getKey()), NamedTextColor.GOLD))

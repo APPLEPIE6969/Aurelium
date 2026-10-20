@@ -1,6 +1,7 @@
 package com.aureleconomy.auction;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.economy.LedgerReason;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.PreparedStatement;
@@ -220,7 +221,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  // The guarded UPDATE inside withdraw() is the sole authority on whether the
  // bidder can pay. A refused charge means nothing has changed anywhere, so
  // there is nothing to undo and no caller may proceed as if it had.
- if (!plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(bidder), amount, currency)) {
+ if (!plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(bidder), amount, currency,
+   LedgerReason.BID, String.valueOf(auction.getId()), null)) {
  return BidResult.INSUFFICIENT_FUNDS;
  }
 
@@ -271,7 +273,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
   * alternative is a silent burn of a player's money.
   */
  private void refund(com.aureleconomy.auction.AuctionItem auction, UUID playerId, BigDecimal amount, String currency, String cachedDisplayName) {
- if (plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(playerId), amount, currency)) {
+ if (plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(playerId), amount, currency,
+   LedgerReason.BID_REFUND, String.valueOf(auction.getId()), null)) {
  return;
  }
  plugin.getComponentLogger().error("Refund of " + amount + " " + currency + " to " + playerId
@@ -353,7 +356,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  return;
  }
 
- plugin.getEconomyManager().withdraw(buyer, finalTotalCost, currency);
+ plugin.getEconomyManager().withdraw(buyer, finalTotalCost, currency,
+   LedgerReason.AUCTION_BUY, String.valueOf(auction.getId()), null);
 
  ItemStack purchased = auction.getItem().clone();
  purchased.setAmount(finalQuantity);
@@ -376,7 +380,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  BigDecimal sellerPayout = finalTotalCost.subtract(tax).setScale(2, RoundingMode.HALF_UP);
 
  Player seller = Bukkit.getPlayer(auction.getSeller());
- plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(auction.getSeller()), sellerPayout, currency);
+ plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(auction.getSeller()), sellerPayout, currency,
+   LedgerReason.AUCTION_SALE, String.valueOf(auction.getId()), null);
 
  String buyerMsg = String.format(remaining > 0 ? MSG_PARTIAL_PURCHASE : MSG_FULL_PURCHASE,
  finalQuantity, available + finalQuantity,
@@ -459,7 +464,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 
  Bukkit.getScheduler().runTask(plugin, (Runnable) () -> {
  if (finalRefund.compareTo(BigDecimal.ZERO) > 0) {
- plugin.getEconomyManager().deposit(player, finalRefund, ai.getCurrency());
+ plugin.getEconomyManager().deposit(player, finalRefund, ai.getCurrency(),
+   LedgerReason.BID_REFUND, String.valueOf(ai.getId()), null);
  String formatted = plugin.getEconomyManager().getFormattedWithSymbol(finalRefund,
  ai.getCurrency());
  player.sendMessage(
@@ -511,7 +517,7 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  if (auction.getHighestBidder() != null) {
  BigDecimal finalPrice = auction.getPrice().multiply(taxMultiplier).setScale(2, RoundingMode.HALF_UP);
  plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(auction.getSeller()), finalPrice,
- auction.getCurrency());
+ auction.getCurrency(), LedgerReason.AUCTION_SALE, String.valueOf(auction.getId()), null);
 
  if (seller != null) {
  seller.sendMessage(Component.text(
@@ -718,7 +724,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  return;
  }
 
- if (!plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(offer.getBidder()), offer.getAmount(), currency)) {
+ if (!plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(offer.getBidder()), offer.getAmount(), currency,
+   LedgerReason.AUCTION_BUY, String.valueOf(ai.getId()), null)) {
  // Nothing has changed, so the offer stays pending and can be accepted once the
  // buyer has the money. Marking it expired for a sale that never happened was
  // the old behaviour.
@@ -770,7 +777,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  // them as the winner, and getCollectionBin keys on the winner, so the item is
  // waiting for them at /ah collect.
 
- if (!plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(ai.getSeller()), offer.getAmount(), currency)) {
+ if (!plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(ai.getSeller()), offer.getAmount(), currency,
+   LedgerReason.AUCTION_SALE, String.valueOf(ai.getId()), null)) {
  plugin.getComponentLogger().error("Failed to pay " + ai.getSeller() + " the accepted offer of "
  + offer.getAmount() + " " + currency + " on auction " + ai.getId());
  }

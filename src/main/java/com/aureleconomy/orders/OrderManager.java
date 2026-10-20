@@ -1,6 +1,7 @@
 package com.aureleconomy.orders;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.economy.LedgerReason;
 import org.bukkit.Material;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -111,7 +112,8 @@ public class OrderManager {
             return;
         }
 
-        plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct, currency);
+        plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct, currency,
+                LedgerReason.ORDER_ESCROW, null, null);
         if (feeAmount.compareTo(BigDecimal.ZERO) > 0) {
             player.sendMessage(
                     Component.text(
@@ -152,7 +154,7 @@ public class OrderManager {
             } catch (SQLException e) {
                 plugin.getComponentLogger().error("Failed to insert buy order", e);
                 plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(player.getUniqueId()), totalToDeduct,
-                        currency);
+                        currency, LedgerReason.ORDER_REFUND, null, null);
                 player.sendMessage(
                         Component.text("A database error occurred. Your money has been refunded.", NamedTextColor.RED));
             }
@@ -172,7 +174,7 @@ public class OrderManager {
         int remainingItems = order.getAmountRemaining();
         BigDecimal refundAmount = order.getPricePerPiece().multiply(BigDecimal.valueOf(remainingItems));
         plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(player.getUniqueId()), refundAmount,
-                order.getCurrency());
+                order.getCurrency(), LedgerReason.ORDER_REFUND, String.valueOf(orderId), null);
 
         updateOrderStatusInDB(orderId, "CANCELLED", order.getAmountFilled());
 
@@ -273,7 +275,7 @@ public class OrderManager {
                 BigDecimal finalPayout = rawPayout.subtract(taxAmount);
 
                 plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(seller.getUniqueId()), finalPayout,
-                        currency);
+                        currency, LedgerReason.ORDER_FILL, null, null);
 
                 // Fulfilling a buy order is a real market trade: the seller hands
                 // over stock and is paid. fillOrder is never reached from

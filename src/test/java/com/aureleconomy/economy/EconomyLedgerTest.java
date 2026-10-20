@@ -158,13 +158,13 @@ class EconomyLedgerTest {
         seed(aliceId, "100.00");
 
         assertTrue(economy.deposit(alice, new BigDecimal("25.00"), CURRENCY,
-                LedgerReason.OFFLINE_EARNING, "earn-1", "IRON_INGOT"));
+                LedgerReason.MARKET_SELL, "earn-1", "IRON_INGOT"));
         assertEquals(1, ledger.flush(), "one mutation must produce one row");
 
         List<LedgerService.Row> rows = allRows();
         assertEquals(1, rows.size());
         LedgerService.Row row = rows.get(0);
-        assertEquals("OFFLINE_EARNING", row.type());
+        assertEquals("MARKET_SELL", row.type());
         assertEquals(new BigDecimal("25.00"), row.amount().setScale(2));
         assertEquals(new BigDecimal("125.00"), row.balanceAfter().setScale(2),
                 "the row must carry the balance the mutation produced");

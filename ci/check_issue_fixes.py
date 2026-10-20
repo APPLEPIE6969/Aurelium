@@ -487,6 +487,30 @@ command = strip_comments(read('src/main/java/com/aureleconomy/commands/EconomyCo
 check('F1 /eco history is wired', 'handleHistory(sender, args)' in command)
 check('F1 /eco history is discoverable', '"history"' in command)
 
+# The primitives cannot know what a movement was for, so each feature names it.
+# Counting the reasons pins both the wiring and the number of movements, which
+# is what stops a refactor from quietly dropping one back to the generic type.
+auction_money = strip_comments(read('src/main/java/com/aureleconomy/auction/AuctionManager.java'))
+for reason, expected in (('BID', 1), ('BID_REFUND', 2), ('AUCTION_BUY', 2), ('AUCTION_SALE', 3)):
+    check(
+        f'F1 auction movement labelled {reason}',
+        auction_money.count(f'LedgerReason.{reason},') == expected,
+        f'expected {expected} call(s), found {auction_money.count(f"LedgerReason.{reason},")}',
+    )
+
+order_money = strip_comments(read('src/main/java/com/aureleconomy/orders/OrderManager.java'))
+for reason, expected in (('ORDER_ESCROW', 1), ('ORDER_REFUND', 2), ('ORDER_FILL', 1)):
+    check(
+        f'F1 buy-order movement labelled {reason}',
+        order_money.count(f'LedgerReason.{reason},') == expected,
+        f'expected {expected} call(s), found {order_money.count(f"LedgerReason.{reason},")}',
+    )
+
+market_buy = strip_comments(read('src/main/java/com/aureleconomy/gui/MarketGUI.java'))
+market_sell = strip_comments(read('src/main/java/com/aureleconomy/gui/SellGUI.java'))
+check('F1 a market purchase is labelled', 'LedgerReason.MARKET_BUY,' in market_buy)
+check('F1 a market sale is labelled', 'LedgerReason.MARKET_SELL,' in market_sell)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

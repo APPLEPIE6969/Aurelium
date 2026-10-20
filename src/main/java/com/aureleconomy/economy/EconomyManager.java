@@ -177,6 +177,14 @@ public class EconomyManager {
         return debit(player, amount, currency, "withdrawIfSufficient", LedgerReason.WITHDRAW, null, null);
     }
 
+    /**
+     * The same affordability-checked debit, recorded as {@code reason} in the ledger.
+     */
+    public boolean withdrawIfSufficient(OfflinePlayer player, BigDecimal amount, String currency,
+            LedgerReason reason, String refId, String itemKey) {
+        return debit(player, amount, currency, "withdrawIfSufficient", reason, refId, itemKey);
+    }
+
     private boolean debit(OfflinePlayer player, BigDecimal amount, String currency, String operation,
             LedgerReason reason, String refId, String itemKey) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)

@@ -32,8 +32,8 @@ public enum LedgerReason {
     BID_REFUND,
     /** A seller's share of an auction sale. */
     AUCTION_SALE,
-    /** Sales tax withheld from an auction sale. */
-    AUCTION_TAX,
+    /** A buyer charged for an auction purchase. */
+    AUCTION_BUY,
     /** Buy-order escrow taken from the buyer when the order is created. */
     ORDER_ESCROW,
     /** A buyer's refund when an order is cancelled. */
@@ -44,6 +44,4 @@ public enum LedgerReason {
     MARKET_BUY,
     /** A market sale. */
     MARKET_SELL,
-    /** Earnings paid to a player while they were offline. */
-    OFFLINE_EARNING,
 }
