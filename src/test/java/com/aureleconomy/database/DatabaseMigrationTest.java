@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class DatabaseMigrationTest {
 
-    private static final int LATEST = 6;
+    private static final int LATEST = 7;
 
     @TempDir
     Path tempDir;
@@ -184,6 +184,12 @@ class DatabaseMigrationTest {
                 stmt.execute("CREATE INDEX idx_price_history_timestamp ON price_history (timestamp)");
                 stmt.execute("CREATE INDEX idx_trade_volume_trade_at ON trade_volume (trade_at)");
             }
+            if (schemaVersion >= 7) {
+                stmt.execute(new com.aureleconomy.database.schema.LedgerSchema(
+                        new SQLiteTypes()).create());
+                stmt.execute("CREATE INDEX idx_transaction_ledger_actor ON transaction_ledger (actor_uuid, ts)");
+                stmt.execute("CREATE INDEX idx_offline_earnings_uuid ON offline_earnings (uuid)");
+            }
 
             stmt.execute("CREATE TABLE database_info (version INTEGER PRIMARY KEY)");
             stmt.execute("INSERT INTO database_info VALUES (" + schemaVersion + ")");
@@ -237,6 +243,11 @@ class DatabaseMigrationTest {
                     "v6 did not add the price_history timestamp index");
             assertTrue(indexes.contains("idx_trade_volume_trade_at"),
                     "v6 did not add the trade_volume index");
+            assertTrue(tables.contains("transaction_ledger"), "v7 did not create the ledger");
+            assertTrue(indexes.contains("idx_transaction_ledger_actor"),
+                    "v7 did not add the ledger index");
+            assertTrue(indexes.contains("idx_offline_earnings_uuid"),
+                    "v7 did not add the offline_earnings uuid index");
 
             // And the data is still usable, not just present.
             try (Statement stmt = conn.createStatement();
@@ -267,6 +278,54 @@ class DatabaseMigrationTest {
                     "v6 did not add the price_history timestamp index");
             assertTrue(indexesOf(conn).contains("idx_trade_volume_trade_at"),
                     "v6 did not add the trade_volume index");
+        }
+        manager.close();
+    }
+
+    @Test
+    @DisplayName("v7 leaves the balances it retypes intact and gives the ledger a usable table")
+    void v7AddsLedgerWithoutTouchingMoney() throws Exception {
+        File dataFolder = buildDatabase("v6toledger", 6, 100, true);
+
+        // The retype is a no-op on SQLite, but the rows still have to survive it,
+        // and the ledger has to accept a full row afterwards - a schema that only
+        // creates an empty table with the wrong columns would pass a table check.
+        try (Connection conn = DriverManager.getConnection(
+                "jdbc:sqlite:" + new File(dataFolder, "database.db").getAbsolutePath());
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("UPDATE player_balances SET balance = 1234.56 WHERE uuid = "
+                    + "'11111111-1111-1111-1111-111111111111'");
+            stmt.execute("INSERT INTO offline_earnings (uuid, timestamp, amount, currency) VALUES "
+                    + "('11111111-1111-1111-1111-111111111111', 1700000000000, 12.34, 'Aurels')");
+        }
+
+        DatabaseManager manager = new DatabaseManager(mockPlugin(dataFolder));
+        assertTrue(manager.initialize(), "initialize() must succeed on a v6 database");
+
+        try (Connection conn = manager.getConnection(); Statement stmt = conn.createStatement()) {
+            assertEquals(LATEST, version(conn), "v6 was not carried to v7");
+
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT balance FROM player_balances WHERE uuid = "
+                            + "'11111111-1111-1111-1111-111111111111'")) {
+                assertTrue(rs.next(), "the balance row was lost in the v7 migration");
+                assertEquals(1234.56, rs.getDouble(1), 0.0001, "the balance changed");
+            }
+            assertEquals(1, count(conn, "offline_earnings"), "the offline earning was lost");
+
+            stmt.execute("INSERT INTO transaction_ledger (ts, actor_uuid, counterparty_uuid, type,"
+                    + " item_key, amount, currency, balance_after, ref_id, note) VALUES"
+                    + " (1700000000001, '11111111-1111-1111-1111-111111111111',"
+                    + " '22222222-2222-2222-2222-222222222222', 'BID', 'IRON_INGOT', -25.00,"
+                    + " 'Aurels', 1209.56, '42', 'auction bid')");
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT amount, balance_after, currency FROM transaction_ledger"
+                            + " WHERE type = 'BID'")) {
+                assertTrue(rs.next(), "the ledger did not accept a full row");
+                assertEquals(-25.00, rs.getDouble(1), 0.0001);
+                assertEquals(1209.56, rs.getDouble(2), 0.0001);
+                assertEquals("Aurels", rs.getString(3));
+            }
         }
         manager.close();
     }

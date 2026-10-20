@@ -20,6 +20,7 @@ import com.aureleconomy.database.schema.AuctionSchema;
 import com.aureleconomy.database.schema.BuyOrderSchema;
 import com.aureleconomy.database.schema.CustomItemSchema;
 import com.aureleconomy.database.schema.DatabaseInfoSchema;
+import com.aureleconomy.database.schema.LedgerSchema;
 import com.aureleconomy.database.schema.OfflineEarningSchema;
 import com.aureleconomy.database.schema.PlayerBalanceSchema;
 import com.aureleconomy.database.schema.PlayerSchema;
@@ -36,7 +37,7 @@ import com.aureleconomy.database.types.SQLTypes;
  */
 public class DatabaseManager {
 
-    private static final int LATEST_SCHEMA_VERSION = 6;
+    private static final int LATEST_SCHEMA_VERSION = 7;
 
     private final AurelEconomy plugin;
     private final DatabaseSettings settings;
@@ -131,6 +132,7 @@ public class DatabaseManager {
                     new BuyOrderSchema(t),
                     new PriceHistorySchema(t),
                     new TradeVolumeSchema(t),
+                    new LedgerSchema(t),
                     new CustomItemSchema(t));
 
             createTables();
@@ -348,6 +350,18 @@ public class DatabaseManager {
                 addIndexIfNotExists(conn, "price_history", "idx_price_history_timestamp", "timestamp");
                 addIndexIfNotExists(conn, "trade_volume", "idx_trade_volume_trade_at", "trade_at");
                 break;
+            case 7:
+                // F1 and F4 ride together on purpose: the ledger table and the
+                // money-column retype are one schema change, so a server is
+                // backed up, migrated and verified once rather than twice.
+                execute(conn, new LedgerSchema(database.getTypes()).create());
+                // History is read newest-first for one player, and the audit query
+                // sums by time; the pair covers both without a second index.
+                addIndexIfNotExists(conn, "transaction_ledger", "idx_transaction_ledger_actor", "actor_uuid, ts");
+                // Every join asks for this player's unclaimed earnings (M14/L4).
+                addIndexIfNotExists(conn, "offline_earnings", "idx_offline_earnings_uuid", "uuid");
+                retypeMoneyColumns(conn);
+                break;
         }
     }
 
@@ -386,6 +400,78 @@ public class DatabaseManager {
             }
             statement.execute("ALTER TABLE " + table + " MODIFY COLUMN " + column + " BIGINT");
         }
+    }
+
+    /** Money columns F4 retypes, in the order they are altered. */
+    private static final String[][] MONEY_COLUMNS = {
+            {"player_balances", "balance"},
+            {"auctions", "price"},
+            {"auctions", "listing_fee"},
+            {"auction_offers", "amount"},
+            {"buy_orders", "price_per_piece"},
+            {"offline_earnings", "amount"},
+            {"price_history", "buy_price"},
+            {"price_history", "sell_price"},
+    };
+
+    /**
+     * F4: retypes money columns to DECIMAL(18,2).
+     *
+     * <p>MySQL only, on purpose. SQLite stores a DECIMAL as a REAL through NUMERIC
+     * affinity, so retyping a column there would rewrite every money table on every
+     * server for a type name that changes nothing; the money write path already
+     * normalises with {@code setScale(2)}. MySQL stores DECIMAL exactly, which is
+     * the fix that stops doubling drift compounding in a balance.
+     *
+     * <p>A bare {@code MODIFY} would silently drop NOT NULL and the default, so the
+     * current definition is read back from INFORMATION_SCHEMA and kept.
+     */
+    private void retypeMoneyColumns(Connection conn) throws SQLException {
+        if (settings.getType() != DatabaseType.MYSQL) {
+            return;
+        }
+        for (String[] moneyColumn : MONEY_COLUMNS) {
+            retypeMoneyColumn(conn, moneyColumn[0], moneyColumn[1]);
+        }
+    }
+
+    private void retypeMoneyColumn(Connection conn, String table, String column) throws SQLException {
+        String nullable;
+        String defaultValue;
+        try (PreparedStatement select = conn.prepareStatement(
+                "SELECT IS_NULLABLE, COLUMN_DEFAULT FROM INFORMATION_SCHEMA.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?")) {
+            select.setString(1, table);
+            select.setString(2, column);
+            try (ResultSet rs = select.executeQuery()) {
+                if (!rs.next()) {
+                    return; // this install does not have that column
+                }
+                nullable = rs.getString(1);
+                defaultValue = rs.getString(2);
+            }
+        }
+
+        try (Statement statement = conn.createStatement()) {
+            statement.execute("ALTER TABLE " + table + " MODIFY COLUMN " + column + " "
+                    + moneyColumnDefinition(nullable, defaultValue));
+        }
+    }
+
+    /**
+     * The MODIFY definition for a money column, keeping the nullability and default
+     * the column already had. Split out so the preservation rule is testable without
+     * a MySQL server.
+     */
+    static String moneyColumnDefinition(String nullable, String defaultValue) {
+        StringBuilder definition = new StringBuilder("DECIMAL(18,2)");
+        if ("NO".equalsIgnoreCase(nullable)) {
+            definition.append(" NOT NULL");
+        }
+        if (defaultValue != null) {
+            definition.append(" DEFAULT ").append(defaultValue);
+        }
+        return definition.toString();
     }
 
     /**

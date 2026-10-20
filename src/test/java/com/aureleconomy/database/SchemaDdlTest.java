@@ -46,6 +46,7 @@ class SchemaDdlTest {
                 new BuyOrderSchema(t),
                 new PriceHistorySchema(t),
         new TradeVolumeSchema(t),
+                new LedgerSchema(t),
                 new CustomItemSchema(t));
     }
 
@@ -119,12 +120,37 @@ class SchemaDdlTest {
                     List.copyOf(columnsOf(conn, "buy_orders").keySet()));
             assertEquals(List.of("id", "item_key", "buy_price", "sell_price", "timestamp"),
                     List.copyOf(columnsOf(conn, "price_history").keySet()));
+            assertEquals(List.of("id", "ts", "actor_uuid", "counterparty_uuid", "type", "item_key",
+                    "amount", "currency", "balance_after", "ref_id", "note"),
+                    List.copyOf(columnsOf(conn, "transaction_ledger").keySet()));
             assertEquals(List.of("canonical_id", "source_plugin", "display_name", "item_data",
                     "pdc_key", "model_data_key", "lore_hash", "plugin_native_id", "category",
                     "buy_price", "sell_price", "enabled", "discovery_methods", "first_discovered",
                     "last_seen"),
                     List.copyOf(columnsOf(conn, "custom_items").keySet()));
+
+            // F4: a fresh install must not create a DOUBLE money column again.
+            assertEquals("DECIMAL(18,2)", columnsOf(conn, "player_balances").get("balance"));
+            assertEquals("DECIMAL(18,2)", columnsOf(conn, "transaction_ledger").get("amount"));
+            assertEquals("DECIMAL(18,2)", columnsOf(conn, "transaction_ledger").get("balance_after"),
+                    "the ledger's after-balance is money too");
         }
+    }
+
+    @Test
+    @DisplayName("The v7 retype keeps each money column's nullability and default")
+    void moneyColumnRetypeKeepsDefinition() {
+        // A bare MODIFY COLUMN makes the column nullable and drops its default.
+        // MySQL applies that silently, so the definition is rebuilt from what
+        // INFORMATION_SCHEMA reported rather than from a hardcoded one.
+        assertEquals("DECIMAL(18,2) NOT NULL DEFAULT 0.00",
+                DatabaseManager.moneyColumnDefinition("NO", "0.00"));
+        assertEquals("DECIMAL(18,2) NOT NULL",
+                DatabaseManager.moneyColumnDefinition("NO", null));
+        assertEquals("DECIMAL(18,2) DEFAULT 0.00",
+                DatabaseManager.moneyColumnDefinition("YES", "0.00"));
+        assertEquals("DECIMAL(18,2)",
+                DatabaseManager.moneyColumnDefinition("YES", null));
     }
 
     @Test
@@ -254,7 +280,7 @@ class SchemaDdlTest {
             try (Statement stmt = conn.createStatement();
                     ResultSet rs = stmt.executeQuery("SELECT version FROM database_info")) {
                 assertTrue(rs.next());
-                assertEquals(6, rs.getInt("version"));
+                assertEquals(7, rs.getInt("version"));
             }
         }
         manager.close();
@@ -311,7 +337,7 @@ class SchemaDdlTest {
 
             try (ResultSet rs = stmt.executeQuery("SELECT version FROM database_info")) {
                 assertTrue(rs.next());
-                assertEquals(6, rs.getInt("version"));
+                assertEquals(7, rs.getInt("version"));
             }
         }
         manager.close();

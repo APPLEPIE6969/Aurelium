@@ -21,8 +21,18 @@ public class SQLTypes {
         return "INTEGER";
     }
 
+    /**
+     * Money. F4 retypes every money column here in one place so a new schema cannot
+     * reintroduce a DOUBLE by copying an old one.
+     *
+     * <p>DECIMAL is exact on MySQL. On SQLite the declared type only selects an
+     * affinity: NUMERIC still stores the value as a REAL, so 0.1 + 0.2 is still
+     * 0.30000000000000004 and a retype of an existing column would be a full table
+     * rewrite for a type name. The write path normalises with {@code setScale(2)},
+     * which is what bounds the drift there.
+     */
     public String decimal() {
-        return "DOUBLE";
+        return "DECIMAL(18,2)";
     }
 
     public String text() {
