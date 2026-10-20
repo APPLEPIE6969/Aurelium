@@ -669,25 +669,92 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 
  if (offer == null)
  return;
- com.aureleconomy.auction.AuctionItem ai = getAuctionById(offer.getAuctionId());
- if (ai == null)
- return;
-
- final String cachedDisplayName = getItemDisplayName(ai.getItem());
 
  Offer finalOffer = offer;
  Bukkit.getScheduler().runTask(plugin, (Runnable) () -> {
- if (updateOfferStatusAtomic(offerId, OfferStatus.ACCEPTED)) {
- if (plugin.getEconomyManager().has(Bukkit.getOfflinePlayer(finalOffer.getBidder()),
- finalOffer.getAmount(), ai.getCurrency())) {
- plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(finalOffer.getBidder()),
- finalOffer.getAmount(), ai.getCurrency());
- plugin.getEconomyManager().deposit(seller, finalOffer.getAmount(), ai.getCurrency());
+ com.aureleconomy.auction.AuctionItem ai = getAuctionById(finalOffer.getAuctionId());
+ if (ai == null) {
+ seller.sendMessage(Component.text("That auction is no longer active.", NamedTextColor.YELLOW));
+ return;
+ }
+ acceptOfferNow(finalOffer, ai, seller, getItemDisplayName(ai.getItem()));
+ });
+ } catch (SQLException e) {
+ plugin.getComponentLogger().error("Error accepting offer", e);
+ }
+ });
+ }
 
- Player bidder = Bukkit.getPlayer(finalOffer.getBidder());
+ /**
+  * C2: completes an accepted offer once, and only for a sale that really happens.
+  *
+  * <p>What this used to do: mark the offer accepted, read the buyer's balance from
+  * the cache, withdraw without looking at the result, pay the seller
+  * unconditionally, and then hand the item over inside a branch that an offline
+  * bidder never entered. The seller kept the item, the buyer paid for nothing, and
+  * because the guard was per offer, a second offer on the same auction could be
+  * accepted the same way and duplicate the item.
+  *
+  * <p>What it does now: charge the buyer, claim the auction with one conditional
+  * UPDATE that records the winner as it retires the listing, hand the item over
+  * (inventory if there is room, otherwise the collection bin, which the claim has
+  * already attributed to them), then pay the seller. A failure before the claim
+  * leaves the offer pending and costs the buyer nothing. After the claim the item
+  * has an owner, so the seller can be paid. An auction that went to an offer also
+  * stops paying the seller for a standing bid as well, and refunds that bid.
+  */
+ private void acceptOfferNow(Offer offer, com.aureleconomy.auction.AuctionItem ai, Player seller, String cachedDisplayName) {
+ String currency = ai.getCurrency();
+
+ // Only the auction's own seller may accept, and the payout goes to the
+ // recorded seller rather than to whoever happens to call this.
+ if (!ai.getSeller().equals(seller.getUniqueId())) {
+ seller.sendMessage(Component.text("That offer is not yours to accept.", NamedTextColor.RED));
+ return;
+ }
+
+ if (offer.getStatus() != OfferStatus.PENDING) {
+ seller.sendMessage(Component.text("That offer is no longer pending.", NamedTextColor.YELLOW));
+ return;
+ }
+
+ if (!plugin.getEconomyManager().withdraw(Bukkit.getOfflinePlayer(offer.getBidder()), offer.getAmount(), currency)) {
+ // Nothing has changed, so the offer stays pending and can be accepted once the
+ // buyer has the money. Marking it expired for a sale that never happened was
+ // the old behaviour.
+ seller.sendMessage(Component.text(MSG_NO_FUNDS, NamedTextColor.RED));
+ return;
+ }
+
+ // One statement, one winner. A second accept on this auction, by offer or by
+ // buy-now, matches no row, so it cannot charge anyone. The winner is written in
+ // the same statement that retires the listing, so there is no state where the
+ // money is gone and the item has no owner.
+ if (!claimForOffer(ai.getId(), offer.getBidder(), offer.getAmount())) {
+ refund(ai, offer.getBidder(), offer.getAmount(), currency, cachedDisplayName);
+ seller.sendMessage(Component.text("That auction was already sold.", NamedTextColor.RED));
+ return;
+ }
+
+ if (!updateOfferStatusAtomic(offer.getId(), OfferStatus.ACCEPTED)) {
+ plugin.getComponentLogger().error("Offer " + offer.getId() + " was accepted but its status did not change");
+ }
+
+ // The current top bid, before the auction becomes the offer winner's. Its
+ // charge has to come back: it bought nothing.
+ UUID standingBidder = ai.getHighestBidder();
+ BigDecimal standingPrice = ai.getPrice();
+
+ ai.setHighestBidder(offer.getBidder());
+ ai.setPrice(offer.getAmount());
+ ai.setEnded(true);
+ synchronized (activeAuctions) {
+ activeAuctions.remove(ai);
+ }
+
+ Player bidder = Bukkit.getPlayer(offer.getBidder());
  if (bidder != null) {
- if (com.aureleconomy.utils.InventoryUtils.hasSpace(bidder.getInventory(), ai.getItem(),
- ai.getItem().getAmount())) {
+ if (com.aureleconomy.utils.InventoryUtils.hasSpace(bidder.getInventory(), ai.getItem(), ai.getItem().getAmount())) {
  bidder.getInventory().addItem(ai.getItem().clone());
  markCollected(ai.getId());
  bidder.sendMessage(Component.text(
@@ -699,20 +766,46 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  NamedTextColor.YELLOW));
  }
  }
+ // Offline bidder: nothing to deliver here, and nothing lost. The claim recorded
+ // them as the winner, and getCollectionBin keys on the winner, so the item is
+ // waiting for them at /ah collect.
 
- endAuction(ai);
- seller.sendMessage(Component.text(String.format(MSG_OFFER_ACCEPTED, finalOffer.getAmount()),
+ if (!plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(ai.getSeller()), offer.getAmount(), currency)) {
+ plugin.getComponentLogger().error("Failed to pay " + ai.getSeller() + " the accepted offer of "
+ + offer.getAmount() + " " + currency + " on auction " + ai.getId());
+ }
+
+ if (standingBidder != null) {
+ refund(ai, standingBidder, standingPrice, currency, cachedDisplayName);
+ Player standing = Bukkit.getPlayer(standingBidder);
+ if (standing != null) {
+ String formatted = plugin.getEconomyManager().getFormattedWithSymbol(standingPrice, currency);
+ standing.sendMessage(Component.text(String.format(MSG_OUTBID, cachedDisplayName, formatted),
+ NamedTextColor.YELLOW));
+ }
+ }
+
+ com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
+ seller.sendMessage(Component.text(String.format(MSG_OFFER_ACCEPTED, offer.getAmount()),
  NamedTextColor.GREEN));
- } else {
- seller.sendMessage(Component.text(MSG_NO_FUNDS, NamedTextColor.RED));
- updateOfferStatus(offerId, OfferStatus.EXPIRED);
  }
- }
- });
+
+ /**
+  * Retires an auction for an accepted offer and records the winner in the same
+  * statement. The {@code ended = 0} condition is what makes a second sale of the
+  * same auction impossible: it matches no row and charges nobody.
+  */
+ private boolean claimForOffer(int auctionId, UUID winner, BigDecimal salePrice) {
+ try (Connection conn = plugin.getDatabaseManager().getConnection();
+        PreparedStatement ps = conn.prepareStatement("UPDATE auctions SET ended = 1, highest_bidder_uuid = ?, price = ? WHERE id = ? AND ended = 0")) {
+ ps.setString(1, winner.toString());
+ ps.setBigDecimal(2, salePrice);
+ ps.setInt(3, auctionId);
+ return ps.executeUpdate() > 0;
  } catch (SQLException e) {
- plugin.getComponentLogger().error("Error accepting offer", e);
+ plugin.getComponentLogger().error("Database error claiming auction for an offer", e);
+ return false;
  }
- });
  }
 
  public void declineOffer(int offerId, Player seller) {
