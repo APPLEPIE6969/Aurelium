@@ -5,6 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -396,9 +397,28 @@ public class OrderManager {
         });
     }
 
+    /**
+     * The slots a buy order may take from, so counting and removal cannot
+     * disagree.
+     *
+     * <p>They used to. The count walked {@code getContents()}, which is 41 entries
+     * (36 storage slots plus four armour slots and the offhand), while the removal
+     * walked {@code getSize()}, the 36 storage slots. An item in the offhand or in
+     * armour was counted, paid for and never removed, so the same item could be
+     * sold to a buy order forever.
+     *
+     * <p>Storage is the answer for the removal side too: armour is worn, not
+     * stock, and "sell" does not prepare a player to lose their chestplate.
+     */
+    private static int sellableSlotCount(PlayerInventory inventory) {
+        return inventory.getSize();
+    }
+
     private int countItems(Player player, Material material) {
+        PlayerInventory inventory = player.getInventory();
         int count = 0;
-        for (ItemStack item : player.getInventory().getContents()) {
+        for (int slot = 0; slot < sellableSlotCount(inventory); slot++) {
+            ItemStack item = inventory.getItem(slot);
             if (item != null && item.getType() == material) {
                 count += item.getAmount();
             }
@@ -407,13 +427,14 @@ public class OrderManager {
     }
 
     private void removeItems(Player player, Material material, int amountToRemove) {
+        PlayerInventory inventory = player.getInventory();
         int leftToRemove = amountToRemove;
-        for (int i = 0; i < player.getInventory().getSize(); i++) {
-            ItemStack item = player.getInventory().getItem(i);
+        for (int slot = 0; slot < sellableSlotCount(inventory); slot++) {
+            ItemStack item = inventory.getItem(slot);
             if (item != null && item.getType() == material) {
                 if (item.getAmount() <= leftToRemove) {
                     leftToRemove -= item.getAmount();
-                    player.getInventory().setItem(i, null);
+                    inventory.setItem(slot, null);
                 } else {
                     item.setAmount(item.getAmount() - leftToRemove);
                     leftToRemove = 0;
