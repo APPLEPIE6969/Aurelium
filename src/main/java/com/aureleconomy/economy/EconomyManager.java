@@ -403,8 +403,32 @@ public class EconomyManager {
             }
         } catch (SQLException e) {
             plugin.getComponentLogger().error("Database error while loading balance for " + uuid, e);
+            // C4: a read that failed is not an account that does not exist. Return
+            // what is known and write nothing, so the real balance survives a
+            // timeout and the next access retries the database.
+            return knownBalanceOrZero(uuid, currency);
         }
 
+        return creditStartingBalance(uuid, currency);
+    }
+
+    /**
+     * What a failed read returns: the last value loaded for this player, or zero.
+     *
+     * <p>Zero cannot invent money, and it is not cached, so the next access asks the
+     * database again instead of trusting a number that came out of an outage.
+     */
+    private BigDecimal knownBalanceOrZero(UUID uuid, String currency) {
+        ConcurrentHashMap<String, BigDecimal> userBalances = balanceCache.get(uuid);
+        BigDecimal cached = userBalances != null ? userBalances.get(currency) : null;
+        return cached != null ? cached : BigDecimal.ZERO.setScale(SCALE, ROUNDING_MODE);
+    }
+
+    /**
+     * Writes the starting balance for an account the database confirmed does not
+     * exist. Only {@link #loadBalance}'s zero-row path may reach this.
+     */
+    private BigDecimal creditStartingBalance(UUID uuid, String currency) {
         double startBalRaw = plugin.getConfig().getDouble("economy.currencies." + currency + ".starting-balance",
                 plugin.getConfig().getDouble("economy.starting-balance", DEFAULT_STARTING_BALANCE));
         BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
