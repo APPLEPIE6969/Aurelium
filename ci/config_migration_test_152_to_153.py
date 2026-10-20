@@ -112,12 +112,21 @@ def test_migration():
     config = load_config(CONFIG_PATH)
     errors = []
 
-    # 1. config-version should be 2 (no change from 1.5.2)
+    # 1. config-version should be 3: the upgrade must stamp the version it
+    # actually migrated to, not leave the 1.5.2 value behind.
     cv = config.get("config-version", 0)
-    if cv != 2:
-        errors.append("FAIL: config-version = " + str(cv) + ", expected 2")
+    if cv != 3:
+        errors.append("FAIL: config-version = " + str(cv) + ", expected 3")
     else:
         print("PASS: config-version = " + str(cv))
+
+    # 1b. and the key 1.5.5 added has to appear, or an upgraded server runs
+    # without the ceiling the new price parser depends on.
+    maximum = config.get("economy", {}).get("max-transaction-price")
+    if maximum is None:
+        errors.append("FAIL: economy.max-transaction-price missing after upgrade")
+    else:
+        print("PASS: economy.max-transaction-price = " + str(maximum))
 
     # 2. economy.currencies should survive
     currencies = config.get("economy", {}).get("currencies", {})

@@ -1099,6 +1099,12 @@ def sec_economy(t):
         ('eco take zero', f'eco take {PLAYER} 0 {cur}'),
         ('eco set negative', f'eco set {PLAYER} -1 {cur}'),
         ('eco set zero', f'eco set {PLAYER} 0 {cur}'),
+        # H5: money has one accepted shape. An exponent is refused rather than
+        # built, and a third decimal is refused rather than rounded away.
+        ('eco set scientific notation', f'eco set {PLAYER} 1e2 {cur}'),
+        ('eco set three decimals', f'eco set {PLAYER} 0.005 {cur}'),
+        ('eco set three decimals rounding up', f'eco set {PLAYER} 0.015 {cur}'),
+        ('eco set huge exponent', f'eco set {PLAYER} 1e999999999 {cur}'),
         ('eco give non-numeric', f'eco give {PLAYER} abc {cur}'),
         ('eco give NaN', f'eco give {PLAYER} NaN {cur}'),
         ('eco give Infinity', f'eco give {PLAYER} Infinity {cur}'),
@@ -1125,15 +1131,6 @@ def sec_economy(t):
 
     t.cmd(f'eco take {PLAYER} 200.25 {cur}')
     t.wait_balance(PLAYER, cur, 1300.00)
-
-    t.cmd(f'eco set {PLAYER} 1e2 {cur}')
-    t.wait_balance(PLAYER, cur, 100.0)
-
-    t.cmd(f'eco set {PLAYER} 0.005 {cur}')
-    t.wait_balance(PLAYER, cur, 0.00)
-
-    t.cmd(f'eco set {PLAYER} 0.015 {cur}')
-    t.wait_balance(PLAYER, cur, 0.02)
 
     t.cmd(f'eco set {PLAYER} 1 {cur}')
     t.wait_balance(PLAYER, cur, 1.0)
