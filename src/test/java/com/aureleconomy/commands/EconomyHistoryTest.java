@@ -220,4 +220,20 @@ class EconomyHistoryTest {
         assertEquals(List.of("Usage: /eco history <player> [page]"), lines());
         assertFalse(lines().get(0).contains("Processing"));
     }
+
+    /**
+     * The history branch reads {@code args[0]} before the old length check, so a
+     * bare {@code /eco} threw {@code ArrayIndexOutOfBoundsException} and the outer
+     * handler reported it as an internal error. The server log audit in CI
+     * treats any such error as a failure, and so does this test.
+     */
+    @Test
+    @DisplayName("a bare /eco is answered with the usage line, not an internal error")
+    void bareEcoIsAnswered() {
+        command.onCommand(adminSender(), mock(Command.class), "eco", new String[0]);
+
+        List<String> lines = lines();
+        assertEquals(1, lines.size(), lines.toString());
+        assertTrue(lines.get(0).startsWith("Usage: /eco"), lines.toString());
+    }
 }

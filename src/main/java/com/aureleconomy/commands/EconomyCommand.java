@@ -243,7 +243,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  return;
  }
 
- if (args[0].equalsIgnoreCase("history")) {
+ if (args.length > 0 && args[0].equalsIgnoreCase("history")) {
  handleHistory(sender, args);
  return;
  }

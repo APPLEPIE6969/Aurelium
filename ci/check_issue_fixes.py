@@ -486,6 +486,11 @@ check(
 command = strip_comments(read('src/main/java/com/aureleconomy/commands/EconomyCommand.java'))
 check('F1 /eco history is wired', 'handleHistory(sender, args)' in command)
 check('F1 /eco history is discoverable', '"history"' in command)
+check(
+    'F1 /eco history reads args[0] only after checking for one',
+    'args.length > 0 && args[0].equalsIgnoreCase("history")' in command,
+    'a bare /eco threw ArrayIndexOutOfBoundsException before this guard existed',
+)
 
 # The primitives cannot know what a movement was for, so each feature names it.
 # Counting the reasons pins both the wiring and the number of movements, which
