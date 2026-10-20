@@ -186,13 +186,19 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  return;
  }
 
- boolean hasFunds = plugin.getEconomyManager().has(player, amount, currency);
-
  Bukkit.getScheduler().runTask(plugin, () -> {
  try {
- if (hasFunds) {
- plugin.getEconomyManager().withdraw(player, amount, currency);
- plugin.getEconomyManager().deposit(target, amount, currency);
+ // C3: one transfer, not a balance check followed by an unchecked withdraw and
+ // an unconditional deposit. transfer() moves both legs in one transaction or
+ // neither, so a balance that changed after it was read can no longer pay
+ // somebody with money that was never taken from the payer.
+ if (!plugin.getEconomyManager().transfer(player, target, amount, currency)) {
+ // Nothing moved and nothing is half-done. An empty balance and a database
+ // fault both land here, and transfer() reports both as false (fixplan C1
+ // note 3), so both are named as insufficient funds.
+ player.sendMessage(Component.text("Insufficient funds.", NamedTextColor.RED));
+ return;
+ }
  String formatted = plugin.getEconomyManager().format(amount, currency);
  String symbol = plugin.getEconomyManager().getCurrencySymbol(currency);
 
@@ -215,9 +221,6 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
  .replace("%currency%", currency);
  op.sendMessage(mm.deserialize(recvMsg));
  }
- }
- } else {
- player.sendMessage(Component.text("Insufficient funds.", NamedTextColor.RED));
  }
  } catch (Exception e) {
  plugin.getComponentLogger().error("Error processing payment", e);
