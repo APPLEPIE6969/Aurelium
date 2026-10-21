@@ -317,9 +317,16 @@ public class WebPurchaseExecutor {
         BigDecimal amount = BigDecimal.valueOf(purchase.amount());
 
         if (ai.isBin()) {
-            // A BIN listing is a purchase, not a bid.
+            // A BIN listing is a purchase, not a bid: the queued amount is the
+            // quantity for a UNIT listing. It used to be the unit price, which
+            // turned a listing priced 100.50 per unit into a 100-item purchase
+            // (H4). A STACK listing always sells the whole stack.
             int quantity = ai.getPurchaseMode() == AuctionItem.PurchaseMode.STACK
-                    ? ai.getAvailableQuantity() : purchase.amount();
+                    ? ai.getAvailableQuantity()
+                    : Math.min(purchase.amount(), ai.getAvailableQuantity());
+            if (quantity <= 0) {
+                return fail(result, "This listing has no items remaining.");
+            }
             BigDecimal totalCost = ai.getPricePerUnit().multiply(BigDecimal.valueOf(quantity))
                     .setScale(2, RoundingMode.HALF_UP);
             if (!plugin.getEconomyManager().has(bidder, totalCost, ai.getCurrency())) {
@@ -330,11 +337,17 @@ public class WebPurchaseExecutor {
             if (purchased <= 0) {
                 return fail(result, "Purchase failed");
             }
+            // purchaseUnits charges for what it actually takes, which can be less
+            // than asked for when the stock moved. Report that same number rather
+            // than the request, so the browser never shows a cost that was not
+            // charged.
+            BigDecimal charged = ai.getPricePerUnit().multiply(BigDecimal.valueOf(purchased))
+                    .setScale(2, RoundingMode.HALF_UP);
             BigDecimal newBal = plugin.getEconomyManager().getBalance(bidder, ai.getCurrency());
             result.addProperty("success", true);
             result.addProperty("purchased", purchased);
             result.addProperty("spent",
-                    plugin.getEconomyManager().getFormattedWithSymbol(totalCost, ai.getCurrency()));
+                    plugin.getEconomyManager().getFormattedWithSymbol(charged, ai.getCurrency()));
             result.addProperty("newBalance", newBal.doubleValue());
             return true;
         }

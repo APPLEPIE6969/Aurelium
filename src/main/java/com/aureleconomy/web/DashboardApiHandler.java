@@ -1,6 +1,7 @@
 package com.aureleconomy.web;
 
 import com.aureleconomy.AurelEconomy;
+import com.aureleconomy.auction.AuctionItem;
 import com.aureleconomy.webstore.PurchaseQueue;
 import com.aureleconomy.webstore.WebSnapshot;
 import com.aureleconomy.webstore.WebSnapshotCache;
@@ -562,14 +563,36 @@ public class DashboardApiHandler implements HttpHandler {
                 message = "Sale queued - confirming in-game...";
             }
             case BID -> {
-                double bidAmount = optDouble(body, "amount", Double.NaN);
-                if (!(auctionId > 0) || !Double.isFinite(bidAmount) || bidAmount <= 0) {
-                    send(exchange, 400, "{\"error\":\"Invalid auction or amount\"}");
-                    return;
+                // A BIN listing is a purchase, not a bid. The browser used to send
+                // the unit price in `amount` and this handler stored it as a
+                // quantity, so a listing priced 100.50 per unit bought 100 items
+                // (H4). A BIN request carries an explicit `quantity`; `amount` is
+                // a bid price and means nothing here.
+                AuctionItem auction = plugin.getAuctionManager().getAuctionById(auctionId);
+                if (auction != null && auction.isBin()) {
+                    // Validate the double, not the cast: 1.5 must be refused, not
+                    // floored to one unit.
+                    double requested = optDouble(body, "quantity", Double.NaN);
+                    if (!(auctionId > 0) || !isWholeInRange(requested)) {
+                        send(exchange, 400, "{\"error\":\"Invalid auction or quantity\"}");
+                        return;
+                    }
+                    int quantity = (int) requested;
+                    // Stock can move before the queue drains, so the executor caps
+                    // again. Capping here keeps the queued number and the browser
+                    // confirmation honest about what was asked for.
+                    amount = Math.min(quantity, Math.max(1, auction.getAvailableQuantity()));
+                    message = "Purchase queued - delivering in-game...";
+                } else {
+                    double bidAmount = optDouble(body, "amount", Double.NaN);
+                    if (!(auctionId > 0) || !Double.isFinite(bidAmount) || bidAmount <= 0) {
+                        send(exchange, 400, "{\"error\":\"Invalid auction or amount\"}");
+                        return;
+                    }
+                    // Fractional bids are meaningless for the in-game BidGUI.
+                    amount = (int) bidAmount;
+                    message = "Bid queued - confirming in-game...";
                 }
-                // Fractional bids are meaningless for the in-game BidGUI.
-                amount = (int) bidAmount;
-                message = "Bid queued - confirming in-game...";
             }
             case FILL_ORDER -> {
                 if (!(orderId > 0) || !isWholeInRange(amount)) {

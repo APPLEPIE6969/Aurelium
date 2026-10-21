@@ -319,14 +319,18 @@
                     <img id="bid-item-icon" class="modal-item-icon" alt="">
                     <span id="bid-item-name" class="modal-item-name"></span>
                 </div>
-                <div class="modal-qty">
+                <div class="modal-qty" id="bid-amount-block">
                     <label>Your Bid (per item)</label>
                     <input type="number" id="bid-amount-input" value="1" min="0.01" step="0.01" aria-label="Bid amount">
+                </div>
+                <div class="modal-qty" id="bid-quantity-block" hidden>
+                    <label>Quantity <span id="bid-hint" class="qty-hint"></span></label>
+                    <input type="number" id="bid-quantity-input" value="1" min="1" step="1" aria-label="Quantity">
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-cancel" data-close-modal="bid-modal">Cancel</button>
-                <button class="btn-confirm" data-action="confirmBid">Place Bid</button>
+                <button class="btn-confirm" id="bid-confirm" data-action="confirmBid">Place Bid</button>
             </div>
         </div>
     </div>

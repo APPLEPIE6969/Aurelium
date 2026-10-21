@@ -516,6 +516,67 @@ market_sell = strip_comments(read('src/main/java/com/aureleconomy/gui/SellGUI.ja
 check('F1 a market purchase is labelled', 'LedgerReason.MARKET_BUY,' in market_buy)
 check('F1 a market sale is labelled', 'LedgerReason.MARKET_SELL,' in market_sell)
 
+# --------------------------------------------------------------------------
+# H4: a BIN purchase carries a quantity, never a price read as one
+#
+# The dashboard sent the unit price in `amount` and the API stored it as the
+# purchase quantity, so a listing priced 100.50 bought 100 items. Both halves
+# matter: the API must refuse a BIN request with no quantity (or the legacy
+# shape comes back), and the executor must cap the quantity it is given at the
+# stock it can see.
+# --------------------------------------------------------------------------
+handler = strip_comments(read('src/main/java/com/aureleconomy/web/DashboardApiHandler.java'))
+check(
+    'H4 the bid API tells a BIN listing apart from an auction',
+    'auction.isBin()' in handler,
+    'without this the endpoint cannot know that amount is a price, not a quantity',
+)
+check(
+    'H4 a BIN request reads an explicit quantity',
+    'optDouble(body, "quantity"' in handler,
+)
+check(
+    'H4 a BIN request without a quantity is refused',
+    'Invalid auction or quantity' in handler,
+    'accepting it falls back to amount-as-quantity, which is the bug',
+)
+check(
+    'H4 a fractional quantity is refused, not floored',
+    'double requested = optDouble(body, "quantity"' in handler,
+    'casting first turns 1.5 into one unit and hides the malformed request',
+)
+
+web_exec = strip_comments(read('src/main/java/com/aureleconomy/web/WebPurchaseExecutor.java'))
+check(
+    'H4 the executor caps a BIN quantity at the live stock',
+    'Math.min(purchase.amount(), ai.getAvailableQuantity())' in web_exec,
+    'stock moves between queueing and draining',
+)
+check(
+    'H4 the executor reports the quantity it actually bought',
+    'BigDecimal.valueOf(purchased)' in web_exec,
+    'reporting the request would show a cost the buyer was never charged',
+)
+
+app_js = read('src/main/resources/web/app.js')
+check(
+    'H4 the dashboard sends a quantity for a BIN purchase',
+    '{ auctionId: modalAuction.id, quantity }' in app_js,
+)
+check(
+    'H4 the dashboard still sends a price for a real bid',
+    '{ auctionId: modalAuction.id, amount }' in app_js,
+)
+dashboard = read('src/main/resources/web/index.html')
+check(
+    'H4 the BIN modal has a quantity control',
+    'id="bid-quantity-input"' in dashboard and 'id="bid-quantity-block"' in dashboard,
+)
+check(
+    'H4 the frontend suite covers the request body',
+    os.path.exists(os.path.join(ROOT, 'ci', 'test_bid_quantity.js')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

@@ -33,7 +33,7 @@ Write-Host '== javascript ==' -ForegroundColor Cyan
 node --check src\main\resources\web\app.js
 if ($LASTEXITCODE -ne 0) { $failed += 'app.js syntax' } else { Write-Host '  app.js parses' }
 
-foreach ($suite in @('test_market', 'test_stepper', 'test_currency', 'test_orders')) {
+foreach ($suite in @('test_market', 'test_stepper', 'test_currency', 'test_orders', 'test_bid_quantity')) {
     $res = & node "ci\$suite.js" 2>&1
     if ($LASTEXITCODE -ne 0) {
         $failed += $suite

@@ -1803,13 +1803,48 @@ function openBidModal(auction) {
     if (name) {
         name.textContent = auction.itemName;
     }
+    const isBin = Boolean(auction.isBin);
     const input = document.getElementById('bid-amount-input');
     if (input) {
-        input.value = auction.isBin ? Number(auction.price || 0).toFixed(2) : (Number(auction.price || 0) + 1).toFixed(2);
+        input.value = isBin ? Number(auction.price || 0).toFixed(2) : (Number(auction.price || 0) + 1).toFixed(2);
+    }
+    // A BIN listing is a purchase: the price is fixed and the only thing the
+    // buyer chooses is how many units to take. The old modal asked for an
+    // "amount", which the server read as a quantity, so a listing priced 100.50
+    // per unit tried to buy 100 items (H4).
+    const amountBlock = document.getElementById('bid-amount-block');
+    if (amountBlock) {
+        amountBlock.hidden = isBin;
+    }
+    const qtyBlock = document.getElementById('bid-quantity-block');
+    if (qtyBlock) {
+        qtyBlock.hidden = !isBin;
+    }
+    const qtyInput = document.getElementById('bid-quantity-input');
+    const hint = document.getElementById('bid-hint');
+    if (isBin) {
+        const unit = auction.purchaseMode === 'UNIT';
+        const remaining = Math.max(1, Number(auction.remaining || 1));
+        if (qtyInput) {
+            qtyInput.max = String(unit ? remaining : 1);
+            qtyInput.value = '1';
+            qtyInput.disabled = !unit;
+        }
+        if (hint) {
+            hint.textContent = unit
+                ? `- ${money(auction.price, auction.currency, auction.currencySymbol)} each`
+                : `- all ${remaining} for ${money(auction.price, auction.currency, auction.currencySymbol)}`;
+        }
+    } else if (hint) {
+        hint.textContent = '';
     }
     const title = document.getElementById('bid-modal-title');
     if (title) {
-        title.textContent = auction.isBin ? 'Buy It Now' : 'Place Bid';
+        title.textContent = isBin ? 'Buy It Now' : 'Place Bid';
+    }
+    const confirm = document.getElementById('bid-confirm');
+    if (confirm) {
+        confirm.textContent = isBin ? 'Buy Now' : 'Place Bid';
     }
     openModal('bid-modal');
 }
@@ -1818,12 +1853,20 @@ async function confirmBid() {
     if (!modalAuction) {
         return;
     }
+    const isBin = Boolean(modalAuction.isBin);
     const input = document.getElementById('bid-amount-input');
+    const qtyInput = document.getElementById('bid-quantity-input');
     const amount = Number(input?.value || 0);
+    const quantity = Math.max(1, Math.floor(Number(qtyInput?.value || 1)));
     try {
-        const res = await post('/bid', { auctionId: modalAuction.id, amount });
+        // A BIN purchase sends the quantity it is buying. `amount` is a bid
+        // price and has no meaning on a BIN listing (H4).
+        const body = isBin
+            ? { auctionId: modalAuction.id, quantity }
+            : { auctionId: modalAuction.id, amount };
+        const res = await post('/bid', body);
         closeModal('bid-modal');
-        toast('success', modalAuction.isBin ? 'Purchase queued...' : 'Bid queued...');
+        toast('success', isBin ? 'Purchase queued...' : 'Bid queued...');
         if (res.purchaseId) {
             await awaitPurchase(res.purchaseId, (result) => {
                 if (result?.error) {
