@@ -1,7 +1,7 @@
 # Aurelium Configuration (v1.5.3)
 
 # Don't touch this, used for auto-migration
-config-version: 3
+config-version: 4
 
 # --- Database ---
 database:
@@ -241,3 +241,13 @@ custom-items:
 #   sell-price: 375.0
 #   enabled: true
 discovered-items: {}
+
+# ---------------------------------------------------------------------------
+# Spawners
+# ---------------------------------------------------------------------------
+# Mining a spawner gives it back with its mob type, but only for a player
+# holding the aureleconomy.spawner-mine permission (default: op) and, with
+# this setting on, a tool with Silk Touch. Set it to false to let any pickaxe
+# produce the item, which is the pre-1.5.5 behaviour.
+spawners:
+  require-silk-touch: true

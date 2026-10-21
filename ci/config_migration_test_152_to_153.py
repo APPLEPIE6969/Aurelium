@@ -112,11 +112,11 @@ def test_migration():
     config = load_config(CONFIG_PATH)
     errors = []
 
-    # 1. config-version should be 3: the upgrade must stamp the version it
+    # 1. config-version should be 4: the upgrade must stamp the version it
     # actually migrated to, not leave the 1.5.2 value behind.
     cv = config.get("config-version", 0)
-    if cv != 3:
-        errors.append("FAIL: config-version = " + str(cv) + ", expected 3")
+    if cv != 4:
+        errors.append("FAIL: config-version = " + str(cv) + ", expected 4")
     else:
         print("PASS: config-version = " + str(cv))
 
@@ -127,6 +127,15 @@ def test_migration():
         errors.append("FAIL: economy.max-transaction-price missing after upgrade")
     else:
         print("PASS: economy.max-transaction-price = " + str(maximum))
+
+    # 1c. the spawner gate 1.5.5 added. An upgraded server that misses it falls
+    # back to require-silk-touch = true, which is the safe default, but the key
+    # has to be visible so an owner can turn it off.
+    silk = config.get("spawners", {}).get("require-silk-touch")
+    if silk is None:
+        errors.append("FAIL: spawners.require-silk-touch missing after upgrade")
+    else:
+        print("PASS: spawners.require-silk-touch = " + str(silk))
 
     # 2. economy.currencies should survive
     currencies = config.get("economy", {}).get("currencies", {})

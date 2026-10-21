@@ -656,6 +656,46 @@ check(
                                 'scanner', 'CustomItemToggleTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# H8: a mined spawner needs the permission, and Silk Touch unless the owner
+# turns that off. The listener used to run at NORMAL, before a protection
+# plugin could cancel the event, and accepted any pickaxe, so a region flag
+# that only cancels the event still let the typed spawner item out.
+# --------------------------------------------------------------------------
+spawner_src = strip_comments(read('src/main/java/com/aureleconomy/listeners/SpawnerListener.java'))
+check(
+    'H8 the spawner drop needs Silk Touch by default',
+    'tool.getEnchantmentLevel(Enchantment.SILK_TOUCH) > 0' in spawner_src,
+    'the production predicate must read the real enchantment, not a stand-in',
+)
+check(
+    'H8 spawner mining needs a permission',
+    'player.hasPermission(MINE_PERMISSION)' in spawner_src,
+)
+check(
+    'H8 the spawner break handler runs last and ignores cancelled events',
+    '@EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)\n    public void onSpawnerBreak'
+    in spawner_src,
+    'NORMAL runs before a protection plugin can cancel the event',
+)
+version_match = re.search(r'^config-version:\s*(\d+)', config_text, re.M)
+check(
+    'H8 the Silk Touch gate is configurable and shipped on by default',
+    'require-silk-touch: true' in config_text
+    and version_match is not None and int(version_match.group(1)) >= 4,
+    'the safe default is true, and a new key needs config-version bumped',
+)
+plugin_yml = read('src/main/resources/plugin.yml')
+check(
+    'H8 the spawner permission is declared default op',
+    'aureleconomy.spawner-mine:' in plugin_yml and 'default: op' in plugin_yml,
+)
+check(
+    'H8 the spawner listener test covers permission, Silk Touch and priority',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'listeners', 'SpawnerListenerTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

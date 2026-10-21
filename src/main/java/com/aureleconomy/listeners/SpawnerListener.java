@@ -6,23 +6,53 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.CreatureSpawner;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
 
+import java.util.function.Predicate;
+
 public class SpawnerListener implements Listener {
 
+    /**
+     * H8: the permission that turns a mined spawner into the plugin's spawner
+     * item. Without it the event is left to vanilla, which drops a plain
+     * spawner only when the tool has Silk Touch.
+     */
+    public static final String MINE_PERMISSION = "aureleconomy.spawner-mine";
+
+    private final AurelEconomy plugin;
+    private final Predicate<ItemStack> silkTouchCheck;
+
     public SpawnerListener(AurelEconomy plugin) {
-        // Plugin parameter kept for future use if needed, but field removed to fix
-        // warning
+        this(plugin, tool -> tool.getEnchantmentLevel(Enchantment.SILK_TOUCH) > 0);
     }
 
-    @EventHandler
+    /**
+     * Test seam. {@code Enchantment.SILK_TOUCH} is registry-backed on modern
+     * Paper and cannot be reached without a server, so the check is injected
+     * rather than looked up inline. Production always uses the constructor above.
+     */
+    SpawnerListener(AurelEconomy plugin, Predicate<ItemStack> silkTouchCheck) {
+        this.plugin = plugin;
+        this.silkTouchCheck = silkTouchCheck;
+    }
+
+    /**
+     * H8: this used to run at NORMAL priority, before a protection plugin could
+     * cancel the event, accept any pickaxe, and never check Silk Touch or a
+     * permission. The result was a typed-spawner dupe behind any region flag
+     * that only cancels the event, and a mob-type loss for players mining
+     * their own spawners with a plain pickaxe.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSpawnerBreak(BlockBreakEvent event) {
         if (event.isCancelled())
             return;
@@ -32,9 +62,17 @@ public class SpawnerListener implements Listener {
             return;
 
         Player player = event.getPlayer();
+        if (!player.hasPermission(MINE_PERMISSION)) {
+            return;
+        }
+
         ItemStack tool = player.getInventory().getItemInMainHand();
 
         if (!tool.getType().name().contains("PICKAXE")) {
+            return;
+        }
+
+        if (plugin.getConfig().getBoolean("spawners.require-silk-touch", true) && !silkTouchCheck.test(tool)) {
             return;
         }
 

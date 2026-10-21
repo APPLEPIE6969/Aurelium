@@ -79,6 +79,9 @@ permissions:
   aureleconomy.web:
     description: Use /web
     default: true
+  aureleconomy.spawner-mine:
+    description: Mine a spawner and receive it with its mob type
+    default: op
   aureleconomy.stocks:
     description: Use /stocks
     default: true
