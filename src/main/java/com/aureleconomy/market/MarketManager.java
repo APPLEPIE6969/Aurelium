@@ -370,6 +370,12 @@ public class MarketManager {
  */
  public void addCustomMarketItem(String canonicalId, CustomMarketItem customItem) {
  String key = canonicalId;
+ // A disabled item has no market presence at all. Adding it back with a
+ // price is how a toggled-off item stayed buyable after a rescan (H7).
+ if (!customItem.isEnabled()) {
+ removeCustomMarketItem(key);
+ return;
+ }
 
  // Resolve effective prices: treat -1 (unset sentinel) as "use vanilla material price"
  BigDecimal effectiveBuyPrice = customItem.getBuyPrice();
@@ -402,6 +408,21 @@ public class MarketManager {
  if (!itemCurrencies.containsKey(key)) {
  itemCurrencies.put(key, plugin.getEconomyManager().getDefaultCurrency());
  }
+ }
+
+ /**
+ * Removes a custom item from every price map and from the entry cache.
+ * Called when the item is switched off, so no stale price survives the
+ * toggle and no lookup can still find an entry to sell (H7).
+ */
+ public void removeCustomMarketItem(String canonicalId) {
+ if (canonicalId == null) {
+ return;
+ }
+ entryCache.remove(canonicalId);
+ buyPrices.remove(canonicalId);
+ sellPrices.remove(canonicalId);
+ itemCurrencies.remove(canonicalId);
  }
 
 }

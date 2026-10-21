@@ -126,6 +126,15 @@ public class AuctionManager {
  public void listAuction(UUID seller, ItemStack item, BigDecimal price, String currency, boolean isBin,
  long durationMillis, BigDecimal listingFee, AuctionItem.PurchaseMode purchaseMode,
  Consumer<com.aureleconomy.auction.AuctionItem> onListed) {
+ // A custom item switched off in /customitems must not reach the auction
+ // house either. The caller already treats a null callback as "listing
+ // failed" and refunds the fee, so this reuses that path (H7).
+ com.aureleconomy.scanner.CustomItemRegistry registry = plugin.getCustomItemRegistry();
+ if (registry != null && registry.isDisabledCustomItem(item)) {
+ runOnMainThread(null, onListed);
+ return;
+ }
+
  long now = System.currentTimeMillis();
  long expiration = now + durationMillis;
 

@@ -577,6 +577,85 @@ check(
     os.path.exists(os.path.join(ROOT, 'ci', 'test_bid_quantity.js')),
 )
 
+# --------------------------------------------------------------------------
+# H7: a custom item switched off stays off, and stops being tradeable
+#
+# The flag used to live only in the database: loadFromDatabase skipped every
+# enabled = 0 row, so a restart made the item absent from memory and the next
+# scan registered it as new with enabled = 1. Nothing on a trade path read the
+# flag, so even an in-memory toggle left the item buyable at its cached price.
+# The registry is the authority; the price map is a cache of it.
+# --------------------------------------------------------------------------
+registry = strip_comments(read('src/main/java/com/aureleconomy/scanner/CustomItemRegistry.java'))
+load_block = registry[registry.index('public void loadFromDatabase'):
+                     registry.index('public void saveToDatabase')]
+upsert_block = registry[registry.index('public void upsert'):registry.index('public void clear')]
+check(
+    'H7 the registry loads disabled rows too',
+    '"SELECT * FROM custom_items"' in load_block and 'WHERE enabled = 1' not in registry,
+    'skipping them makes the next scan register the item as new and reset the flag',
+)
+check(
+    'H7 a loaded item keeps its stored flag',
+    '.enabled(rs.getBoolean("enabled"))' in load_block,
+    'forcing enabled(true) is the reset this fix removes',
+)
+check(
+    'H7 a reload prices enabled items and drops disabled ones',
+    'marketManager.addCustomMarketItem(canonicalId, item)' in load_block
+    and 'marketManager.removeCustomMarketItem(canonicalId)' in load_block,
+    'register() is not called for a loaded item, so a restart used to drop its price',
+)
+check(
+    'H7 a toggle reaches the market',
+    'marketManager.addCustomMarketItem(canonicalId, item)' in upsert_block
+    and 'marketManager.removeCustomMarketItem(canonicalId)' in upsert_block,
+    'without this the disabled item keeps its last price',
+)
+check(
+    'H7 the registry exposes the shared trade guard',
+    'public boolean isDisabledCustomItem(ItemStack item)' in registry,
+)
+
+market_mgr = strip_comments(read('src/main/java/com/aureleconomy/market/MarketManager.java'))
+check(
+    'H7 the market never prices a disabled item',
+    'if (!customItem.isEnabled())' in market_mgr,
+)
+check(
+    'H7 the market can drop a custom item',
+    'public void removeCustomMarketItem(String canonicalId)' in market_mgr,
+)
+
+sell_gui = strip_comments(read('src/main/java/com/aureleconomy/gui/SellGUI.java'))
+check(
+    'H7 the sell GUI skips a disabled custom item',
+    sell_gui.count('if (isDisabledCustomItem(item))') >= 2,
+    'the preview and the payout loop both have to skip it',
+)
+listing_block = auction_mgr[auction_mgr.index('Consumer<com.aureleconomy.auction.AuctionItem> onListed) {'):
+                            auction_mgr.index('long now = System.currentTimeMillis();')]
+check(
+    'H7 the auction house refuses a disabled item',
+    'registry.isDisabledCustomItem(item)' in listing_block
+    and 'runOnMainThread(null, onListed)' in listing_block,
+    'the caller refunds the fee when the callback is null',
+)
+check(
+    'H7 the web purchase path refuses a disabled item',
+    'This item is disabled' in web_exec,
+)
+snapshot = strip_comments(read('src/main/java/com/aureleconomy/webstore/WebSnapshot.java'))
+check(
+    'H7 the dashboard shop hides a disabled item',
+    'if (!cmi.isEnabled())' in snapshot,
+)
+check(
+    'H7 the toggle test covers persistence and both trade paths',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'scanner', 'CustomItemToggleTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

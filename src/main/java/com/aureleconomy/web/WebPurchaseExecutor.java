@@ -149,6 +149,17 @@ public class WebPurchaseExecutor {
         String itemKey = purchase.itemKey();
         int amount = purchase.amount();
 
+        // A disabled custom item is not for sale, whatever its cached price
+        // says. The registry is the authority and the price map is a cache of
+        // it, so the check belongs here rather than in the price lookup (H7).
+        com.aureleconomy.scanner.CustomItemRegistry registry = plugin.getCustomItemRegistry();
+        if (registry != null) {
+            com.aureleconomy.scanner.CustomMarketItem custom = registry.getById(itemKey);
+            if (custom != null && !custom.isEnabled()) {
+                return fail(result, "This item is disabled");
+            }
+        }
+
         // Resolve through the entry cache rather than guessing a material from the key.
             // Every market item, plain or named, is cached under the same key its price
             // is stored under, so a key that misses the cache has no price either. A

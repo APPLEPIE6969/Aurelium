@@ -207,6 +207,19 @@ public class CustomItemRegistry {
  if (item.getPluginNativeId() != null) pluginNativeIdToId.put(item.getPluginNativeId(), canonicalId);
  itemHashToId.put(computeItemHash(item.getItemStack()), canonicalId);
  }
+
+ // The toggle has to reach the trade paths, not just the registry: a
+ // disabled item must stop being priced, or it stays buyable at its last
+ // price until the next restart (H7). A null plugin is a registry built in a
+ // test without a server; there is no market to notify.
+ MarketManager marketManager = plugin != null ? plugin.getMarketManager() : null;
+ if (marketManager != null) {
+ if (item.isEnabled()) {
+ marketManager.addCustomMarketItem(canonicalId, item);
+ } else {
+ marketManager.removeCustomMarketItem(canonicalId);
+ }
+ }
  }
 
  /**
@@ -301,12 +314,35 @@ public class CustomItemRegistry {
  }
 
  /**
+ * True when {@code item} resolves to a custom item the admin has switched
+ * off. Trade paths call this instead of trusting a cached price: the price
+ * map is a cache of the registry, and a stale entry is exactly how a
+ * disabled item stayed tradeable (H7).
+ */
+ public boolean isDisabledCustomItem(ItemStack item) {
+ if (item == null) {
+ return false;
+ }
+ Optional<String> id = resolveItemId(item);
+ if (id.isEmpty()) {
+ return false;
+ }
+ CustomMarketItem custom = itemsById.get(id.get());
+ return custom != null && !custom.isEnabled();
+ }
+
+ /**
  * Load previously discovered items from database.
  */
  public void loadFromDatabase(DatabaseManager dbManager) {
+ // Every row, enabled or not. Filtering on enabled = 1 meant a disabled
+ // item was absent from the registry after a restart, so the scanner's
+ // next pass registered it as a brand-new item and wrote enabled = 1 back
+ // over the admin's choice (H7). The flag only means something if it
+ // survives the reload.
  try (Connection conn = dbManager.getConnection();
         PreparedStatement ps = conn.prepareStatement(
- "SELECT * FROM custom_items WHERE enabled = 1")) {
+ "SELECT * FROM custom_items")) {
  ResultSet rs = ps.executeQuery();
  int loaded = 0;
  while (rs.next()) {
@@ -344,16 +380,28 @@ public class CustomItemRegistry {
  .category(category != null ? category : "CUSTOM_ITEMS")
  .buyPrice(buyPrice >= 0 ? BigDecimal.valueOf(buyPrice) : BigDecimal.valueOf(-1))
  .sellPrice(sellPrice >= 0 ? BigDecimal.valueOf(sellPrice) : BigDecimal.valueOf(-1))
- .enabled(true)
+ .enabled(rs.getBoolean("enabled"))
  .build();
 
- // Directly insert into maps (bypass register to avoid re-adding to market)
+ // Directly insert into maps, bypassing register's dedup work. The market
+ // is told explicitly below: bypassing register used to mean a restart
+ // dropped every custom price until the item was rediscovered, and a
+ // rediscovery hit alreadyExists and never re-added it.
  itemsById.put(canonicalId, item);
  if (pdcKey != null) pdcKeyToId.put(pdcKey, canonicalId);
  if (modelDataKey != null) modelDataToId.put(modelDataKey, canonicalId);
  if (loreHash != null) loreHashToId.put(loreHash, canonicalId);
  if (pluginNativeId != null) pluginNativeIdToId.put(pluginNativeId, canonicalId);
  itemHashToId.put(computeItemHash(itemStack), canonicalId);
+
+ MarketManager marketManager = plugin != null ? plugin.getMarketManager() : null;
+ if (marketManager != null) {
+ if (item.isEnabled()) {
+ marketManager.addCustomMarketItem(canonicalId, item);
+ } else {
+ marketManager.removeCustomMarketItem(canonicalId);
+ }
+ }
 
  // Restore discovery methods
  Set<DiscoveryMethod> methods = ConcurrentHashMap.newKeySet();

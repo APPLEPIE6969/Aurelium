@@ -174,6 +174,9 @@ public class SellGUI extends GUIHolder {
         for (int i = 0; i < 45; i++) {
             ItemStack item = inventory.getItem(i);
             if (item != null && item.getType() != Material.AIR) {
+                if (isDisabledCustomItem(item)) {
+                    continue;
+                }
                 String key = getItemKey(item);
                 BigDecimal price = plugin.getMarketManager().getSellPrice(key);
                 String currency = plugin.getMarketManager().getCurrency(key);
@@ -219,6 +222,9 @@ public class SellGUI extends GUIHolder {
             for (int i = 0; i < 45; i++) {
                 ItemStack item = inventory.getItem(i);
                 if (item != null && item.getType() != Material.AIR) {
+                    if (isDisabledCustomItem(item)) {
+                        continue;
+                    }
                     String key = getItemKey(item);
                     BigDecimal price = plugin.getMarketManager().getSellPrice(key);
                     if (price.compareTo(BigDecimal.ZERO) > 0) {
@@ -246,6 +252,16 @@ public class SellGUI extends GUIHolder {
         }
 
         player.closeInventory();
+    }
+
+    /**
+     * A custom item switched off in /customitems is not sellable, even when
+     * its material still has a price. A material-only key cannot tell the
+     * custom stack apart, so the registry resolves it first (H7).
+     */
+    private boolean isDisabledCustomItem(ItemStack item) {
+        return plugin.getCustomItemRegistry() != null
+                && plugin.getCustomItemRegistry().isDisabledCustomItem(item);
     }
 
     public void handleClose(InventoryCloseEvent event) {

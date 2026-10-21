@@ -317,6 +317,11 @@ public class WebSnapshot {
         StringBuilder json = new StringBuilder("[");
         int i = 0;
         for (CustomMarketItem cmi : registry.getAllItems()) {
+            // A disabled item is not for sale, so it does not belong in the
+            // shop window either (H7).
+            if (!cmi.isEnabled()) {
+                continue;
+            }
             if (i++ > 0) {
                 json.append(",");
             }
