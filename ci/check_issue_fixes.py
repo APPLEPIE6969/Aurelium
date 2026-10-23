@@ -696,6 +696,69 @@ check(
                                 'listeners', 'SpawnerListenerTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# H9: a dashboard purchase is claimed in the database before it runs, so a
+# replayed ID is refused after a restart instead of being charged twice. The
+# cloud path also grew the guards the local web path already had.
+# --------------------------------------------------------------------------
+cloud_src = strip_comments(read('src/main/java/com/aureleconomy/web/CloudSyncManager.java'))
+store_src = strip_comments(read('src/main/java/com/aureleconomy/web/ProcessedPurchaseStore.java'))
+purchase_schema = strip_comments(read(
+    'src/main/java/com/aureleconomy/database/schema/ProcessedPurchaseSchema.java'))
+
+check(
+    'H9 the purchase is claimed before anything executes',
+    'if (!purchaseStore.claim(purchaseId))' in cloud_src
+    and cloud_src.index('purchaseStore.claim(purchaseId)')
+    < cloud_src.index('executeMarketWebBuy(player'),
+    'claiming after delivery is not deduplication',
+)
+check(
+    'H9 the ten-minute in-memory purchase map is gone',
+    'processedPurchases' not in cloud_src and 'PURCHASE_EXPIRY_MS' not in cloud_src,
+    'a map that empties on restart is the replay window',
+)
+check(
+    'H9 the cloud market path checks the blacklist',
+    'isBlacklisted(material)' in cloud_src,
+)
+check(
+    'H9 the cloud market path caps the amount at one stack',
+    'amount < 1 || amount > 64' in cloud_src,
+)
+check(
+    'H9 a purchase with no id is refused instead of executed unclaimed',
+    "asString(purchase.get(\"id\"))" in cloud_src
+    and 'Ignored a dashboard purchase with no id' in cloud_src,
+)
+check(
+    'H9 the recorded outcome is sent and retried after a failed confirmation',
+    'purchaseStore.markReady(' in cloud_src
+    and 'purchaseStore.markConfirmed(' in cloud_src
+    and 'purchaseStore.pendingConfirmations()' in cloud_src,
+)
+check(
+    'H9 the claim is a primary key, so the database enforces it',
+    '"purchase_id "' in purchase_schema and 'PRIMARY KEY' in purchase_schema,
+)
+check(
+    'H9 the claim table ships in schema v8',
+    'LATEST_SCHEMA_VERSION = 8' in migration
+    and 'case 8:' in migration
+    and 'new ProcessedPurchaseSchema(' in migration.split('case 8:', 1)[1],
+    'the table has to be created by the migration, not only listed for fresh installs',
+)
+check(
+    'H9 the dedup test covers replay, restart, blacklist and malformed entries',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'web', 'CloudPurchaseDedupTest.java')),
+)
+check(
+    'H9 the store test covers the persisted claim and its outcome',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'web', 'ProcessedPurchaseStoreTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

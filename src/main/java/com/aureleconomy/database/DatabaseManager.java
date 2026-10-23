@@ -25,6 +25,7 @@ import com.aureleconomy.database.schema.OfflineEarningSchema;
 import com.aureleconomy.database.schema.PlayerBalanceSchema;
 import com.aureleconomy.database.schema.PlayerSchema;
 import com.aureleconomy.database.schema.PriceHistorySchema;
+import com.aureleconomy.database.schema.ProcessedPurchaseSchema;
 import com.aureleconomy.database.schema.Schema;
 import com.aureleconomy.database.schema.TradeVolumeSchema;
 import com.aureleconomy.database.types.SQLTypes;
@@ -37,7 +38,7 @@ import com.aureleconomy.database.types.SQLTypes;
  */
 public class DatabaseManager {
 
-    private static final int LATEST_SCHEMA_VERSION = 7;
+    private static final int LATEST_SCHEMA_VERSION = 8;
 
     private final AurelEconomy plugin;
     private final DatabaseSettings settings;
@@ -133,7 +134,8 @@ public class DatabaseManager {
                     new PriceHistorySchema(t),
                     new TradeVolumeSchema(t),
                     new LedgerSchema(t),
-                    new CustomItemSchema(t));
+                    new CustomItemSchema(t),
+                    new ProcessedPurchaseSchema(t));
 
             createTables();
             migrateLegacyBalances();
@@ -361,6 +363,13 @@ public class DatabaseManager {
                 // Every join asks for this player's unclaimed earnings (M14/L4).
                 addIndexIfNotExists(conn, "offline_earnings", "idx_offline_earnings_uuid", "uuid");
                 retypeMoneyColumns(conn);
+                break;
+            case 8:
+                // H9: a purchase ID the dashboard already sent has to be
+                // answered from the database, not from a ten-minute in-memory
+                // map. The row is claimed before the purchase executes, so a
+                // restart cannot replay it.
+                execute(conn, new ProcessedPurchaseSchema(database.getTypes()).create());
                 break;
         }
     }

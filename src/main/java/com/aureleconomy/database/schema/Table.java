@@ -11,7 +11,8 @@ public enum Table {
     PRICE_HISTORY("price_history"),
     TRADE_VOLUME("trade_volume"),
     TRANSACTION_LEDGER("transaction_ledger"),
-    CUSTOM_ITEMS("custom_items");
+    CUSTOM_ITEMS("custom_items"),
+    PROCESSED_PURCHASES("processed_purchases");
 
     private final String table;
 

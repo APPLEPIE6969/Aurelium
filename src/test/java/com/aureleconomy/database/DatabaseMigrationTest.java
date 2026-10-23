@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class DatabaseMigrationTest {
 
-    private static final int LATEST = 7;
+    private static final int LATEST = 8;
 
     @TempDir
     Path tempDir;
@@ -190,6 +190,10 @@ class DatabaseMigrationTest {
                 stmt.execute("CREATE INDEX idx_transaction_ledger_actor ON transaction_ledger (actor_uuid, ts)");
                 stmt.execute("CREATE INDEX idx_offline_earnings_uuid ON offline_earnings (uuid)");
             }
+            if (schemaVersion >= 8) {
+                stmt.execute(new com.aureleconomy.database.schema.ProcessedPurchaseSchema(
+                        new SQLiteTypes()).create());
+            }
 
             stmt.execute("CREATE TABLE database_info (version INTEGER PRIMARY KEY)");
             stmt.execute("INSERT INTO database_info VALUES (" + schemaVersion + ")");
@@ -248,6 +252,8 @@ class DatabaseMigrationTest {
                     "v7 did not add the ledger index");
             assertTrue(indexes.contains("idx_offline_earnings_uuid"),
                     "v7 did not add the offline_earnings uuid index");
+            assertTrue(tables.contains("processed_purchases"),
+                    "v8 did not create the processed_purchases table");
 
             // And the data is still usable, not just present.
             try (Statement stmt = conn.createStatement();

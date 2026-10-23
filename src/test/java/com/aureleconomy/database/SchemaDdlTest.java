@@ -47,7 +47,8 @@ class SchemaDdlTest {
                 new PriceHistorySchema(t),
         new TradeVolumeSchema(t),
                 new LedgerSchema(t),
-                new CustomItemSchema(t));
+                new CustomItemSchema(t),
+                new ProcessedPurchaseSchema(t));
     }
 
     private Connection openSqlite(String dbName) throws SQLException {
@@ -280,7 +281,7 @@ class SchemaDdlTest {
             try (Statement stmt = conn.createStatement();
                     ResultSet rs = stmt.executeQuery("SELECT version FROM database_info")) {
                 assertTrue(rs.next());
-                assertEquals(7, rs.getInt("version"));
+                assertEquals(8, rs.getInt("version"));
             }
         }
         manager.close();
@@ -337,7 +338,7 @@ class SchemaDdlTest {
 
             try (ResultSet rs = stmt.executeQuery("SELECT version FROM database_info")) {
                 assertTrue(rs.next());
-                assertEquals(7, rs.getInt("version"));
+                assertEquals(8, rs.getInt("version"));
             }
         }
         manager.close();

@@ -67,6 +67,7 @@ public class CloudSyncManager {
     private String prevApiKey;
     private final String registrationSecret;
     private final int syncInterval;
+    private final ProcessedPurchaseStore purchaseStore;
 
     private BukkitTask syncTask;
     private BukkitTask purchaseTask;
@@ -105,6 +106,7 @@ public class CloudSyncManager {
         this.apiKey = key;
         this.prevApiKey = prevKey;
         this.registrationSecret = regSecret;
+        this.purchaseStore = new ProcessedPurchaseStore(plugin);
     }
 
     /**
@@ -232,6 +234,32 @@ public class CloudSyncManager {
                 plugin.getComponentLogger().warn("Price history snapshot failed: " + e.getMessage());
             }
         }, 200L, 12000L);
+
+        reconcileConfirmations();
+    }
+
+    /**
+     * H9: a confirmation that never reached the dashboard leaves its row READY.
+     * The purchase itself already happened, so it must not be executed again:
+     * only the answer is re-sent.
+     */
+    private void reconcileConfirmations() {
+        try {
+            purchaseStore.prune();
+            List<ProcessedPurchaseStore.Confirmation> pending = purchaseStore.pendingConfirmations();
+            if (pending.isEmpty()) {
+                return;
+            }
+            plugin.getComponentLogger().info("Retrying " + pending.size()
+                    + " purchase confirmation(s) that did not reach the dashboard.");
+            for (ProcessedPurchaseStore.Confirmation confirmation : pending) {
+                CompletableFuture.runAsync(() -> deliverConfirmation(
+                        confirmation.purchaseId(), confirmation.success(),
+                        confirmation.newBalance(), confirmation.spent()));
+            }
+        } catch (RuntimeException e) {
+            plugin.getComponentLogger().warn("Could not reconcile web purchases: " + e.getMessage());
+        }
     }
 
     private void attemptRegistration(int attempt) {
@@ -773,45 +801,68 @@ public class CloudSyncManager {
         return Collections.emptyList();
     }
 
-    /** Time-based expiry for processed purchase IDs. Key = purchaseId, Value = timestamp. */
-    private final Map<String, Long> processedPurchases = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final long PURCHASE_EXPIRY_MS = 600_000L; // 10 minutes
-
+    /**
+     * H9: the database claim is the dedup, and it is taken before any money
+     * moves. The ten-minute in-memory map this replaced forgot everything on
+     * restart, so a purchase the dashboard re-sent after a restart charged
+     * twice.
+     */
     private void executePurchases(List<Map<String, Object>> pending) {
-        long now = System.currentTimeMillis();
-
-        // Purge expired entries
-        var iter = processedPurchases.entrySet().iterator();
-        while (iter.hasNext()) {
-            if (now - iter.next().getValue() > PURCHASE_EXPIRY_MS) {
-                iter.remove();
-            }
-        }
-
         for (Map<String, Object> purchase : pending) {
-            String purchaseId = (String) purchase.get("id");
-            if (purchaseId != null && processedPurchases.containsKey(purchaseId)) continue;
-
-            String playerUuid = (String) purchase.get("playerUuid");
-            String type = (String) purchase.getOrDefault("type", "buy");
-
-            Player player = Bukkit.getPlayer(UUID.fromString(playerUuid));
-            if (player == null || !player.isOnline()) {
-                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Player offline");
+            String purchaseId = asString(purchase.get("id"));
+            // A purchase with no ID cannot be deduped, so it cannot be executed.
+            if (purchaseId == null || purchaseId.isBlank()) {
+                plugin.getComponentLogger().warn("Ignored a dashboard purchase with no id.");
+                continue;
+            }
+            if (!purchaseStore.claim(purchaseId)) {
+                // A replay, or a row claimed before a restart. Both mean this
+                // server has already dealt with this purchase.
                 continue;
             }
 
-            processedPurchases.put(purchaseId, now);
+            // Every exit path below confirms the purchase, so the dashboard is
+            // never left waiting on a claim this server took.
+            try {
+                UUID uuid = parseUuid(asString(purchase.get("playerUuid")));
+                Player player = uuid == null ? null : Bukkit.getPlayer(uuid);
+                if (player == null || !player.isOnline()) {
+                    confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Player offline");
+                    continue;
+                }
 
-            if ("bin".equals(type)) {
-                executeAuctionWebBinPurchase(player, purchase, purchaseId);
-            } else if ("bid".equals(type)) {
-                executeAuctionWebBid(player, purchase, purchaseId);
-            } else if ("fill_order".equals(type)) {
-                executeOrderWebFill(player, purchase, purchaseId);
-            } else {
-                executeMarketWebBuy(player, purchase, purchaseId);
+                String type = purchase.get("type") instanceof String s ? s : "buy";
+
+                if ("bin".equals(type)) {
+                    executeAuctionWebBinPurchase(player, purchase, purchaseId);
+                } else if ("bid".equals(type)) {
+                    executeAuctionWebBid(player, purchase, purchaseId);
+                } else if ("fill_order".equals(type)) {
+                    executeOrderWebFill(player, purchase, purchaseId);
+                } else {
+                    executeMarketWebBuy(player, purchase, purchaseId);
+                }
+            } catch (RuntimeException e) {
+                // One malformed entry must not drop the rest of the batch.
+                plugin.getComponentLogger().warn("Web purchase " + purchaseId
+                        + " failed: " + e.getMessage());
+                confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Purchase failed");
             }
+        }
+    }
+
+    private static String asString(Object value) {
+        return value instanceof String s ? s : null;
+    }
+
+    private static UUID parseUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 
@@ -973,8 +1024,18 @@ public class CloudSyncManager {
     }
 
     private void executeMarketWebBuy(Player player, Map<String, Object> purchase, String purchaseId) {
-        String itemKey = (String) purchase.get("item");
+        String itemKey = asString(purchase.get("item"));
+        // H9: the cloud path never passes through the dashboard's HTTP handler,
+        // so the guards the local web path relies on have to be repeated here.
+        if (itemKey == null || itemKey.isBlank()) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Item not specified");
+            return;
+        }
         int amount = parseFieldInt(purchase, "amount", 1);
+        if (amount < 1 || amount > 64) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Invalid amount");
+            return;
+        }
 
         BigDecimal buyPrice;
         String currency;
@@ -994,10 +1055,16 @@ public class CloudSyncManager {
             return;
             }
             material = entry.material;
+            // A disabled or blacklisted item is not for sale, whatever the
+            // cached price says. Same check as the local web path (H7).
+            if (plugin.getMarketManager().isBlacklisted(material)) {
+            confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Item not for sale");
+            return;
+            }
             buyPrice = plugin.getMarketManager().getBuyPrice(itemKey);
             currency = plugin.getMarketManager().getCurrency(itemKey);
 
-        if (buyPrice.compareTo(BigDecimal.ZERO) <= 0) {
+        if (buyPrice == null || buyPrice.compareTo(BigDecimal.ZERO) <= 0) {
             confirmPurchase(purchaseId, false, BigDecimal.ZERO, "Item not for sale");
             return;
         }
@@ -1089,20 +1156,36 @@ public class CloudSyncManager {
         confirmPurchase(purchaseId, true, newBalance, formatted);
     }
 
-    private void confirmPurchase(String purchaseId, boolean success, BigDecimal newBalance, String spent) {
-        CompletableFuture.runAsync(() -> {
-            try {
-                StringBuilder json = new StringBuilder();
-                json.append("{\"purchaseId\":\"").append(escJson(purchaseId)).append("\"")
-                        .append(",\"serverId\":\"").append(escJson(serverId)).append("\"")
-                        .append(",\"success\":").append(success)
-                        .append(",\"newBalance\":").append(newBalance != null ? newBalance.doubleValue() : 0)
-                        .append(",\"spent\":\"").append(escJson(spent)).append("\"}");
-                postJson("/api/confirm-purchase", json.toString());
-            } catch (Exception e) {
-                plugin.getComponentLogger().warn("Failed to confirm purchase: " + e.getMessage());
-            }
-        });
+    /**
+     * Records the outcome, then tells the dashboard. Only the first outcome
+     * for a purchase is sent: a later failure path after a successful sale
+     * would otherwise report a second, contradictory result.
+     */
+    void confirmPurchase(String purchaseId, boolean success, BigDecimal newBalance, String spent) {
+        if (!purchaseStore.markReady(purchaseId, success, newBalance, spent)) {
+            return;
+        }
+        CompletableFuture.runAsync(() -> deliverConfirmation(purchaseId, success, newBalance, spent));
+    }
+
+    /**
+     * Sends one confirmation. A failure leaves the row READY, so the next
+     * {@link #start()} retries it instead of losing the answer.
+     */
+    void deliverConfirmation(String purchaseId, boolean success, BigDecimal newBalance, String spent) {
+        try {
+            StringBuilder json = new StringBuilder();
+            json.append("{\"purchaseId\":\"").append(escJson(purchaseId)).append("\"")
+                    .append(",\"serverId\":\"").append(escJson(serverId)).append("\"")
+                    .append(",\"success\":").append(success)
+                    .append(",\"newBalance\":").append(newBalance != null ? newBalance.doubleValue() : 0)
+                    .append(",\"spent\":\"").append(escJson(spent)).append("\"}");
+            postJson("/api/confirm-purchase", json.toString());
+            purchaseStore.markConfirmed(purchaseId);
+        } catch (Exception e) {
+            plugin.getComponentLogger().warn("Failed to confirm purchase " + purchaseId
+                    + ": " + e.getMessage());
+        }
     }
 
     // ── HTTP Helpers ─────────────────────────────────────────────────
