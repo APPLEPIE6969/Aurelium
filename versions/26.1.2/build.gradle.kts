@@ -20,8 +20,8 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.74-stable")
 
     implementation("com.zaxxer:HikariCP:5.1.0")
-    implementation("com.mysql:mysql-connector-j:8.3.0")
-    implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.mysql:mysql-connector-j:8.4.0")
+    implementation("com.google.code.gson:gson:2.14.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testImplementation("org.mockito:mockito-core:5.23.0")
