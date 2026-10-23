@@ -23,17 +23,17 @@ dependencies {
     implementation("com.mysql:mysql-connector-j:8.3.0")
     implementation("com.google.code.gson:gson:2.10.1")
 
-    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    testImplementation("org.mockito:mockito-core:5.23.0")
-    testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
+    testImplementation("org.mockito:mockito-core:5.24.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.24.0")
     testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     testImplementation("net.kyori:adventure-api:4.17.0")
     testImplementation("com.github.MilkBowl:VaultAPI:1.7") {
         exclude(group = "org.bukkit", module = "bukkit")
     }
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testRuntimeOnly("org.xerial:sqlite-jdbc:3.45.3.0")
-    testRuntimeOnly("net.bytebuddy:byte-buddy-agent:1.17.7")
+    testRuntimeOnly("org.xerial:sqlite-jdbc:3.53.4.0")
+    testRuntimeOnly("net.bytebuddy:byte-buddy-agent:1.18.15")
 }
 
 sourceSets {

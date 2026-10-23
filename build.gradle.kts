@@ -40,12 +40,12 @@ subprojects {
             implementation("com.google.code.gson:gson:2.10.1")
 
             // Test dependencies
-            testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-            testImplementation("org.mockito:mockito-core:5.23.0")
-            testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
+            testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
+            testImplementation("org.mockito:mockito-core:5.24.0")
+            testImplementation("org.mockito:mockito-junit-jupiter:5.24.0")
             testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-            testRuntimeOnly("org.xerial:sqlite-jdbc:3.45.3.0")
-            testRuntimeOnly("net.bytebuddy:byte-buddy-agent:1.17.7")
+            testRuntimeOnly("org.xerial:sqlite-jdbc:3.53.4.0")
+            testRuntimeOnly("net.bytebuddy:byte-buddy-agent:1.18.15")
         }
 
         tasks.test {
