@@ -1,19 +1,67 @@
+# Dependabot version updates for Aurelium.
+#
+# Scope is deliberately narrow:
+#
+#  * The Paper API version is a build target, not a dependency to track. Each
+#    version module compiles against the Paper API for the Minecraft line it
+#    ships, so an automatic bump would silently change what that module targets.
+#  * The ci/mock-* projects are separate Gradle builds, each pinned to the API
+#    of the plugin it mocks. They are not part of the root build and are not
+#    scanned here.
+#  * The Mineflayer scripts under .github/scripts/ are pinned to the Minecraft
+#    protocol the live suites drive. Bumping them is a deliberate change.
+#
+# Shaded libraries are grouped into one PR, and majors are ignored so a new
+# major is a reviewed decision rather than an automatic PR. The test toolchain
+# is grouped separately, so a failing PR points at one side.
+#
+# The live-server matrix runs on every pull request. Grouping is what keeps a
+# month of updates to one or two runs instead of one run per dependency.
 version: 2
+
 updates:
- - package-ecosystem: "gradle"
- directory: "/"
- schedule:
- interval: "weekly"
- open-pull-requests-limit: 5
- labels:
- - "dependencies"
- - "automated"
- - package-ecosystem: "github-actions"
- directory: "/"
- schedule:
- interval: "weekly"
- open-pull-requests-limit: 5
- labels:
- - "dependencies"
- - "ci"
- - "automated"
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    groups:
+      test-toolchain:
+        patterns:
+          - "org.junit*"
+          - "org.mockito*"
+          - "net.bytebuddy*"
+          - "org.xerial*"
+      shaded-runtime:
+        patterns:
+          - "com.zaxxer:HikariCP"
+          - "com.mysql:mysql-connector-j"
+          - "com.google.code.gson:gson"
+    ignore:
+      - dependency-name: "io.papermc.paper:paper-api"
+      - dependency-name: "com.github.MilkBowl:VaultAPI"
+      - dependency-name: "com.zaxxer:HikariCP"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.mysql:mysql-connector-j"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.google.code.gson:gson"
+        update-types: ["version-update:semver-major"]
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"

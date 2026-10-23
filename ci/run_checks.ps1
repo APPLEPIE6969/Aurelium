@@ -50,6 +50,7 @@ Write-Host '== static contracts ==' -ForegroundColor Cyan
 # in CI, which is how the spawner price key guard went stale against the web
 # purchase paths while still passing locally.
 $contracts = @(
+    'check_dependabot.py',
     'check_web_ui.py',
     'check_css_classes.py',
     'check_issue_fixes.py',
