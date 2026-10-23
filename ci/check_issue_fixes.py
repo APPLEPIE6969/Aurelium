@@ -759,6 +759,38 @@ check(
                                 'web', 'ProcessedPurchaseStoreTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# H6: cancelling an order claims it in the database before the refund. The
+# refund used to be paid first and the status written asynchronously, so a fill
+# that claimed the still-ACTIVE row in that window was paid out of refunded
+# escrow.
+# --------------------------------------------------------------------------
+order_src = strip_comments(read('src/main/java/com/aureleconomy/orders/OrderManager.java'))
+cancel_src = order_src.split('public void cancelOrder', 1)[1].split('public void fillOrder', 1)[0]
+claim_src = order_src.split('private int claimCancellation', 1)[1]
+check(
+    'H6 the cancellation claims the database row before the refund',
+    "UPDATE buy_orders SET status = 'CANCELLED' WHERE id = ? AND status = 'ACTIVE'" in claim_src
+    and cancel_src.index('claimCancellation(orderId)')
+    < cancel_src.index('LedgerReason.ORDER_REFUND'),
+    'refunding before the claim is the race',
+)
+check(
+    'H6 the refund uses the filled count the database returned',
+    'int filled = claimCancellation(orderId);' in cancel_src
+    and 'getAmountRequested() - filled' in cancel_src,
+    'the in-memory copy is short when a fill already committed',
+)
+check(
+    'H6 the async status write that lost the race is gone',
+    'updateOrderStatusInDB' not in order_src,
+)
+check(
+    'H6 the race test covers stale memory, a held claim and real threads',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'orders', 'OrderCancelFillRaceTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

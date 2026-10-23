@@ -168,15 +168,30 @@ public class OrderManager {
             return;
         }
 
+        // H6: the cancellation is claimed in the database before the refund.
+        // fillOrder claims the same row with its own conditional UPDATE, so the
+        // two cannot both pay out of one escrow. The filled count comes back
+        // from the row because a fill may have committed already, and the
+        // in-memory copy would then be short.
+        int filled = claimCancellation(orderId);
+        if (filled < 0) {
+            player.sendMessage(Component.text(
+                    "That order was filled or cancelled before this request could claim it.",
+                    NamedTextColor.RED));
+            refreshOrderMemory(orderId);
+            return;
+        }
+
+        order.setAmountFilled(filled);
         order.setStatus("CANCELLED");
         activeOrders.remove(orderId);
 
-        int remainingItems = order.getAmountRemaining();
+        int remainingItems = Math.max(0, order.getAmountRequested() - filled);
         BigDecimal refundAmount = order.getPricePerPiece().multiply(BigDecimal.valueOf(remainingItems));
-        plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(player.getUniqueId()), refundAmount,
-                order.getCurrency(), LedgerReason.ORDER_REFUND, String.valueOf(orderId), null);
-
-        updateOrderStatusInDB(orderId, "CANCELLED", order.getAmountFilled());
+        if (remainingItems > 0) {
+            plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(player.getUniqueId()), refundAmount,
+                    order.getCurrency(), LedgerReason.ORDER_REFUND, String.valueOf(orderId), null);
+        }
 
         player.sendMessage(
                 Component.text(
@@ -184,6 +199,46 @@ public class OrderManager {
                                 + plugin.getEconomyManager().getFormattedWithSymbol(refundAmount, order.getCurrency())
                                 + ".",
                         NamedTextColor.GREEN));
+    }
+
+    /**
+     * H6: moves the order from ACTIVE to CANCELLED in the database and returns
+     * the filled count at that moment, or -1 when the order was no longer
+     * ACTIVE, which means a fill or an earlier cancellation already owns it.
+     *
+     * <p>This used to be the other way round: the refund was paid from the
+     * in-memory order, and the status update followed asynchronously. A fill
+     * that claimed the still-ACTIVE row in that window was paid out of escrow
+     * that had already gone back to the buyer.
+     */
+    private int claimCancellation(int orderId) {
+        synchronized (plugin.getDatabaseManager().getWriteLock()) {
+            try (Connection conn = plugin.getDatabaseManager().getConnection()) {
+                if (conn == null) {
+                    return -1;
+                }
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE buy_orders SET status = 'CANCELLED' WHERE id = ? AND status = 'ACTIVE'")) {
+                    ps.setInt(1, orderId);
+                    if (ps.executeUpdate() != 1) {
+                        return -1;
+                    }
+                }
+                // The claim itself prevents further fills, so this count cannot
+                // move between the two statements.
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT amount_filled FROM buy_orders WHERE id = ?")) {
+                    ps.setInt(1, orderId);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        return rs.next() ? rs.getInt("amount_filled") : -1;
+                    }
+                }
+            } catch (SQLException e) {
+                plugin.getComponentLogger().error(
+                        "Could not claim the cancellation of buy order " + orderId, e);
+                return -1;
+            }
+        }
     }
 
     public void fillOrder(Player seller, int orderId, int amountToSell) {
@@ -380,21 +435,6 @@ public class OrderManager {
                 ps.executeUpdate();
             } catch (SQLException e) {
                 plugin.getComponentLogger().error("Failed to record offline order notification", e);
-            }
-        });
-    }
-
-    private void updateOrderStatusInDB(int orderId, String status, int amountFilled) {
-        String sql = "UPDATE buy_orders SET status = ?, amount_filled = ? WHERE id = ?";
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            try (Connection conn = plugin.getDatabaseManager().getConnection();
-                    PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, status);
-                ps.setInt(2, amountFilled);
-                ps.setInt(3, orderId);
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                plugin.getComponentLogger().error("Failed to update order status", e);
             }
         });
     }
