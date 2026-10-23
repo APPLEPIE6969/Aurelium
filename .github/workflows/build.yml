@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Static contract checks
         run: |
           # Source-level contracts that need no server. These guard wiring that
@@ -95,7 +95,7 @@ jobs:
             echo "=== ci/test_mysql_binding.py ==="
             python3 ci/test_mysql_binding.py
       - name: Set up JDK ${{ matrix.jdk }}
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: ${{ matrix.jdk }}
           distribution: "temurin"
@@ -106,7 +106,7 @@ jobs:
           set -o pipefail
           ./gradlew ${{ matrix.gradle_task }} 2>&1 | tee build-${{ matrix.version }}.log
       - name: Upload JAR
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: versions/${{ matrix.version }}/build/libs/*.jar
@@ -129,14 +129,14 @@ jobs:
           fi
       - name: "Upload paste.rs URL"
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: paste-url-${{ matrix.artifact_name }}
           path: paste-url.txt
           retention-days: 1
       - name: Upload build log
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ matrix.version }}-log
           path: build-${{ matrix.version }}.log
@@ -147,9 +147,9 @@ jobs:
     timeout-minutes: 20
     needs: build
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -257,7 +257,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: config-migration-log
           path: logs/latest.log
@@ -268,9 +268,9 @@ jobs:
     timeout-minutes: 20
     needs: build
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -376,7 +376,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: config-migration-152-to-153-log
           path: logs/latest.log
@@ -387,9 +387,9 @@ jobs:
     timeout-minutes: 20
     needs: build
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -484,7 +484,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: vault-autoinstall-log
           path: logs/latest.log
@@ -495,9 +495,9 @@ jobs:
     timeout-minutes: 60
     needs: build
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -633,7 +633,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-ingame-log
           path: logs/latest.log
@@ -660,9 +660,9 @@ jobs:
             fi
             sleep 2
           done
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -755,7 +755,7 @@ jobs:
           exit $RC
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mysql-test-log
           path: logs/latest.log
@@ -782,9 +782,9 @@ jobs:
             fi
             sleep 2
           done
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -872,7 +872,7 @@ jobs:
           exit $RC
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: scanner-mysql-log
           path: logs/latest.log
@@ -883,9 +883,9 @@ jobs:
     timeout-minutes: 20
     needs: build
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -1049,7 +1049,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: cloud-registration-log
           path: logs/latest.log
@@ -1069,9 +1069,9 @@ jobs:
     # cloud dashboard is slow or unreachable.
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -1241,7 +1241,7 @@ jobs:
           if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true; fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mineflayer-ingame-log
           path: logs/latest.log
@@ -1252,9 +1252,9 @@ jobs:
     needs: build
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: "25"
           distribution: "temurin"
@@ -1401,7 +1401,7 @@ jobs:
           fi
       - name: Upload server log
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: restart-cycle-test-log
           path: logs/latest.log
