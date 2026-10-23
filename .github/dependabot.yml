@@ -11,9 +11,9 @@
 #  * The Mineflayer scripts under .github/scripts/ are pinned to the Minecraft
 #    protocol the live suites drive. Bumping them is a deliberate change.
 #
-# Shaded libraries are grouped into one PR, and majors are ignored so a new
-# major is a reviewed decision rather than an automatic PR. The test toolchain
-# is grouped separately, so a failing PR points at one side.
+# Shaded libraries and the test toolchain are grouped into separate PRs. A
+# major bump of any dependency is ignored, so it is a reviewed decision rather
+# than an automatic PR; security updates still arrive immediately.
 #
 # The live-server matrix runs on every pull request. Grouping is what keeps a
 # month of updates to one or two runs instead of one run per dependency.
@@ -46,6 +46,14 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "com.google.code.gson:gson"
         update-types: ["version-update:semver-major"]
+      # JUnit 6 and a Mockito major are migrations, not routine bumps. Let the
+      # toolchain move once the migration is planned, on its own CI run.
+      - dependency-name: "org.junit*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.mockito*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "net.bytebuddy*"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
     commit-message:
@@ -60,6 +68,12 @@ updates:
       actions:
         patterns:
           - "*"
+    # A major action bump changes how every job runs. The matrix pins its
+    # runner image on purpose, so majors are reviewed and landed as their own
+    # change rather than riding along with a routine update.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
       - "ci"
