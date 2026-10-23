@@ -36,8 +36,8 @@ subprojects {
 
             // Shaded dependencies (bundled into the plugin JAR)
             implementation("com.zaxxer:HikariCP:5.1.0")
-            implementation("com.mysql:mysql-connector-j:8.3.0")
-            implementation("com.google.code.gson:gson:2.10.1")
+            implementation("com.mysql:mysql-connector-j:8.4.0")
+            implementation("com.google.code.gson:gson:2.14.0")
 
             // Test dependencies
             testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
