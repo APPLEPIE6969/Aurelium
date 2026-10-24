@@ -291,6 +291,7 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
 
     private PurchaseQueue createPurchaseQueue() {
         String type = getConfig().getString("web-queue.type", "memory").toLowerCase();
+        int ttlMinutes = Math.max(1, getConfig().getInt("web-queue.ttl-minutes", 15));
         if ("sqlite".equals(type)) {
             String file = getConfig().getString("web-queue.file", "web-queue.db");
             SqlitePurchaseQueue queue = new SqlitePurchaseQueue(this, file);
@@ -304,7 +305,7 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
                     + "(queued browser purchases are lost on restart; nothing is charged, "
                     + "so nothing is at risk — set web-queue.type to 'sqlite' to keep them)");
         }
-        return new InMemoryPurchaseQueue();
+        return new InMemoryPurchaseQueue(ttlMinutes * 60_000L);
     }
 
     private void publishSnapshot(WebSnapshot snapshot, WebSnapshotCache cache) {

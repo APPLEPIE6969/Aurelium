@@ -34,7 +34,7 @@ import org.bukkit.scheduler.BukkitTask;
 public class WebPurchaseExecutor {
 
     private static final long TICK_INTERVAL = 10L;      // twice a second
-    private static final long PURCHASE_TTL_MS = 30 * 60 * 1000L;
+    private static final long SETTLED_RETENTION_MS = 30 * 60 * 1000L;
     private static final long FILL_ATTEMPT_TTL_MS = 15_000L;
 
     /** A fill-order that has been dispatched but not yet resolved. */
@@ -55,11 +55,18 @@ public class WebPurchaseExecutor {
     private final AurelEconomy plugin;
     private final PurchaseQueue queue;
     private final Map<String, PendingFill> pendingFills = new HashMap<>();
+    private final long fillAttemptTtlMs;
     private BukkitTask task;
 
     public WebPurchaseExecutor(AurelEconomy plugin, PurchaseQueue queue) {
+        this(plugin, queue, FILL_ATTEMPT_TTL_MS);
+    }
+
+    /** Test seam: shrink the fill-attempt window so a resolution can be driven. */
+    WebPurchaseExecutor(AurelEconomy plugin, PurchaseQueue queue, long fillAttemptTtlMs) {
         this.plugin = plugin;
         this.queue = queue;
+        this.fillAttemptTtlMs = Math.max(0L, fillAttemptTtlMs);
     }
 
     public void start() {
@@ -75,15 +82,20 @@ public class WebPurchaseExecutor {
         pendingFills.clear();
     }
 
-    private void drain() {
+    void drain() {
         try {
+            // Cancel before claiming. An entry that waited past the TTL must not
+            // run now, at a price the player saw days ago; this also cancels the
+            // entries of players who are not online, which the claim loop below
+            // never visits.
+            queue.expireStale();
             resolvePendingFills();
             for (Player player : Bukkit.getOnlinePlayers()) {
                 for (PurchaseQueue.Purchase purchase : queue.claimPending(player.getUniqueId())) {
                     execute(player, purchase);
                 }
             }
-            queue.prune(PURCHASE_TTL_MS);
+            queue.prune(SETTLED_RETENTION_MS);
         } catch (Exception e) {
             plugin.getComponentLogger().error("Web purchase drain failed", e);
         }
@@ -105,7 +117,7 @@ public class WebPurchaseExecutor {
                 queue.complete(entry.getKey(), true, result.toString());
                 return true;
             }
-            if (now - pending.startedAt > FILL_ATTEMPT_TTL_MS) {
+            if (now - pending.startedAt > fillAttemptTtlMs) {
                 queue.complete(entry.getKey(), false, errorResult("Order could not be filled"));
                 return true;
             }
@@ -120,6 +132,13 @@ public class WebPurchaseExecutor {
     }
 
     private void execute(Player player, PurchaseQueue.Purchase purchase) {
+        if (!player.isOnline()) {
+            // Claimed and then the player left before this pass ran. Nothing has
+            // been charged yet, so cancelling is enough.
+            queue.complete(purchase.id(), false,
+                    errorResult("The player went offline before the purchase could run."));
+            return;
+        }
         JsonObject result = new JsonObject();
         boolean ok;
         try {
@@ -135,12 +154,14 @@ public class WebPurchaseExecutor {
             result.addProperty("error", "Purchase failed");
             ok = false;
         }
-        if (ok) {
-            queue.complete(purchase.id(), true, result.toString());
-        } else if (!queue.find(purchase.id()).status().equals("processing")) {
-            queue.complete(purchase.id(), false, result.toString());
+        if (ok && purchase.type() == PurchaseQueue.Type.FILL_ORDER) {
+            // OrderManager.fillOrder completes asynchronously and reports failure
+            // only through chat. Settling here would answer "failed" before the
+            // fill had a chance to move the order's counter (M7). The row stays
+            // processing and resolvePendingFills settles it on a later pass.
+            return;
         }
-        // A deferred fill-order stays "processing" and is resolved next pass.
+        queue.complete(purchase.id(), ok, result.toString());
     }
 
     // ── server market ─────────────────────────────────────────────────

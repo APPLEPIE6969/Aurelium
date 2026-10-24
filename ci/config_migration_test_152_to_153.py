@@ -112,11 +112,11 @@ def test_migration():
     config = load_config(CONFIG_PATH)
     errors = []
 
-    # 1. config-version should be 4: the upgrade must stamp the version it
+    # 1. config-version should be 5: the upgrade must stamp the version it
     # actually migrated to, not leave the 1.5.2 value behind.
     cv = config.get("config-version", 0)
-    if cv != 4:
-        errors.append("FAIL: config-version = " + str(cv) + ", expected 4")
+    if cv != 5:
+        errors.append("FAIL: config-version = " + str(cv) + ", expected 5")
     else:
         print("PASS: config-version = " + str(cv))
 
@@ -136,6 +136,14 @@ def test_migration():
         errors.append("FAIL: spawners.require-silk-touch missing after upgrade")
     else:
         print("PASS: spawners.require-silk-touch = " + str(silk))
+
+    # 1d. the queue TTL 1.5.5 added. Without it an upgraded server keeps the
+    # code default, but the key has to be visible so an owner can change it.
+    ttl = config.get("web-queue", {}).get("ttl-minutes")
+    if ttl is None:
+        errors.append("FAIL: web-queue.ttl-minutes missing after upgrade")
+    else:
+        print("PASS: web-queue.ttl-minutes = " + str(ttl))
 
     # 2. economy.currencies should survive
     currencies = config.get("economy", {}).get("currencies", {})

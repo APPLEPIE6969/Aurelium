@@ -791,6 +791,67 @@ check(
                                 'orders', 'OrderCancelFillRaceTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# H10: the durable queue shared one connection across four HTTP threads and the
+# main thread, flipped its autoCommit to claim, and left stale PENDING entries
+# to execute whenever their player next logged in. M7 rides this: a fill-order
+# must not be marked complete before the fill has actually moved the order.
+# --------------------------------------------------------------------------
+queue_src = strip_comments(read('src/main/java/com/aureleconomy/webstore/SqlitePurchaseQueue.java'))
+memory_src = strip_comments(read('src/main/java/com/aureleconomy/webstore/InMemoryPurchaseQueue.java'))
+executor_src = strip_comments(read('src/main/java/com/aureleconomy/web/WebPurchaseExecutor.java'))
+check(
+    'H10 the queue has no connection shared across threads',
+    'private Connection connection' not in queue_src,
+    'one JDBC connection for every HTTP thread is the transaction mix-up',
+)
+check(
+    'H10 no thread flips the shared connection autoCommit',
+    'setAutoCommit' not in queue_src,
+    'a claim must not put another thread enqueue inside its transaction',
+)
+check(
+    'H10 a claim moves and returns the rows in one statement',
+    'WHERE player_uuid = ? AND status = ?' in queue_src
+    and 'RETURNING id, type' in queue_src,
+    'a read-then-update lets two claimers take the same row',
+)
+check(
+    'H10 completion is a status CAS from processing',
+    'WHERE id = ? AND status = ?' in queue_src
+    and 'ps.setString(4, PROCESSING)' in queue_src
+    and 'if (!PROCESSING.equals(p.status()))' in memory_src,
+    'an unguarded completion lets a late result overwrite the real one',
+)
+check(
+    'H10 stale entries are cancelled before anything claims them',
+    'queue.expireStale()' in executor_src
+    and executor_src.index('queue.expireStale()') < executor_src.index('queue.claimPending('),
+    'draining first is what lets a days-old purchase execute',
+)
+check(
+    'H10 the queue TTL is configurable and ships at 15 minutes',
+    'ttl-minutes: 15' in config_text
+    and version_match is not None and int(version_match.group(1)) >= 5,
+    'a new key needs config-version bumped in the same change',
+)
+check(
+    'M7 a dispatched fill stays processing until its resolution pass',
+    'if (ok && purchase.type() == PurchaseQueue.Type.FILL_ORDER)' in executor_src
+    and 'queue.find(purchase.id())' not in executor_src,
+    'completing on dispatch answers failed before the asynchronous fill ran',
+)
+check(
+    'H10 the queue test covers the concurrent claim, the TTL and the CAS',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'webstore', 'SqlitePurchaseQueueTest.java')),
+)
+check(
+    'M7 the executor test covers the deferred fill and the offline player',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'web', 'WebPurchaseExecutorTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

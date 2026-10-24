@@ -1,7 +1,7 @@
 # Aurelium Configuration (v1.5.3)
 
 # Don't touch this, used for auto-migration
-config-version: 4
+config-version: 5
 
 # --- Database ---
 database:
@@ -181,6 +181,10 @@ web-queue:
   # sqlite - kept in a local database file next to this one.
   type: memory
   file: "web-queue.db"
+  # A queued purchase that has not run within this many minutes is cancelled
+  # instead of executing later at a price the player never saw. Applies to both
+  # queue types.
+  ttl-minutes: 15
 
 
 # --- Custom Item Scanner ---

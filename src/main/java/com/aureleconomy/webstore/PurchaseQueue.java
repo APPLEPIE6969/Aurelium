@@ -115,6 +115,9 @@ public interface PurchaseQueue {
     String COMPLETED = "completed";
     String FAILED = "failed";
 
+    /** Result written when an entry is cancelled because it waited too long. */
+    String EXPIRED_RESULT = "{\"error\":\"This purchase expired before it could run.\"}";
+
     /** Queue an action and return the id the browser polls with. */
     String enqueue(Type type, UUID player, String itemKey, int auctionId, int orderId, int amount);
 
@@ -126,7 +129,20 @@ public interface PurchaseQueue {
 
     Purchase find(String purchaseId);
 
-    void complete(String purchaseId, boolean success, String resultJson);
+    /**
+     * Settle a claimed purchase. Returns {@code true} only when this call made
+     * the transition; a second completion of the same purchase, or one arriving
+     * after the TTL cancelled it, changes nothing and returns {@code false}.
+     */
+    boolean complete(String purchaseId, boolean success, String resultJson);
+
+    /**
+     * Cancel pending and processing entries older than the configured TTL, and
+     * return how many were cancelled. Called every drain tick, so a purchase for
+     * a player who never comes back cannot sit in the queue and run days later
+     * at a different price.
+     */
+    int expireStale();
 
     /** Drop settled entries older than {@code maxAgeMs}. */
     void prune(long maxAgeMs);

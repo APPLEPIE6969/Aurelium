@@ -216,6 +216,7 @@ class ConfigMigrationTest {
                 "web.mode",
                 "web.local.host",
                 "web-queue.type",
+                "web-queue.ttl-minutes",
                 "economy.max-transaction-price",
                 "spawners.require-silk-touch"}) {
             assertTrue(result.contains(key),
@@ -234,7 +235,7 @@ class ConfigMigrationTest {
 
         assertTrue(defaults.contains("config-version"),
                 "shipped config.yml has no config-version");
-        assertEquals(4, defaults.getInt("config-version"),
+        assertEquals(5, defaults.getInt("config-version"),
                 "config-version changed; upgradeConfig must be able to recognise it");
     }
 
