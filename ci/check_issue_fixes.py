@@ -852,6 +852,58 @@ check(
                                 'web', 'WebPurchaseExecutorTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# F3: the dashboard API is authenticated but was not throttled, read request
+# bodies without a bound, and re-parsed the whole item catalogue per request.
+# --------------------------------------------------------------------------
+handler_src = strip_comments(read('src/main/java/com/aureleconomy/web/DashboardApiHandler.java'))
+limiter_src = strip_comments(read('src/main/java/com/aureleconomy/web/SessionRateLimiter.java'))
+cache_src = strip_comments(read('src/main/java/com/aureleconomy/webstore/WebSnapshotCache.java'))
+check(
+    'F3 the API throttles a session before routing',
+    'if (!rateLimiter.tryAcquire(player))' in handler_src
+    and handler_src.index('rateLimiter.tryAcquire(player)')
+    < handler_src.index('route(exchange, action, params, player)')
+    and 'send(exchange, 429' in handler_src,
+    'a limit after routing protects nothing',
+)
+check(
+    'F3 the token bucket is per session and refills at a fixed rate',
+    'new SessionRateLimiter(REQUESTS_PER_SECOND, REQUEST_BURST)' in handler_src
+    and 'permitsPerSecond' in limiter_src
+    and 'bucket.tokens -= 1.0' in limiter_src
+    and 'elapsed / 1_000_000_000.0' in limiter_src,
+    'the bucket must spend one permit per request and refill from elapsed time',
+)
+check(
+    'F3 request bodies are bounded at 64 KB',
+    'MAX_BODY_BYTES = 64 * 1024' in handler_src
+    and 'readNBytes(MAX_BODY_BYTES + 1)' in handler_src
+    and 'send(exchange, 413' in handler_src,
+    'readAllBytes accepts however much an authenticated client sends',
+)
+check(
+    'F3 search queries are bounded before the catalogue scan',
+    'MAX_SEARCH_QUERY_LENGTH = 64' in handler_src
+    and 'q.length() > MAX_SEARCH_QUERY_LENGTH' in handler_src,
+)
+check(
+    'F3 the item catalogue is parsed once per publish, not once per request',
+    'parseObject(cache.itemsJson())' not in handler_src
+    and 'cache.itemsObject()' in handler_src
+    and 'this.itemsObject = null' in cache_src,
+    're-parsing the multi-megabyte snapshot is the request cost the limit protects',
+)
+check(
+    'F3 the rate limiter, body limit and catalogue cache have tests',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'web', 'SessionRateLimiterTest.java'))
+    and os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                    'web', 'DashboardRequestLimitsTest.java'))
+    and os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                    'webstore', 'WebSnapshotCacheTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

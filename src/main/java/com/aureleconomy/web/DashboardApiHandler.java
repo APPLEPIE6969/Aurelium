@@ -51,12 +51,20 @@ public class DashboardApiHandler implements HttpHandler {
     private static final int ITEMS_PER_PAGE = 28;
     private static final int MAX_PAGE_SIZE = 200;
     private static final int MAX_AMOUNT = 64;
+    /** A dashboard action is small JSON; anything larger is a mistake or an attack. */
+    private static final int MAX_BODY_BYTES = 64 * 1024;
+    /** Bounds the substring scan over the snapshot for one search request. */
+    private static final int MAX_SEARCH_QUERY_LENGTH = 64;
+    private static final int REQUESTS_PER_SECOND = 10;
+    private static final int REQUEST_BURST = 20;
 
     private final AurelEconomy plugin;
     private final WebSessionManager sessions;
     private final WebSnapshotCache cache;
     private final PurchaseQueue queue;
     private final String serverId;
+    private final SessionRateLimiter rateLimiter =
+            new SessionRateLimiter(REQUESTS_PER_SECOND, REQUEST_BURST);
 
     public DashboardApiHandler(AurelEconomy plugin, WebSessionManager sessions,
                                WebSnapshotCache cache, PurchaseQueue queue, String serverId) {
@@ -105,8 +113,19 @@ public class DashboardApiHandler implements HttpHandler {
             return;
         }
 
+        // Throttle after authentication so an unauthenticated flood cannot fill
+        // the bucket map, and before routing so the snapshot parsing below is
+        // what the limit actually protects.
+        if (!rateLimiter.tryAcquire(player)) {
+            exchange.getResponseHeaders().set("Retry-After", "1");
+            send(exchange, 429, "{\"error\":\"Too many requests\"}");
+            return;
+        }
+
         try {
             route(exchange, action, params, player);
+        } catch (BodyTooLargeException e) {
+            send(exchange, 413, "{\"error\":\"Request body too large\"}");
         } catch (Exception e) {
             plugin.getComponentLogger().error("Dashboard API error on /" + action, e);
             send(exchange, 500, "{\"error\":\"Internal server error\"}");
@@ -150,6 +169,8 @@ public class DashboardApiHandler implements HttpHandler {
                 String q = params.get("q");
                 if (q == null || q.isBlank()) {
                     send(exchange, 400, "{\"error\":\"Missing search query\"}");
+                } else if (q.length() > MAX_SEARCH_QUERY_LENGTH) {
+                    send(exchange, 400, "{\"error\":\"Search query too long\"}");
                 } else {
                     send(exchange, 200, searchItems(q, params));
                 }
@@ -284,14 +305,14 @@ public class DashboardApiHandler implements HttpHandler {
 
     /** {@code itemsJson} is a map of category id -> array; slice one array. */
     private String pagedItems(String category, Map<String, String> params, boolean search) {
-        JsonObject all = parseObject(cache.itemsJson());
+        JsonObject all = cache.itemsObject();
         JsonArray source;
-        if (all != null && category != null && all.has(category)) {
+        if (category != null && all.has(category)) {
             source = all.getAsJsonArray(category);
-        } else if (all != null && all.entrySet().isEmpty()) {
+        } else if (all.entrySet().isEmpty()) {
             source = new JsonArray();
         } else {
-            source = all == null ? new JsonArray() : flattenItems(all);
+            source = flattenItems(all);
         }
         return page(source, params);
     }
@@ -314,7 +335,7 @@ public class DashboardApiHandler implements HttpHandler {
 
     private String searchItems(String query, Map<String, String> params) {
         String needle = query.toLowerCase();
-        JsonArray all = flattenItems(parseObject(cache.itemsJson()));
+        JsonArray all = flattenItems(cache.itemsObject());
         JsonArray hits = new JsonArray();
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
         for (JsonElement el : all) {
@@ -638,23 +659,27 @@ public class DashboardApiHandler implements HttpHandler {
 
     private JsonObject readJson(HttpExchange exchange) {
         try (var in = exchange.getRequestBody()) {
-            String raw = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            // Read one byte past the limit so a chunked body without a
+            // Content-Length is bounded too, and the caller can answer 413
+            // instead of parsing however much the client sent.
+            byte[] bytes = in.readNBytes(MAX_BODY_BYTES + 1);
+            if (bytes.length > MAX_BODY_BYTES) {
+                throw new BodyTooLargeException();
+            }
+            String raw = new String(bytes, StandardCharsets.UTF_8);
             if (raw.isBlank()) {
                 return null;
             }
             return JsonParser.parseString(raw).getAsJsonObject();
+        } catch (BodyTooLargeException e) {
+            throw e;
         } catch (Exception e) {
             return null;
         }
     }
 
-    private static JsonObject parseObject(String json) {
-        try {
-            JsonElement el = JsonParser.parseString(json);
-            return el.isJsonObject() ? el.getAsJsonObject() : null;
-        } catch (Exception e) {
-            return null;
-        }
+    /** Signals a request body over {@link #MAX_BODY_BYTES} to {@link #handle}. */
+    private static final class BodyTooLargeException extends RuntimeException {
     }
 
     static int parseInt(String s, int fallback) {

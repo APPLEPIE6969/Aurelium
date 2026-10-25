@@ -1,6 +1,8 @@
 package com.aureleconomy.webstore;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 /**
@@ -30,6 +32,12 @@ public class WebSnapshotCache {
     private volatile JsonArray auctionsArray;
     private volatile JsonArray ordersArray;
     private volatile JsonArray stocksArray;
+    // The item catalogue is a category -> array object rather than a flat array,
+    // and it is the largest document in the snapshot. It used to be parsed on
+    // every /items and /search request, which is what the API rate limit now
+    // protects; parsing it once per publish removes the cost those requests were
+    // paying even when they were legitimate.
+    private volatile JsonObject itemsObject;
 
     /** Replaces every document at once so a reader never sees a half-updated view. */
     public void publish(WebSnapshot.Snapshot s) {
@@ -46,6 +54,7 @@ public class WebSnapshotCache {
         this.auctionsArray = null;
         this.ordersArray = null;
         this.stocksArray = null;
+        this.itemsObject = null;
     }
 
     public JsonArray auctionsArray() {
@@ -80,6 +89,25 @@ public class WebSnapshotCache {
             return JsonParser.parseString(json).getAsJsonArray();
         } catch (Exception e) {
             return new JsonArray();
+        }
+    }
+
+    /** Parsed item catalogue, cached until the next publish. Never null. */
+    public JsonObject itemsObject() {
+        JsonObject local = itemsObject;
+        if (local == null) {
+            local = parseObject(items);
+            itemsObject = local;
+        }
+        return local;
+    }
+
+    private static JsonObject parseObject(String json) {
+        try {
+            JsonElement el = JsonParser.parseString(json);
+            return el.isJsonObject() ? el.getAsJsonObject() : new JsonObject();
+        } catch (Exception e) {
+            return new JsonObject();
         }
     }
 
