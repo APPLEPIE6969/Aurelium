@@ -364,10 +364,7 @@ public static class MarketEntry {
                                 new MarketEntry(Material.MINECART, 250), new MarketEntry(Material.CHEST_MINECART, 270),
                                 new MarketEntry(Material.FURNACE_MINECART, 265),
                                 new MarketEntry(Material.HOPPER_MINECART, 500),
-                                new MarketEntry(Material.TNT_MINECART, 450), new MarketEntry(Material.BAMBOO_RAFT, 25),
-                                new MarketEntry(Material.BAMBOO_CHEST_RAFT, 35),
-                                // Boats (Generic Oak for now, or all)
-                                new MarketEntry(Material.OAK_BOAT, 25), new MarketEntry(Material.OAK_CHEST_BOAT, 35),
+                                new MarketEntry(Material.TNT_MINECART, 450),
                                 // Components
                                 new MarketEntry(Material.REDSTONE_TORCH, 15), new MarketEntry(Material.REPEATER, 80),
                                 new MarketEntry(Material.COMPARATOR, 150), new MarketEntry(Material.REDSTONE_LAMP, 80),
@@ -614,11 +611,6 @@ public static class MarketEntry {
                                 new MarketEntry(Material.BAMBOO_RAFT, 25),
                                 new MarketEntry(Material.BAMBOO_CHEST_RAFT, 35)); // 🟧 Copper
                 add(Category.COPPER,
-                                // Base
-                                new MarketEntry(Material.COPPER_ORE, 120),
-                                new MarketEntry(Material.DEEPSLATE_COPPER_ORE, 130),
-                                new MarketEntry(Material.RAW_COPPER, 100),
-
                                 // Normal
                                 new MarketEntry(Material.CHISELED_COPPER, 20),
                                 new MarketEntry(Material.COPPER_BULB, 25),
@@ -1134,11 +1126,6 @@ public static class MarketEntry {
                                 new MarketEntry(Material.OBSIDIAN, 150),
                                 new MarketEntry(Material.CRYING_OBSIDIAN, 300),
                                 new MarketEntry(Material.AMETHYST_BLOCK, 400),
-                                /* Material.CHAIN changed/removed */ new MarketEntry(
-                                                Material.matchMaterial("CHAIN") != null
-                                                                ? Material.matchMaterial("CHAIN")
-                                                                : Material.IRON_NUGGET /* fallback */,
-                                                20),
                                 new MarketEntry(Material.IRON_BARS, 20),
                                 new MarketEntry(Material.GRAVEL, 0.5, 0.05), new MarketEntry(Material.SAND, 1, 0.1),
                                 new MarketEntry(Material.RED_SAND, 1.5, 0.15), new MarketEntry(Material.CLAY, 10),
@@ -1148,6 +1135,17 @@ public static class MarketEntry {
                                 new MarketEntry(Material.NETHERRACK, 0.2, 0.02),
                                 new MarketEntry(Material.SOUL_SAND, 15),
                                 new MarketEntry(Material.SOUL_SOIL, 15), new MarketEntry(Material.MAGMA_BLOCK, 30));
+                // M8: CHAIN was renamed IRON_CHAIN in 26.x and the old ternary fell
+                // back to IRON_NUGGET, registering the wrong item under a second
+                // category. Resolve the right name for the API in use, and skip the
+                // entry rather than substituting an unrelated material.
+                Material chainMaterial = Material.matchMaterial("CHAIN");
+                if (chainMaterial == null) {
+                        chainMaterial = Material.matchMaterial("IRON_CHAIN");
+                }
+                if (chainMaterial != null) {
+                        items.get(Category.BUILDING).add(new MarketEntry(chainMaterial, 20));
+                }
 
                 // 🎭 Decoration
                 add(Category.DECORATION,
