@@ -904,6 +904,18 @@ check(
                                     'webstore', 'WebSnapshotCacheTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# M5: plugin.yml declared aureleconomy.stocks but never put it on the command
+# node, and the 1.21.11 module ships its own copy of plugin.yml.
+# --------------------------------------------------------------------------
+check(
+    'M5 every shipped plugin.yml requires aureleconomy.stocks for /stocks',
+    all('permission: aureleconomy.stocks' in read(path)
+        for path in ('src/main/resources/plugin.yml',
+                     'versions/1.21.11/src/main/resources/plugin.yml')),
+    'a node without its permission runs for every sender',
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:
