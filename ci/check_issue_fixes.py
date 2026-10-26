@@ -942,6 +942,11 @@ check(
     < aurel_src.index('databaseManager.close()'),
     'the periodic save is a five-minute window, and the scheduler is gone by onDisable',
 )
+check(
+    'L7 the cloud registration log carries no key material',
+    'apiKey=' not in cloud_src and 'apiKey.substring' not in cloud_src,
+    'even a key prefix in a log is key material in a log file',
+)
 
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')

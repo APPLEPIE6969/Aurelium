@@ -411,7 +411,7 @@ public class CloudSyncManager {
     private void register() throws Exception {
         String serverName = plugin.getServer().getName();
 
-        plugin.getComponentLogger().info("Cloud dashboard: registering serverId=" + serverId + " apiKey=" + apiKey.substring(0, 8) + "...");
+        plugin.getComponentLogger().info("Cloud dashboard: registering serverId=" + serverId + " (apiKey redacted)");
 
         StringBuilder json = new StringBuilder();
         json.append("{\"serverId\":\"").append(escJson(serverId)).append("\"")
