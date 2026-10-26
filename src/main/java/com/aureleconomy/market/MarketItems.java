@@ -1409,9 +1409,9 @@ public static class MarketEntry {
          * Returns market items + order-only items merged for use in the Order GUI.
          */
         public static List<MarketEntry> getOrderItems(Category category) {
-                // If it's a specific category, just return the items exactly as they are
-                // configured
-                return items.getOrDefault(category, new ArrayList<>());
+                List<MarketEntry> merged = new ArrayList<>(items.getOrDefault(category, new ArrayList<>()));
+                merged.addAll(orderOnlyItems.getOrDefault(category, new ArrayList<>()));
+                return merged;
         }
 
         public static boolean isObtainable(Material material) {
