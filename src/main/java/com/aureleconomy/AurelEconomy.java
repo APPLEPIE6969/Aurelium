@@ -175,9 +175,6 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
 
         getComponentLogger().info("AurelEconomy has been enabled!");
 
-        // Check for version updates (async, logs to console)
-        com.aureleconomy.utils.VersionChecker.checkVersion(this);
-
         // Trade volume is recorded for in-game trades too, so the log needs
         // pruning regardless of which web mode is active.
         getServer().getScheduler().runTaskTimerAsynchronously(this,

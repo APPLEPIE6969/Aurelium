@@ -916,6 +916,17 @@ check(
     'a node without its permission runs for every sender',
 )
 
+# --------------------------------------------------------------------------
+# L1: onEnable called VersionChecker.checkVersion twice, so every boot asked
+# the update endpoint twice.
+# --------------------------------------------------------------------------
+aurel_src = strip_comments(read('src/main/java/com/aureleconomy/AurelEconomy.java'))
+check(
+    'L1 the update check runs once per enable',
+    len(re.findall(r'VersionChecker\.checkVersion\(', aurel_src)) == 1,
+    'a second call duplicates the update request every start',
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:
