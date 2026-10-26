@@ -322,6 +322,12 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
         // Queued rows go before the connection closes, so a restart does not lose
         // the movements that happened in the last few seconds.
         if (ledgerService != null) ledgerService.flush();
+        // L3: the periodic save runs every five minutes, so registrations made in
+        // the last window would die with the process. The scheduler is gone by
+        // now, so this flush is synchronous and must precede the close.
+        if (customItemRegistry != null && databaseManager != null) {
+            customItemRegistry.saveToDatabaseSync(databaseManager);
+        }
         if (databaseManager != null) databaseManager.close();
         getComponentLogger().info("AurelEconomy has been disabled!");
     }

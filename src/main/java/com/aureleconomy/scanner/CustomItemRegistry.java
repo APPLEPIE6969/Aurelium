@@ -425,7 +425,19 @@ public class CustomItemRegistry {
  * Save all discovered items to database asynchronously.
  */
  public void saveToDatabase(DatabaseManager dbManager) {
- org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+ org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> saveAllItems(dbManager));
+ }
+
+ /**
+  * L3: the scheduler is already shut down by the time onDisable runs, so the
+  * async save path cannot be used there. This synchronous flush is the last
+  * chance to persist registrations discovered since the last periodic save.
+  */
+ public void saveToDatabaseSync(DatabaseManager dbManager) {
+ saveAllItems(dbManager);
+ }
+
+ private void saveAllItems(DatabaseManager dbManager) {
  synchronized (dbManager.getWriteLock()) {
  for (Map.Entry<String, CustomMarketItem> entry : itemsById.entrySet()) {
  try {
@@ -436,7 +448,6 @@ public class CustomItemRegistry {
  }
  }
  }
- });
  }
 
  private void saveCustomItem(DatabaseManager dbManager, String canonicalId, CustomMarketItem item,

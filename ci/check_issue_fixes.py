@@ -935,6 +935,13 @@ check(
     'lastScan.remove(event.getPlayer().getUniqueId())' in strip_comments(
         read('src/main/java/com/aureleconomy/scanner/ItemDiscoveryListener.java')),
 )
+check(
+    'L3 onDisable flushes the custom item registry before the database closes',
+    'customItemRegistry.saveToDatabaseSync(databaseManager)' in aurel_src
+    and aurel_src.index('customItemRegistry.saveToDatabaseSync(databaseManager)')
+    < aurel_src.index('databaseManager.close()'),
+    'the periodic save is a five-minute window, and the scheduler is gone by onDisable',
+)
 
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
