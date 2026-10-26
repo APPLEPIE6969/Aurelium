@@ -927,6 +927,15 @@ check(
     'a second call duplicates the update request every start',
 )
 
+# --------------------------------------------------------------------------
+# L2: the per-player scan cooldown map never dropped an entry.
+# --------------------------------------------------------------------------
+check(
+    'L2 a quitting player leaves no scan cooldown entry',
+    'lastScan.remove(event.getPlayer().getUniqueId())' in strip_comments(
+        read('src/main/java/com/aureleconomy/scanner/ItemDiscoveryListener.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

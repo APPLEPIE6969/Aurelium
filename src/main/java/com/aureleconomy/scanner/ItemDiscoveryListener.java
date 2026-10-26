@@ -28,7 +28,8 @@ public class ItemDiscoveryListener implements Listener {
  private final AurelEconomy plugin;
 
  // Rate-limit: max 1 scan per player per 2 seconds
- private final ConcurrentHashMap<java.util.UUID, AtomicLong> lastScan = new ConcurrentHashMap<>();
+ // package-private so the leak test can see the entries
+ final ConcurrentHashMap<java.util.UUID, AtomicLong> lastScan = new ConcurrentHashMap<>();
  private static final long SCAN_COOLDOWN_MS = 2000;
 
  public ItemDiscoveryListener(AurelEconomy plugin, UnifiedItemScanner scanner) {
@@ -47,6 +48,13 @@ public class ItemDiscoveryListener implements Listener {
  long prev = last.get();
  if (now - prev < SCAN_COOLDOWN_MS) return false;
  return last.compareAndSet(prev, now);
+ }
+
+ // L2: the cooldown entry lived on after quit, so every player who ever
+ // triggered a scan left a row in this map forever.
+ @EventHandler(priority = EventPriority.MONITOR)
+ public void onPlayerQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+ lastScan.remove(event.getPlayer().getUniqueId());
  }
 
  private void tryScan(org.bukkit.entity.Player player, ItemStack item) {
