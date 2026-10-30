@@ -512,7 +512,7 @@ for reason, expected in (('ORDER_ESCROW', 1), ('ORDER_REFUND', 2), ('ORDER_FILL'
     )
 
 market_buy = strip_comments(read('src/main/java/com/aureleconomy/gui/MarketGUI.java'))
-market_sell = strip_comments(read('src/main/java/com/aureleconomy/gui/SellGUI.java'))
+market_sell = strip_comments(read('src/main/java/com/aureleconomy/market/SellTransaction.java'))
 check('F1 a market purchase is labelled', 'LedgerReason.MARKET_BUY,' in market_buy)
 check('F1 a market sale is labelled', 'LedgerReason.MARKET_SELL,' in market_sell)
 
@@ -628,10 +628,13 @@ check(
 )
 
 sell_gui = strip_comments(read('src/main/java/com/aureleconomy/gui/SellGUI.java'))
+price_identity = strip_comments(read('src/main/java/com/aureleconomy/market/MarketItemFactory.java'))
 check(
-    'H7 the sell GUI skips a disabled custom item',
-    sell_gui.count('if (isDisabledCustomItem(item))') >= 2,
-    'the preview and the payout loop both have to skip it',
+    'H7 the sell path refuses a disabled custom item',
+    'MarketItemFactory.priceKey' in sell_gui
+    and 'registry.resolveItemId(stack)' in price_identity
+    and 'custom.isEnabled()' in price_identity,
+    'identity comes from the registry, and a switched-off item resolves to no key',
 )
 listing_block = auction_mgr[auction_mgr.index('Consumer<com.aureleconomy.auction.AuctionItem> onListed) {'):
                             auction_mgr.index('long now = System.currentTimeMillis();')]

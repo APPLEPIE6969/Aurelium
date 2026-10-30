@@ -278,7 +278,8 @@ public class WebPurchaseExecutor {
             // Material.ENCHANTED_BOOK, so a type check alone lets a bare spawner be
             // sold as an iron golem spawner at the iron golem spawner price.
             ItemStack expected = com.aureleconomy.market.MarketItemFactory.build(plugin, entry, 1);
-            int held = countSimilar(seller, expected, amount);
+            int held = com.aureleconomy.market.MarketItemFactory.countSimilar(
+                    seller.getInventory(), expected, amount);
             if (held < amount) {
             return fail(result, "You only have " + held + "x "
             + material.name().replace("_", " "));
@@ -293,7 +294,8 @@ public class WebPurchaseExecutor {
         if (!plugin.getEconomyManager().deposit(seller, payout, currency)) {
             return fail(result, "The payout failed, so nothing was taken from your inventory");
         }
-        removeFromInventory(seller, expected, amount);
+        com.aureleconomy.market.MarketItemFactory.removeSimilar(
+                seller.getInventory(), expected, amount);
         // Records the volume and moves the price, exactly like the in-game sell.
         plugin.getMarketManager().onTransaction(itemKey, false, amount);
 
@@ -313,26 +315,6 @@ public class WebPurchaseExecutor {
                         + material.name().replace("_", " ") + "</white> for <gold>" + earned
                         + "</gold></green>"));
         return true;
-    }
-
-    /** Remove {@code amount} of {@code material} from the player's inventory. */
-        private void removeFromInventory(Player player, ItemStack expected, int amount) {
-        int left = amount;
-        var contents = player.getInventory().getStorageContents();
-        for (int slot = 0; slot < contents.length && left > 0; slot++) {
-        ItemStack stack = contents[slot];
-        if (stack == null || !stack.isSimilar(expected)) {
-        continue;
-        }
-            int take = Math.min(left, stack.getAmount());
-            left -= take;
-            if (stack.getAmount() == take) {
-                player.getInventory().setItem(slot, null);
-            } else {
-                stack.setAmount(stack.getAmount() - take);
-                player.getInventory().setItem(slot, stack);
-            }
-        }
     }
 
     // ── auction house ─────────────────────────────────────────────────
@@ -455,25 +437,6 @@ public class WebPurchaseExecutor {
                 }
             }
             return total;
-        }
-
-        /**
-         * How many of {@code expected} the player is holding, counting only stacks
-         * that really are that item, capped at {@code needed} so a refusal cannot
-         * claim more than was asked for.
-         */
-        private int countSimilar(Player player, ItemStack expected, int needed) {
-        int total = 0;
-        for (ItemStack stack : player.getInventory().getStorageContents()) {
-        if (stack == null || !stack.isSimilar(expected)) {
-        continue;
-        }
-        total += stack.getAmount();
-        if (total >= needed) {
-        return needed;
-        }
-        }
-        return total;
         }
 
     private boolean fail(JsonObject result, String message) {

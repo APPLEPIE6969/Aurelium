@@ -1,7 +1,8 @@
 package com.aureleconomy.gui;
 
 import com.aureleconomy.AurelEconomy;
-import com.aureleconomy.economy.LedgerReason;
+import com.aureleconomy.market.MarketItemFactory;
+import com.aureleconomy.market.SellTransaction;
 import com.aureleconomy.utils.ItemBuilder;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -15,7 +16,9 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class SellGUI extends GUIHolder {
@@ -93,14 +96,28 @@ public class SellGUI extends GUIHolder {
         }
     }
 
+    /**
+     * Moves everything the player holds that is the same item as {@code template}.
+     *
+     * <p>Matching uses the price key rather than the material, so dragging one
+     * iron golem spawner no longer pulls every other spawner into the window where
+     * it could not be sold (M2).
+     */
     private void pullMatchingItems(ItemStack template) {
-        Material type = template.getType();
+        String templateKey = MarketItemFactory.priceKey(plugin, template);
+        if (templateKey == null) {
+            player.sendMessage(Component.text(
+                    "The market has no price for this item as it is, so it cannot be sold here.",
+                    NamedTextColor.RED));
+            return;
+        }
+
         Inventory pInv = player.getInventory();
         int addedCount = 0;
 
         for (int i = 0; i < pInv.getSize(); i++) {
             ItemStack item = pInv.getItem(i);
-            if (item != null && item.getType() == type) {
+            if (item != null && templateKey.equals(MarketItemFactory.priceKey(plugin, item))) {
                 HashMap<Integer, ItemStack> leftover = inventory.addItem(item);
                 if (leftover.isEmpty()) {
                     pInv.setItem(i, null); 
@@ -131,28 +148,6 @@ public class SellGUI extends GUIHolder {
         }
     }
 
-    private String getItemKey(ItemStack item) {
-        if (item.getType() == Material.SPAWNER) {
-            try {
-                org.bukkit.inventory.meta.BlockStateMeta meta = (org.bukkit.inventory.meta.BlockStateMeta) item
-                        .getItemMeta();
-                org.bukkit.block.CreatureSpawner spawner = (org.bukkit.block.CreatureSpawner) meta.getBlockState();
-                String typeName = spawner.getSpawnedType().name();
-                String[] words = typeName.split("_");
-                StringBuilder sb = new StringBuilder();
-                for (int j = 0; j < words.length; j++) {
-                    sb.append(words[j].substring(0, 1).toUpperCase())
-                            .append(words[j].substring(1).toLowerCase());
-                    if (j < words.length - 1)
-                        sb.append(" ");
-                }
-                return sb.toString() + " Spawner";
-            } catch (Exception ignored) {
-            }
-        }
-        return item.getType().name();
-    }
-
     public void handleDrag(InventoryDragEvent event) {
         for (int slot : event.getRawSlots()) {
             if (slot >= 45 && slot < 54) {
@@ -165,32 +160,22 @@ public class SellGUI extends GUIHolder {
         }
     }
 
-    private Map<String, BigDecimal> cachedTotals = new HashMap<>();
-
+    /**
+     * Prices what is in the window now and shows the confirm button.
+     *
+     * <p>The totals on the button are a preview. The payout is taken from a fresh
+     * quote on confirm, because prices move while the screen is open (M3).
+     */
     private void calculateAndPrompt() {
-        cachedTotals.clear();
-        boolean hasSellable = false;
+        SellTransaction.Quote quote = new SellTransaction(plugin).quote(window());
 
-        for (int i = 0; i < 45; i++) {
-            ItemStack item = inventory.getItem(i);
-            if (item != null && item.getType() != Material.AIR) {
-                if (isDisabledCustomItem(item)) {
-                    continue;
-                }
-                String key = getItemKey(item);
-                BigDecimal price = plugin.getMarketManager().getSellPrice(key);
-                String currency = plugin.getMarketManager().getCurrency(key);
-
-                if (price.compareTo(BigDecimal.ZERO) > 0) {
-                    BigDecimal amount = BigDecimal.valueOf(item.getAmount());
-                    cachedTotals.put(currency, cachedTotals.getOrDefault(currency, BigDecimal.ZERO).add(price.multiply(amount)));
-                    hasSellable = true;
-                }
-            }
-        }
-
-        if (!hasSellable) {
+        if (quote.isEmpty()) {
             player.sendMessage(Component.text("No sellable items found.", NamedTextColor.RED));
+            if (quote.refused() > 0) {
+                player.sendMessage(Component.text(quote.refused()
+                        + " item(s) cannot be sold: the market has no price for them as they are.",
+                        NamedTextColor.YELLOW));
+            }
             return;
         }
 
@@ -203,12 +188,17 @@ public class SellGUI extends GUIHolder {
         ItemBuilder confirmButton = new ItemBuilder(Material.LIME_CONCRETE)
                 .name(Component.text("Confirm Sell", NamedTextColor.GREEN));
 
-        for (Map.Entry<String, BigDecimal> entry : cachedTotals.entrySet()) {
+        for (Map.Entry<String, BigDecimal> entry : quote.totals().entrySet()) {
             confirmButton.lore(
                     Component.text("Value: " + plugin.getEconomyManager().getFormattedWithSymbol(entry.getValue(), entry.getKey()),
                             NamedTextColor.YELLOW));
         }
+        if (quote.refused() > 0) {
+            confirmButton.lore(Component.text(quote.refused()
+                    + " item(s) stay here: no price for them as they are", NamedTextColor.GRAY));
+        }
         confirmButton.lore(Component.text("Click to confirm", NamedTextColor.GRAY));
+        confirmButton.lore(Component.text("Final value is checked when you confirm", NamedTextColor.DARK_GRAY));
 
         inventory.setItem(49, confirmButton.build());
 
@@ -216,52 +206,38 @@ public class SellGUI extends GUIHolder {
     }
 
     private void performSell() {
-        if (!cachedTotals.isEmpty()) {
-            Map<String, Integer> itemsToNotifyMarket = new HashMap<>();
-            
-            for (int i = 0; i < 45; i++) {
-                ItemStack item = inventory.getItem(i);
-                if (item != null && item.getType() != Material.AIR) {
-                    if (isDisabledCustomItem(item)) {
-                        continue;
-                    }
-                    String key = getItemKey(item);
-                    BigDecimal price = plugin.getMarketManager().getSellPrice(key);
-                    if (price.compareTo(BigDecimal.ZERO) > 0) {
-                        itemsToNotifyMarket.put(key, itemsToNotifyMarket.getOrDefault(key, 0) + item.getAmount());
-                        inventory.setItem(i, null); 
-                    }
-                }
-            }
+        SellTransaction.Sale sale = new SellTransaction(plugin)
+                .sell(window(), player, slot -> inventory.setItem(slot, null));
 
-            for (Map.Entry<String, BigDecimal> entry : cachedTotals.entrySet()) {
-                plugin.getEconomyManager().deposit(player, entry.getValue(), entry.getKey(),
-                    LedgerReason.MARKET_SELL, null, null);
-                player.sendMessage(Component.text()
-                        .append(Component.text("Sold items for ", NamedTextColor.GREEN))
-                        .append(Component.text(plugin.getEconomyManager().getFormattedWithSymbol(entry.getValue(), entry.getKey()), NamedTextColor.GOLD))
-                        .build());
-            }
-
-            itemsToNotifyMarket.forEach((key, quantity) -> {
-                plugin.getMarketManager().onTransaction(key, false, quantity);
-            });
-
-            player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1);
-            cachedTotals.clear();
+        if (sale.isEmpty()) {
+            player.sendMessage(Component.text(
+                    "The sale could not be completed, so nothing was taken.", NamedTextColor.RED));
+            player.closeInventory();
+            return;
         }
 
+        for (Map.Entry<String, BigDecimal> entry : sale.paid().entrySet()) {
+            player.sendMessage(Component.text()
+                    .append(Component.text("Sold items for ", NamedTextColor.GREEN))
+                    .append(Component.text(plugin.getEconomyManager().getFormattedWithSymbol(entry.getValue(), entry.getKey()), NamedTextColor.GOLD))
+                    .build());
+        }
+        if (sale.unsold() > 0) {
+            player.sendMessage(Component.text(sale.unsold()
+                    + " item(s) could not be sold and were returned.", NamedTextColor.YELLOW));
+        }
+
+        player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1, 1);
         player.closeInventory();
     }
 
-    /**
-     * A custom item switched off in /customitems is not sellable, even when
-     * its material still has a price. A material-only key cannot tell the
-     * custom stack apart, so the registry resolves it first (H7).
-     */
-    private boolean isDisabledCustomItem(ItemStack item) {
-        return plugin.getCustomItemRegistry() != null
-                && plugin.getCustomItemRegistry().isDisabledCustomItem(item);
+    /** The 45 sell slots, in slot order. */
+    private List<ItemStack> window() {
+        List<ItemStack> contents = new ArrayList<>(45);
+        for (int i = 0; i < 45; i++) {
+            contents.add(inventory.getItem(i));
+        }
+        return contents;
     }
 
     public void handleClose(InventoryCloseEvent event) {
