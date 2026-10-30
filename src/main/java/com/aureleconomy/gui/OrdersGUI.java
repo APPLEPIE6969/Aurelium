@@ -20,24 +20,22 @@ public class OrdersGUI extends GUIHolder {
     private final AurelEconomy plugin;
     private final Player player;
     private final Inventory inventory;
-    private int page;
-    private String searchQuery = null;
+    private final GuiSearchView search;
     private final List<BuyOrder> allOrders;
 
-    public OrdersGUI(AurelEconomy plugin, Player player, int page) {
+    public OrdersGUI(AurelEconomy plugin, Player player, GuiSearchView search) {
         this.plugin = plugin;
         this.player = player;
-        this.page = page;
+        this.search = search;
         this.inventory = Bukkit.createInventory(this, 54,
                 Component.text("Global Buy Orders", NamedTextColor.DARK_GRAY));
         this.allOrders = new java.util.ArrayList<>(plugin.getOrderManager().getActiveOrders());
         plugin.addViewer(player);
     }
 
-    public void setSearchQuery(String query) {
-        this.searchQuery = query;
-        this.page = 0;
-        refresh();
+    /** Read-only view state, for tests and for rebuilds. */
+    GuiSearchView view() {
+        return search;
     }
 
     public void open() {
@@ -54,15 +52,9 @@ public class OrdersGUI extends GUIHolder {
     private void setupItems() {
         inventory.clear();
 
-        List<BuyOrder> filtered = allOrders;
-        if (searchQuery != null && !searchQuery.isBlank()) {
-            final String q = searchQuery.toLowerCase();
-            filtered = allOrders.stream()
-                    .filter(o -> o.getMaterial().name().toLowerCase().contains(q))
-                    .toList();
-        }
+        List<BuyOrder> filtered = search.filter(allOrders, o -> o.getMaterial().name());
 
-        int startIdx = page * 45;
+        int startIdx = search.page() * 45;
         for (int i = 0; i < 45; i++) {
             if (startIdx + i >= filtered.size())
                 break;
@@ -105,7 +97,7 @@ public class OrdersGUI extends GUIHolder {
                 new ItemBuilder(Material.COMPASS).name(Component.text("Search Orders", NamedTextColor.GOLD))
                         .lore(Component.text("Find a specific item requested", NamedTextColor.GRAY)).build());
 
-        if (page > 0) {
+        if (search.hasPrevious()) {
             inventory.setItem(48, new ItemBuilder(Material.ARROW)
                     .name(Component.text("Previous Page", NamedTextColor.YELLOW)).build());
         }
@@ -113,7 +105,7 @@ public class OrdersGUI extends GUIHolder {
         inventory.setItem(49,
                 new ItemBuilder(Material.BARRIER).name(Component.text("Close", NamedTextColor.RED)).build());
 
-        if (startIdx + 45 < filtered.size()) {
+        if (search.hasNext(filtered.size(), 45)) {
             inventory.setItem(50,
                     new ItemBuilder(Material.ARROW).name(Component.text("Next Page", NamedTextColor.YELLOW)).build());
         }
@@ -142,37 +134,31 @@ public class OrdersGUI extends GUIHolder {
             plugin.getChatPromptManager().prompt(player, query -> {
                 if (query.equalsIgnoreCase("cancel")) {
                     player.sendMessage(Component.text("Search cancelled.", NamedTextColor.RED));
-                    new OrdersGUI(plugin, player, 0).open();
+                    new OrdersGUI(plugin, player, search).open();
                     return;
                 }
                 if (query.equalsIgnoreCase("clear")) {
-                    setSearchQuery(null);
-                    new OrdersGUI(plugin, player, 0).open();
+                    new OrdersGUI(plugin, player, GuiSearchView.none()).open();
                     return;
                 }
-                setSearchQuery(query);
-                new OrdersGUI(plugin, player, 0).open(); 
+                // The query goes into the constructor: setting it on this instance
+                // and then opening a fresh GUI lost it, because the fresh one was
+                // built with the default empty view.
+                new OrdersGUI(plugin, player, search.withQuery(query)).open();
             });
-        } else if (slot == 48 && page > 0) {
-            page--;
-            refresh();
+        } else if (slot == 48 && search.hasPrevious()) {
+            new OrdersGUI(plugin, player, search.previous()).open();
         } else if (slot == 49) {
             player.closeInventory();
-        } else if (slot == 50 && (page * 45) + 45 < allOrders.size()) {
-            page++;
-            refresh();
+        } else if (slot == 50
+                && search.hasNext(search.filter(allOrders, o -> o.getMaterial().name()).size(), 45)) {
+            new OrdersGUI(plugin, player, search.next()).open();
         } else if (slot == 53) { 
             new MyOrdersGUI(plugin, player, 0).open();
         } else if (slot < 45) {
-            List<BuyOrder> filtered = allOrders;
-            if (searchQuery != null && !searchQuery.isBlank()) {
-                final String q = searchQuery.toLowerCase();
-                filtered = allOrders.stream()
-                        .filter(o -> o.getMaterial().name().toLowerCase().contains(q))
-                        .toList();
-            }
+            List<BuyOrder> filtered = search.filter(allOrders, o -> o.getMaterial().name());
 
-            int orderIndex = (page * 45) + slot;
+            int orderIndex = (search.page() * 45) + slot;
             if (orderIndex < filtered.size()) {
                 BuyOrder order = filtered.get(orderIndex);
 

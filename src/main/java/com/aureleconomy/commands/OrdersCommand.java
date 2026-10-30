@@ -43,7 +43,7 @@ public class OrdersCommand implements TabExecutor {
 
         // No subcommand = open the GUI
         if (args.length == 0) {
-            new com.aureleconomy.gui.OrdersGUI(plugin, player, 0).open();
+            new com.aureleconomy.gui.OrdersGUI(plugin, player, com.aureleconomy.gui.GuiSearchView.none()).open();
             return true;
         }
 

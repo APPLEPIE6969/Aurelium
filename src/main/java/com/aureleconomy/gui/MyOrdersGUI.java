@@ -96,7 +96,7 @@ public class MyOrdersGUI extends GUIHolder {
 
         int slot = event.getRawSlot();
         if (slot == 45) { 
-            new OrdersGUI(plugin, player, 0).open();
+            new OrdersGUI(plugin, player, GuiSearchView.none()).open();
         } else if (slot == 48 && page > 0) {
             page--;
             refresh();

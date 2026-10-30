@@ -32,12 +32,10 @@ public class ShopGUI extends GUIHolder {
 
     private final AurelEconomy plugin;
     private final Category category;
-    private final int page;
+    private final GuiSearchView search;
 
     private final Map<Integer, Category> categorySlots = new HashMap<>();
     private final Map<Integer, MarketEntry> itemSlots = new HashMap<>();
-
-    private String searchQuery = null;
 
     private static final ItemStack FILLER;
     static {
@@ -56,13 +54,13 @@ public class ShopGUI extends GUIHolder {
     }
 
     public ShopGUI(AurelEconomy plugin, Player player) {
-        this(plugin, player, null, 0);
+        this(plugin, player, null, GuiSearchView.none());
     }
 
-    public ShopGUI(AurelEconomy plugin, Player player, Category category, int page) {
+    public ShopGUI(AurelEconomy plugin, Player player, Category category, GuiSearchView search) {
         this.plugin = plugin;
         this.category = category;
-        this.page = page;
+        this.search = search;
 
         if (category == null) {
             this.inventory = plugin.getServer().createInventory(this, 27,
@@ -73,6 +71,11 @@ public class ShopGUI extends GUIHolder {
                     MM.deserialize("<gradient:#55AAFF:#55FFFF>" + category.name + "</gradient>"));
             setupItems();
         }
+    }
+
+    /** Read-only view state, for tests and for rebuilds. */
+    GuiSearchView view() {
+        return search;
     }
 
     private void setupCategories() {
@@ -127,8 +130,8 @@ public class ShopGUI extends GUIHolder {
     @SuppressWarnings("deprecation")
     private void setupItems() {
         List<MarketEntry> allItems;
-        if (searchQuery != null) {
-            allItems = searchItems(searchQuery);
+        if (search.active()) {
+            allItems = searchItems(search.query());
         } else {
             allItems = MarketItems.getItems(category);
         }
@@ -145,7 +148,7 @@ public class ShopGUI extends GUIHolder {
         {
             ItemStack back = new ItemStack(Material.ARROW);
             ItemMeta m = back.getItemMeta();
-            m.displayName(MM.deserialize(searchQuery != null
+            m.displayName(MM.deserialize(search.active()
                     ? "<red><bold>✖ Clear Search</bold></red>"
                     : "<red><bold>← Back</bold></red>")
                     .decoration(TextDecoration.ITALIC, false));
@@ -153,7 +156,7 @@ public class ShopGUI extends GUIHolder {
             inventory.setItem(45, back);
         }
 
-        if (page > 0) {
+        if (search.hasPrevious()) {
             ItemStack prev = new ItemStack(Material.SPECTRAL_ARROW);
             ItemMeta m = prev.getItemMeta();
             m.displayName(MM.deserialize("<yellow><bold>◀ Previous Page</bold></yellow>")
@@ -166,13 +169,13 @@ public class ShopGUI extends GUIHolder {
             ItemStack info = new ItemStack(Material.BOOK);
             ItemMeta m = info.getItemMeta();
             m.displayName(MM
-                    .deserialize("<white>Page <gold>" + (page + 1) + "</gold>/<gold>" + totalPages + "</gold></white>")
+                    .deserialize("<white>Page <gold>" + (search.page() + 1) + "</gold>/<gold>" + totalPages + "</gold></white>")
                     .decoration(TextDecoration.ITALIC, false));
             info.setItemMeta(m);
             inventory.setItem(49, info);
         }
 
-        if (page < totalPages - 1) {
+        if (search.hasNext(totalItems, itemsPerPage)) {
             ItemStack next = new ItemStack(Material.SPECTRAL_ARROW);
             ItemMeta m = next.getItemMeta();
             m.displayName(MM.deserialize("<yellow><bold>Next Page ▶</bold></yellow>")
@@ -184,8 +187,8 @@ public class ShopGUI extends GUIHolder {
         {
             ItemStack compass = new ItemStack(Material.COMPASS);
             ItemMeta m = compass.getItemMeta();
-            m.displayName(MM.deserialize(searchQuery != null
-                    ? "<aqua><bold>🔍 " + searchQuery + "</bold></aqua>"
+            m.displayName(MM.deserialize(search.active()
+                    ? "<aqua><bold>🔍 " + search.query() + "</bold></aqua>"
                     : "<aqua><bold>🔍 Search</bold></aqua>")
                     .decoration(TextDecoration.ITALIC, false));
             compass.setItemMeta(m);
@@ -194,7 +197,7 @@ public class ShopGUI extends GUIHolder {
 
         int[] contentSlots = getContentSlots();
 
-        int startIndex = page * itemsPerPage;
+        int startIndex = search.page() * itemsPerPage;
         int endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
         for (int i = startIndex; i < endIndex; i++) {
@@ -267,7 +270,7 @@ public class ShopGUI extends GUIHolder {
         if (category == null) {
             if (categorySlots.containsKey(slot)) {
                 clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.2f);
-                new ShopGUI(plugin, clicker, categorySlots.get(slot), 0).open(clicker);
+                new ShopGUI(plugin, clicker, categorySlots.get(slot), GuiSearchView.none()).open(clicker);
             } else if (slot == 4) {
                 promptSearch(clicker);
             }
@@ -283,27 +286,24 @@ public class ShopGUI extends GUIHolder {
 
         if (slot == 45) {
             clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 0.8f);
-            if (searchQuery != null) {
-                searchQuery = null;
-                refreshItems();
+            if (search.active()) {
+                openView(clicker, search.withQuery(null));
             } else {
                 new ShopGUI(plugin, clicker).open(clicker);
             }
             return;
         }
 
-        if (slot == 48 && page > 0) {
+        if (slot == 48 && search.hasPrevious()) {
             clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.0f);
-            ShopGUI prev = new ShopGUI(plugin, clicker, category, page - 1);
-            prev.searchQuery = this.searchQuery;
-            prev.open(clicker);
+            openView(clicker, search.previous());
             return;
         }
 
         if (slot == 50) {
             List<MarketEntry> allItems;
-            if (searchQuery != null) {
-                allItems = searchItems(searchQuery);
+            if (search.active()) {
+                allItems = searchItems(search.query());
             } else {
                 allItems = MarketItems.getItems(category);
             }
@@ -311,15 +311,9 @@ public class ShopGUI extends GUIHolder {
                     .filter(e -> !plugin.getMarketManager().isBlacklisted(e.material))
                     .toList();
 
-            int itemsPerPage = 28;
-            int totalItems = allItems.size();
-            int totalPages = Math.max(1, (int) Math.ceil((double) totalItems / itemsPerPage));
-
-            if (page < totalPages - 1) {
+            if (search.hasNext(allItems.size(), 28)) {
                 clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1.0f);
-                ShopGUI next = new ShopGUI(plugin, clicker, category, page + 1);
-                next.searchQuery = this.searchQuery;
-                next.open(clicker);
+                openView(clicker, search.next());
             }
             return;
         }
@@ -458,24 +452,25 @@ public class ShopGUI extends GUIHolder {
                 "<aqua><bold>🔍</bold></aqua> <gray>Type your search query in chat</gray> <dark_gray>(or</dark_gray> <red>cancel</red><dark_gray>)</dark_gray>"));
         plugin.getChatPromptManager().prompt(target, (input) -> {
             if (input.equalsIgnoreCase("cancel")) {
-                new ShopGUI(plugin, target, category, page).open(target);
+                new ShopGUI(plugin, target, category, search).open(target);
                 return;
             }
-            ShopGUI gui = new ShopGUI(plugin, target, category != null ? category : Category.ALL_ITEMS, 0);
-            gui.searchQuery = input;
-            gui.refreshItems();
-            gui.open(target);
+            // The query goes into the constructor. Assigning it afterwards and
+            // refreshing worked on this screen, but the page arrows did the same
+            // assignment and then opened without a refresh, so the next page came
+            // back unfiltered.
+            new ShopGUI(plugin, target, category != null ? category : Category.ALL_ITEMS,
+                    search.withQuery(input)).open(target);
         });
+    }
+
+    private void openView(Player player, GuiSearchView view) {
+        new ShopGUI(plugin, player, category, view).open(player);
     }
 
     private void refreshItems() {
         itemSlots.clear();
         inventory.clear();
         setupItems();
-    }
-
-    public void setSearchQuery(String query) {
-        this.searchQuery = query;
-        refreshItems();
     }
 }

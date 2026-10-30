@@ -74,7 +74,7 @@ public class OrderCategoryGUI extends GUIHolder {
 
         int slot = event.getRawSlot();
         if (slot == 40) {
-            new OrdersGUI(plugin, player, 0).open();
+            new OrdersGUI(plugin, player, GuiSearchView.none()).open();
             return;
         }
 

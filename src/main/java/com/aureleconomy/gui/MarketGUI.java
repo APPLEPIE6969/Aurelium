@@ -25,22 +25,23 @@ public class MarketGUI extends GUIHolder {
 
     private final AurelEconomy plugin;
     private final Category category;
-    private final int page;
+    private final GuiSearchView search;
     private final Map<Integer, Category> slots = new HashMap<>();
     private final Map<Integer, MarketEntry> itemSlots = new HashMap<>();
-    private String searchQuery = null;
     private static final Map<java.util.UUID, Long> clickCooldowns = new HashMap<>();
     private static final long COOLDOWN_MS = 100; // 0.1s cooldown
 
-    public MarketGUI(AurelEconomy plugin, Player player, Category category, int page) {
+    public MarketGUI(AurelEconomy plugin, Player player, Category category, GuiSearchView search) {
         this.plugin = plugin;
         this.category = category;
-        this.page = page;
+        this.search = search;
 
         this.inventory = plugin.getServer().createInventory(this, 54,
                 Component.text("Market - " + (category != null ? category.name : "Categories")));
 
-        if (category == null) {
+        if (search.active()) {
+            setupSearch();
+        } else if (category == null) {
             setupCategories();
         } else {
             setupItems();
@@ -48,7 +49,12 @@ public class MarketGUI extends GUIHolder {
     }
 
     public MarketGUI(AurelEconomy plugin, Player player) {
-        this(plugin, player, null, 0);
+        this(plugin, player, null, GuiSearchView.none());
+    }
+
+    /** Read-only view state, for tests and for rebuilds. */
+    GuiSearchView view() {
+        return search;
     }
 
     private void setupCategories() {
@@ -78,14 +84,8 @@ public class MarketGUI extends GUIHolder {
         itemSlots.clear();
         inventory.clear();
 
-        List<MarketEntry> matches = new java.util.ArrayList<>();
-        String query = searchQuery.toLowerCase();
-
-        for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
-            if (entry.searchName.contains(query)) {
-                matches.add(entry);
-            }
-        }
+        List<MarketEntry> matches = search.filter(MarketItems.getItems(Category.ALL_ITEMS),
+                entry -> entry.searchName);
 
         renderItems(matches);
     }
@@ -103,34 +103,34 @@ public class MarketGUI extends GUIHolder {
         int totalPages = (int) Math.ceil((double) totalItems / itemsPerPage);
 
         inventory.setItem(46, new ItemBuilder(Material.COMPASS)
-                .name(Component.text(searchQuery != null ? "Change Search: " + searchQuery : "Search Market",
+                .name(Component.text(search.active() ? "Change Search: " + search.query() : "Search Market",
                         NamedTextColor.AQUA))
                 .lore(Component.text("Click to find specific items", NamedTextColor.GRAY))
                 .build());
 
         inventory.setItem(49, new ItemBuilder(Material.BOOK)
-                .name(Component.text("Page " + (page + 1) + " of " + totalPages, NamedTextColor.WHITE))
+                .name(Component.text("Page " + (search.page() + 1) + " of " + totalPages, NamedTextColor.WHITE))
                 .lore(Component.text(
-                        searchQuery != null ? "Search Results: " + totalItems : "Total Items: " + totalItems,
+                        search.active() ? "Search Results: " + totalItems : "Total Items: " + totalItems,
                         NamedTextColor.GRAY))
                 .build());
 
-        if (page > 0) {
+        if (search.hasPrevious()) {
             inventory.setItem(48,
                     new ItemBuilder(Material.PAPER).name(Component.text("Previous Page", NamedTextColor.YELLOW))
                             .build());
         }
 
-        if (page < totalPages - 1) {
+        if (search.hasNext(totalItems, itemsPerPage)) {
             inventory.setItem(50,
                     new ItemBuilder(Material.PAPER).name(Component.text("Next Page", NamedTextColor.YELLOW)).build());
         }
 
         inventory.setItem(45, new ItemBuilder(Material.BARRIER)
-                .name(Component.text(searchQuery != null ? "Clear Search" : "Back to Categories", NamedTextColor.RED))
+                .name(Component.text(search.active() ? "Clear Search" : "Back to Categories", NamedTextColor.RED))
                 .build());
 
-        int startIndex = page * itemsPerPage;
+        int startIndex = search.page() * itemsPerPage;
         int endIndex = Math.min(startIndex + itemsPerPage, totalItems);
 
         for (int i = startIndex; i < endIndex; i++) {
@@ -200,41 +200,32 @@ public class MarketGUI extends GUIHolder {
 
         if (category == null) {
             if (slots.containsKey(slot)) {
-                new MarketGUI(plugin, player, slots.get(slot), 0).open(player);
+                new MarketGUI(plugin, player, slots.get(slot), GuiSearchView.none()).open(player);
             } else if (slot == 46) {
                 promptSearch(player);
             }
         } else {
-            if (slot == 45 || (slot == 49 && searchQuery != null)) {
-                if (searchQuery != null) {
-                    searchQuery = null;
-                    refresh();
+            if (slot == 45 || (slot == 49 && search.active())) {
+                if (search.active()) {
+                    openView(player, search.withQuery(null));
                 } else {
                     new MarketGUI(plugin, player).open(player);
                 }
-            } else if (slot == 48 && page > 0) {
-                new MarketGUI(plugin, player, category, page - 1).open(player);
+            } else if (slot == 48 && search.hasPrevious()) {
+                openView(player, search.previous());
             } else if (slot == 50) {
                 List<MarketEntry> allItems;
-                if (searchQuery != null) {
-                    allItems = new java.util.ArrayList<>();
-                    String query = searchQuery.toLowerCase();
-                    for (MarketEntry entry : MarketItems.getItems(Category.ALL_ITEMS)) {
-                        if (entry.searchName.contains(query)) {
-                            allItems.add(entry);
-                        }
-                    }
+                if (search.active()) {
+                    allItems = search.filter(MarketItems.getItems(Category.ALL_ITEMS), entry -> entry.searchName);
                 } else {
                     allItems = MarketItems.getItems(category);
                 }
 
                 allItems = allItems.stream().filter(entry -> !plugin.getMarketManager().isBlacklisted(entry.material))
                         .collect(java.util.stream.Collectors.toList());
-                int itemsPerPage = 45;
-                int totalPages = (int) Math.ceil((double) allItems.size() / itemsPerPage);
 
-                if (page < totalPages - 1) {
-                    new MarketGUI(plugin, player, category, page + 1).open(player);
+                if (search.hasNext(allItems.size(), 45)) {
+                    openView(player, search.next());
                 }
             } else if (slot == 46) {
                 promptSearch(player);
@@ -350,15 +341,17 @@ public class MarketGUI extends GUIHolder {
                 open(player);
                 return;
             }
-            this.searchQuery = input;
-            refresh();
-            open(player);
+            openView(player, search.withQuery(input));
         });
+    }
+
+    private void openView(Player player, GuiSearchView view) {
+        new MarketGUI(plugin, player, category, view).open(player);
     }
 
     public void refresh() {
         inventory.clear();
-        if (searchQuery != null) {
+        if (search.active()) {
             setupSearch();
         } else if (category == null) {
             setupCategories();

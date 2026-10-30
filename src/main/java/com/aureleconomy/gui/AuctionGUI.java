@@ -487,6 +487,7 @@ refresh();
  return;
  }
  this.searchQuery = input;
+ refresh();
  open();
  });
  }
