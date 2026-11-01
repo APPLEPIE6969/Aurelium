@@ -6,7 +6,9 @@ import com.aureleconomy.utils.ItemBuilder;
 import com.aureleconomy.utils.PriceParser;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -28,6 +30,8 @@ public class AuctionGUI extends GUIHolder {
  private final boolean isCollectionBin;
  private String searchQuery = null;
  private final NamespacedKey auctionIdKey;
+ /** Canonical stacks shown in the bin, keyed by auction id, never the display copies. */
+ private final Map<Integer, ItemStack> collectable = new HashMap<>();
 
  public AuctionGUI(AurelEconomy plugin, Player player, boolean isCollectionBin) {
  this.plugin = plugin;
@@ -87,14 +91,26 @@ public class AuctionGUI extends GUIHolder {
  }
 
  private void setupCollectionBin() {
+ collectable.clear();
  List<AuctionItem> items = plugin.getAuctionManager().getCollectionBin(player.getUniqueId());
  for (AuctionItem ai : items) {
  if (inventory.firstEmpty() == -1)
  break;
 
+ // The bin holds the item that was listed, serialized in the database.
+ // Keep that exact stack for delivery; the copy below is only the view, and
+ // its lore is the view's, never the player's item (M4).
+ collectable.put(ai.getId(), ai.getItem().clone());
+
  ItemStack display = ai.getItem().clone();
  display.editMeta(meta -> {
- meta.lore(List.of(Component.text("Click to Collect", NamedTextColor.GREEN)));
+ // Append rather than replace, so a custom item still shows its own lore
+ // while it waits in the bin.
+ List<Component> lore = meta.lore() == null
+ ? new java.util.ArrayList<>()
+ : new java.util.ArrayList<>(meta.lore());
+ lore.add(Component.text("Click to Collect", NamedTextColor.GREEN));
+ meta.lore(lore);
  meta.getPersistentDataContainer().set(auctionIdKey, PersistentDataType.INTEGER, ai.getId());
  });
  inventory.addItem(display);
@@ -353,11 +369,16 @@ refresh();
  if (id == null)
  return;
 
- ItemStack give = clicked.clone();
- give.editMeta(meta -> {
- meta.lore(null);
- meta.getPersistentDataContainer().remove(auctionIdKey);
- });
+ ItemStack canonical = collectable.get(id);
+ if (canonical == null) {
+ // The display copy is not the item. Handing it back loses the item's real
+ // lore, so refuse rather than deliver a different stack (M4).
+ player.sendMessage(Component.text("This item is no longer in your collection bin.", NamedTextColor.RED));
+ refresh();
+ return;
+ }
+
+ ItemStack give = canonical.clone();
 
  if (!com.aureleconomy.utils.InventoryUtils.hasSpace(player.getInventory(), give, give.getAmount())) {
  player.sendMessage(Component.text("Cannot collect: Your inventory is full!", NamedTextColor.RED));
