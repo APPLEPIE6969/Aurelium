@@ -1031,6 +1031,43 @@ check(
         read('src/test/java/com/aureleconomy/scanner/IsSimilarDedupTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# M11: migration v4 retyped timestamp columns to BIGINT without looking at
+# what was in them, so a datetime string written by an earlier release made
+# the ALTER fail (strict mode) or keep only the year (not strict). And the
+# only rollback test set the version above the latest, which returns before
+# anything runs, so the rollback branch was never executed.
+# --------------------------------------------------------------------------
+migration_src = strip_comments(read('src/main/java/com/aureleconomy/database/DatabaseManager.java'))
+check(
+    'M11 v4 normalises text timestamps before it retypes the column',
+    'for (String sql : timeColumnConversionStatements(table, column))' in migration_src
+    and 'statements.add("ALTER TABLE " + table + " MODIFY COLUMN " + column + " BIGINT");'
+    in migration_src,
+    'a normalisation that is not run before the ALTER fixes nothing',
+)
+check(
+    'M11 the v4 retype happens in exactly one place',
+    migration_src.count('"ALTER TABLE " + table + " MODIFY COLUMN " + column + " BIGINT"') == 1,
+    'a direct ALTER next to the list is the old order coming back',
+)
+check(
+    'M11 the rollback test fails a migration that is already running',
+    'failedStepRollsBackAndKeepsTheVersionBehind' in strip_comments(
+        read('src/test/java/com/aureleconomy/database/DatabaseMigrationRollbackTest.java'))
+    and 'CREATE INDEX idx_transaction_ledger_actor ON players' in strip_comments(
+        read('src/test/java/com/aureleconomy/database/DatabaseMigrationRollbackTest.java')),
+    'a version above the latest returns before applyMigration, so it tests nothing',
+)
+check(
+    'M11 the rollback test asserts the previous version and the rolled-back step',
+    'idx_price_history_timestamp' in strip_comments(
+        read('src/test/java/com/aureleconomy/database/DatabaseMigrationRollbackTest.java'))
+    and 'assertFalse(indexes.contains("idx_price_history_timestamp")' in strip_comments(
+        read('src/test/java/com/aureleconomy/database/DatabaseMigrationRollbackTest.java')),
+    'the test has to name the step that must be gone, not just the version row',
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

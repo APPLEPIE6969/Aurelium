@@ -6,6 +6,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.bukkit.configuration.file.FileConfiguration;
@@ -257,6 +258,15 @@ public class DatabaseManager {
         try {
             connection.setAutoCommit(false);
 
+            // What the transaction is worth depends on the backend (M11). SQLite runs
+            // DDL inside a transaction, so a failure here rolls every step back. MySQL
+            // commits each ALTER and CREATE implicitly, so the rollback cannot undo the
+            // steps that already ran; what it does guarantee is that the version row is
+            // not advanced, and every step is written to be re-runnable: columns and
+            // indexes are probed before they are created, tables carry IF NOT EXISTS,
+            // and the v4 timestamp conversion normalises before it retypes. A failed
+            // migration on MySQL therefore resumes from where it stopped on the next
+            // start, rather than needing a restored backup.
             for (int i = currentVersion + 1; i <= LATEST_SCHEMA_VERSION; i++) {
                 plugin.getComponentLogger().info("Applying database migration v" + i + "...");
                 applyMigration(connection, i);
@@ -398,6 +408,14 @@ public class DatabaseManager {
     /**
      * Retypes a timestamp column to BIGINT on MySQL/MariaDB. A no-op on SQLite, where
      * {@code LONG} already carries numeric affinity, and on columns that do not exist.
+     *
+     * <p>M11: the retype cannot be the first thing that happens to the column. A
+     * server that ran an earlier release holds epoch millis as text, but it can also
+     * hold the shapes those releases accepted, and MySQL will not convert a datetime
+     * string to BIGINT: under a strict sql_mode the ALTER fails and the migration
+     * stops half way, and without strict mode it keeps the year and silently rewrites
+     * every timestamp. The values are normalised first, so the ALTER only ever sees
+     * digits.
      */
     private void convertTimeColumnToBigInt(Connection conn, String table, String column) throws SQLException {
         if (settings.getType() != DatabaseType.MYSQL) {
@@ -407,8 +425,43 @@ public class DatabaseManager {
             if (!columnExists(statement, table, column)) {
                 return;
             }
-            statement.execute("ALTER TABLE " + table + " MODIFY COLUMN " + column + " BIGINT");
+            for (String sql : timeColumnConversionStatements(table, column)) {
+                statement.execute(sql);
+            }
         }
+    }
+
+    /**
+     * The statements that turn text timestamps into epoch millis before the column is
+     * retyped (M11).
+     *
+     * <p>Two passes on purpose. The first converts the datetimes earlier releases
+     * wrote, in milliseconds like the rest of the schema. The second catches whatever
+     * is left that is still not a number, so the ALTER cannot fail and cannot keep
+     * only the leading digits: an unparseable timestamp becomes 0, which is the
+     * "never set" value the rest of the schema already uses, rather than a date in
+     * the year 2025 pretending to be epoch millis.
+     *
+     * <p>The retype is part of the same list so the order is the method's contract,
+     * not a call-site convention: a normalisation that is written but not run before
+     * the ALTER fixes nothing.
+     *
+     * <p>Split out so the shape and the order are testable without a MySQL server.
+     */
+    static List<String> timeColumnConversionStatements(String table, String column) {
+        List<String> statements = new ArrayList<>(normaliseTextTimestamps(table, column));
+        statements.add("ALTER TABLE " + table + " MODIFY COLUMN " + column + " BIGINT");
+        return statements;
+    }
+
+    static List<String> normaliseTextTimestamps(String table, String column) {
+        String target = "`" + table + "`";
+        String value = "`" + column + "`";
+        String notANumber = value + " IS NOT NULL AND " + value + " NOT REGEXP '^[0-9]+$'";
+        return List.of(
+                "UPDATE " + target + " SET " + value + " = CAST(UNIX_TIMESTAMP(" + value + ") AS SIGNED) * 1000"
+                        + " WHERE " + notANumber + " AND UNIX_TIMESTAMP(" + value + ") IS NOT NULL",
+                "UPDATE " + target + " SET " + value + " = 0 WHERE " + notANumber);
     }
 
     /** Money columns F4 retypes, in the order they are altered. */
