@@ -55,7 +55,7 @@ class CustomItemRegistryTest {
     String loreHash, String pluginNativeId) {
     ItemStack stack = mockItemStack(Material.DIAMOND_SWORD,
        modelDataKey != null ? Integer.parseInt(modelDataKey.split(":")[1]) : 0,
-       "Test Item", null);
+       "Test Item", loreHash != null ? List.of(Component.text("Lore " + loreHash)) : null);
     return new CustomMarketItem.Builder()
        .canonicalId(canonicalId)
        .itemStack(stack)

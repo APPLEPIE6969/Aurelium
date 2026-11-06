@@ -998,6 +998,39 @@ check(
                                 'gui', 'AuctionBinSnapshotTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# M10: the scanner's lore dedup keyed a map on the lore hash alone, so two
+# different items that carry the same lore merged into one entry and the
+# second sold at the first one's price.
+# --------------------------------------------------------------------------
+registry_src = strip_comments(read('src/main/java/com/aureleconomy/scanner/CustomItemRegistry.java'))
+check(
+    'M10 the lore dedup key carries the material the lore came from',
+    'String material = stack == null ? "" : stack.getType().name();' in registry_src
+    and 'return material + "|" + loreHash;' in registry_src,
+    'a lore hash identifies a piece of lore text, not an item',
+)
+check(
+    'M10 a lore match also compares the lore itself',
+    registry_src.count('sameLore(existing.getItemStack(), item.getItemStack())') == 2
+    and 'sameLore(existing.getItemStack(), item)' in registry_src,
+    'the key still holds a hash, so the merge cannot be the hash alone',
+)
+check(
+    'M10 no lookup is keyed on the bare lore hash',
+    'loreHashToId.get(item.getLoreHash())' not in registry_src
+    and 'loreHashToId.put(item.getLoreHash()' not in registry_src
+    and 'loreHashToId.get(lHash)' not in registry_src,
+    'one unscoped put is enough to bring the merge back',
+)
+check(
+    'M10 the dedup test covers same lore on two materials and a hash collision',
+    'sameLoreOnDifferentMaterialsStaysSeparate' in strip_comments(
+        read('src/test/java/com/aureleconomy/scanner/IsSimilarDedupTest.java'))
+    and 'aHashCollisionDoesNotMergeTwoDifferentLores' in strip_comments(
+        read('src/test/java/com/aureleconomy/scanner/IsSimilarDedupTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

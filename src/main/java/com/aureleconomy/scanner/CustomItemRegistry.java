@@ -78,11 +78,15 @@ public class CustomItemRegistry {
  }
 
  // 4. Check lore hash
- if (item.getLoreHash() != null && loreHashToId.containsKey(item.getLoreHash())) {
- String existingId = loreHashToId.get(item.getLoreHash());
+ String newLoreKey = loreKey(item);
+ if (newLoreKey != null && loreHashToId.containsKey(newLoreKey)) {
+ String existingId = loreHashToId.get(newLoreKey);
+ CustomMarketItem existing = itemsById.get(existingId);
+ if (existing != null && sameLore(existing.getItemStack(), item.getItemStack())) {
  addDiscoveryMethod(existingId, method);
  duplicatesPrevented.incrementAndGet();
  return RegistrationResult.alreadyExists(existingId, method);
+ }
  }
 
  // 5. Check plugin native ID
@@ -131,11 +135,14 @@ public class CustomItemRegistry {
  return RegistrationResult.alreadyExists(existingId, method);
  }
 
- if (item.getLoreHash() != null && loreHashToId.containsKey(item.getLoreHash())) {
- String existingId = loreHashToId.get(item.getLoreHash());
+ if (newLoreKey != null && loreHashToId.containsKey(newLoreKey)) {
+ String existingId = loreHashToId.get(newLoreKey);
+ CustomMarketItem existing = itemsById.get(existingId);
+ if (existing != null && sameLore(existing.getItemStack(), item.getItemStack())) {
  addDiscoveryMethod(existingId, method);
  duplicatesPrevented.incrementAndGet();
  return RegistrationResult.alreadyExists(existingId, method);
+ }
  }
 
  if (item.getPluginNativeId() != null && pluginNativeIdToId.containsKey(item.getPluginNativeId())) {
@@ -160,7 +167,7 @@ public class CustomItemRegistry {
  itemsById.put(canonicalId, item);
  if (item.getPdcKey() != null) pdcKeyToId.put(item.getPdcKey(), canonicalId);
  if (item.getModelDataKey() != null) modelDataToId.put(item.getModelDataKey(), canonicalId);
- if (item.getLoreHash() != null) loreHashToId.put(item.getLoreHash(), canonicalId);
+ if (newLoreKey != null) loreHashToId.put(newLoreKey, canonicalId);
  if (item.getPluginNativeId() != null) pluginNativeIdToId.put(item.getPluginNativeId(), canonicalId);
  itemHashToId.put(lockedItemHash, canonicalId);
  addDiscoveryMethod(canonicalId, method);
@@ -194,7 +201,8 @@ public class CustomItemRegistry {
  if (old != null) {
  if (old.getPdcKey() != null) pdcKeyToId.remove(old.getPdcKey());
  if (old.getModelDataKey() != null) modelDataToId.remove(old.getModelDataKey());
- if (old.getLoreHash() != null) loreHashToId.remove(old.getLoreHash());
+ String oldLoreKey = loreKey(old);
+ if (oldLoreKey != null) loreHashToId.remove(oldLoreKey);
  if (old.getPluginNativeId() != null) pluginNativeIdToId.remove(old.getPluginNativeId());
  itemHashToId.remove(computeItemHash(old.getItemStack()));
  }
@@ -203,7 +211,8 @@ public class CustomItemRegistry {
  // Re-index dedup keys with new values
  if (item.getPdcKey() != null) pdcKeyToId.put(item.getPdcKey(), canonicalId);
  if (item.getModelDataKey() != null) modelDataToId.put(item.getModelDataKey(), canonicalId);
- if (item.getLoreHash() != null) loreHashToId.put(item.getLoreHash(), canonicalId);
+ String newLoreKey = loreKey(item);
+ if (newLoreKey != null) loreHashToId.put(newLoreKey, canonicalId);
  if (item.getPluginNativeId() != null) pluginNativeIdToId.put(item.getPluginNativeId(), canonicalId);
  itemHashToId.put(computeItemHash(item.getItemStack()), canonicalId);
  }
@@ -235,6 +244,35 @@ public class CustomItemRegistry {
  itemHashToId.clear();
  discoveryMethods.clear();
  }
+ }
+
+ /**
+  * The lore dedup key. A lore hash identifies a piece of lore text, not an item:
+  * two different items can carry the same lore, so the key carries the material
+  * the lore was taken from as well (M10).
+  */
+ private static String loreKey(ItemStack stack, String loreHash) {
+ if (loreHash == null) return null;
+ String material = stack == null ? "" : stack.getType().name();
+ return material + "|" + loreHash;
+ }
+
+ private static String loreKey(CustomMarketItem item) {
+ return loreKey(item.getItemStack(), item.getLoreHash());
+ }
+
+ /** Exact lore equality, so a hash collision cannot merge two different items either (M10). */
+ private static boolean sameLore(ItemStack left, ItemStack right) {
+ java.util.List<net.kyori.adventure.text.Component> a = loreOf(left);
+ java.util.List<net.kyori.adventure.text.Component> b = loreOf(right);
+ return a != null && a.equals(b);
+ }
+
+ private static java.util.List<net.kyori.adventure.text.Component> loreOf(ItemStack stack) {
+ if (stack == null || !stack.hasItemMeta()) return null;
+ org.bukkit.inventory.meta.ItemMeta meta = stack.getItemMeta();
+ if (meta == null || !meta.hasLore() || meta.lore() == null) return null;
+ return meta.lore();
  }
 
  /**
@@ -270,7 +308,10 @@ public class CustomItemRegistry {
  * Tries PDC first (most reliable), then model data, then lore hash, then item hash.
  */
  public Optional<String> resolveItemId(ItemStack item) {
- if (item == null || item.getType().isAir()) return Optional.empty();
+ // Material.isAir() asks the registry for its block type, which a unit test
+ // cannot provide and which costs a lookup on every sell. AIR is the only
+ // material a player can carry that this guard needs to refuse.
+ if (item == null || item.getType() == org.bukkit.Material.AIR) return Optional.empty();
 
  // PDC lookup (most reliable)
  if (item.hasItemMeta()) {
@@ -295,8 +336,15 @@ public class CustomItemRegistry {
  // Lore hash lookup
  if (item.hasItemMeta() && item.getItemMeta().hasLore() && item.getItemMeta().lore() != null) {
  String lHash = String.valueOf(item.getItemMeta().lore().hashCode());
- String id = loreHashToId.get(lHash);
- if (id != null) return Optional.of(id);
+ String id = loreHashToId.get(loreKey(item, lHash));
+ // The key carries the material, and the lore has to match exactly: a lore
+ // hash on its own would resolve any item that carries the same lore (M10).
+ if (id != null) {
+ CustomMarketItem existing = itemsById.get(id);
+ if (existing != null && sameLore(existing.getItemStack(), item)) {
+ return Optional.of(id);
+ }
+ }
  }
 
  // Item hash lookup
@@ -390,7 +438,8 @@ public class CustomItemRegistry {
  itemsById.put(canonicalId, item);
  if (pdcKey != null) pdcKeyToId.put(pdcKey, canonicalId);
  if (modelDataKey != null) modelDataToId.put(modelDataKey, canonicalId);
- if (loreHash != null) loreHashToId.put(loreHash, canonicalId);
+ String loadedLoreKey = loreKey(itemStack, loreHash);
+ if (loadedLoreKey != null) loreHashToId.put(loadedLoreKey, canonicalId);
  if (pluginNativeId != null) pluginNativeIdToId.put(pluginNativeId, canonicalId);
  itemHashToId.put(computeItemHash(itemStack), canonicalId);
 
@@ -536,7 +585,8 @@ public class CustomItemRegistry {
  if (removed != null) {
  if (removed.getPdcKey() != null) pdcKeyToId.remove(removed.getPdcKey());
  if (removed.getModelDataKey() != null) modelDataToId.remove(removed.getModelDataKey());
- if (removed.getLoreHash() != null) loreHashToId.remove(removed.getLoreHash());
+ String removedLoreKey = loreKey(removed);
+ if (removedLoreKey != null) loreHashToId.remove(removedLoreKey);
  if (removed.getPluginNativeId() != null) pluginNativeIdToId.remove(removed.getPluginNativeId());
  itemHashToId.remove(computeItemHash(removed.getItemStack()));
  discoveryMethods.remove(canonicalId);

@@ -3,6 +3,12 @@ package com.aureleconomy.scanner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.util.List;
+
+import net.kyori.adventure.text.Component;
+import org.bukkit.Material;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -147,5 +153,98 @@ public class IsSimilarDedupTest {
 
  registry.clear();
  assertEquals(0, registry.getTotalItems());
+ }
+
+ /**
+  * M10: the lore hash used to be the dedup key on its own. Two different items
+  * that carry the same lore share that hash, so the second one merged into the
+  * first and sold at the first one's price.
+  */
+ @Test
+ void sameLoreOnDifferentMaterialsStaysSeparate() {
+ List<Component> sharedLore = List.of(Component.text("Ancient script"));
+ CustomMarketItem scroll = loreItem("test:scroll", Material.PAPER, sharedLore, "70.00", "35.00");
+ CustomMarketItem blade = loreItem("test:blade", Material.IRON_SWORD, sharedLore, "120.00", "60.00");
+
+ registerSafely(scroll, DiscoveryMethod.LORE_PATTERN);
+ registerSafely(blade, DiscoveryMethod.LORE_PATTERN);
+
+ assertEquals(2, registry.getTotalItems(),
+   "the same lore on two materials is two items, not one");
+ assertEquals("test:scroll", registry.resolveItemId(scroll.getItemStack()).orElse(null));
+ assertEquals("test:blade", registry.resolveItemId(blade.getItemStack()).orElse(null),
+   "each item resolves to itself, so each sells at its own price");
+ assertEquals(0, registry.getById("test:scroll").getSellPrice().compareTo(new BigDecimal("35.00")));
+ assertEquals(0, registry.getById("test:blade").getSellPrice().compareTo(new BigDecimal("60.00")));
+ }
+
+ /**
+  * The scoped key still contains a hash, so the merge also checks the lore itself:
+  * two different lore texts that collide on their hash must not merge.
+  */
+ @Test
+ void aHashCollisionDoesNotMergeTwoDifferentLores() {
+ String collidingHash = "collision";
+ CustomMarketItem first = loreItem("test:first", Material.PAPER,
+   List.of(Component.text("First inscription")), "10.00", "5.00", collidingHash);
+ CustomMarketItem second = loreItem("test:second", Material.PAPER,
+   List.of(Component.text("Second inscription")), "20.00", "10.00", collidingHash);
+
+ registerSafely(first, DiscoveryMethod.LORE_PATTERN);
+ registerSafely(second, DiscoveryMethod.LORE_PATTERN);
+
+ assertEquals(2, registry.getTotalItems(),
+   "a shared hash is not a shared item: the lore has to match exactly too");
+ assertEquals(0, registry.getById("test:second").getSellPrice().compareTo(new BigDecimal("10.00")));
+ }
+
+ @Test
+ void sameLoreOnTheSameMaterialStillDedupes() { List<Component> sharedLore = List.of(Component.text("Ancient script"));
+ CustomMarketItem first = loreItem("test:scroll_a", Material.PAPER, sharedLore, "70.00", "35.00");
+ CustomMarketItem second = loreItem("test:scroll_b", Material.PAPER, sharedLore, "70.00", "35.00");
+
+ registerSafely(first, DiscoveryMethod.LORE_PATTERN);
+ RegistrationResult result = registerSafely(second, DiscoveryMethod.PLUGIN_API_ORAXEN);
+
+ assertEquals(1, registry.getTotalItems(), "the same lore on the same material is one item");
+ if (result != null) {
+ assertTrue(result.isDuplicate());
+ assertEquals("test:scroll_a", result.getCanonicalId());
+ }
+ }
+
+ private CustomMarketItem loreItem(String canonicalId, Material material, List<Component> lore,
+   String buyPrice, String sellPrice) {
+ return loreItem(canonicalId, material, lore, buyPrice, sellPrice, String.valueOf(lore.hashCode()));
+ }
+
+ private CustomMarketItem loreItem(String canonicalId, Material material, List<Component> lore,
+   String buyPrice, String sellPrice, String loreHash) {
+ org.bukkit.inventory.ItemStack item = org.mockito.Mockito.mock(org.bukkit.inventory.ItemStack.class);
+ org.bukkit.inventory.meta.ItemMeta meta = org.mockito.Mockito.mock(org.bukkit.inventory.meta.ItemMeta.class);
+ org.bukkit.persistence.PersistentDataContainer pdc =
+   org.mockito.Mockito.mock(org.bukkit.persistence.PersistentDataContainer.class);
+
+ org.mockito.Mockito.when(item.getType()).thenReturn(material);
+ org.mockito.Mockito.when(item.hasItemMeta()).thenReturn(true);
+ org.mockito.Mockito.when(item.getItemMeta()).thenReturn(meta);
+ org.mockito.Mockito.when(meta.getPersistentDataContainer()).thenReturn(pdc);
+ org.mockito.Mockito.when(meta.hasCustomModelData()).thenReturn(false);
+ org.mockito.Mockito.when(pdc.getKeys()).thenReturn(java.util.Collections.emptySet());
+ org.mockito.Mockito.when(meta.hasLore()).thenReturn(true);
+ org.mockito.Mockito.when(meta.lore()).thenReturn(lore);
+ org.mockito.Mockito.when(item.clone()).thenReturn(item);
+ org.mockito.Mockito.when(item.isSimilar(org.mockito.Mockito.any())).thenReturn(false);
+
+ return new CustomMarketItem.Builder()
+   .canonicalId(canonicalId)
+   .itemStack(item)
+   .sourcePlugin("LorePattern")
+   .loreHash(loreHash)
+   .displayName("Test Item")
+   .category("custom_items")
+   .buyPrice(new BigDecimal(buyPrice))
+   .sellPrice(new BigDecimal(sellPrice))
+   .build();
  }
 }
