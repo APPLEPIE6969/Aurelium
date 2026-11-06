@@ -227,7 +227,6 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
                 else if (holder instanceof com.aureleconomy.gui.AuctionGUI gui) gui.refresh();
                 else if (holder instanceof com.aureleconomy.gui.OrderMaterialGUI gui) gui.refresh();
                 else if (holder instanceof com.aureleconomy.gui.OrdersGUI gui) gui.refresh();
-                else if (holder instanceof com.aureleconomy.gui.CustomItemsGUI gui) gui.setupItems();
                 else if (holder == null) activeViewers.remove(p);
             }
         }, 20L, 20L);

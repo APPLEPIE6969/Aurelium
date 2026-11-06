@@ -951,6 +951,53 @@ check(
     'even a key prefix in a log is key material in a log file',
 )
 
+# --------------------------------------------------------------------------
+# M6: the one-second GUI refresh rebuilt every open screen, and the collection
+# bin read its rows from the database on each rebuild. The refresh reads a
+# snapshot now and the bin is loaded off the main thread; the collect claim is
+# written off the main thread too.
+# --------------------------------------------------------------------------
+bin_render = auction_gui.split('private void setupCollectionBin', 1)[1].split(
+    'private void requestCollectionBin', 1)[0]
+check(
+    'M6 the bin renders a snapshot instead of querying per rebuild',
+    'getCachedCollectionBin(' in bin_render
+    and 'getCollectionBin(' not in bin_render
+    and 'public List<com.aureleconomy.auction.AuctionItem> getCachedCollectionBin(UUID playerUUID)'
+    in auction_mgr,
+    'a rebuild runs once a second, and a query a second per open bin is the bug',
+)
+bin_load = auction_mgr.split('public void refreshCollectionBin', 1)[1]
+check(
+    'M6 the bin is read on a background thread and handed back on the main one',
+    'runTaskAsynchronously' in bin_load.split('Bukkit.getScheduler().runTask(plugin', 1)[0]
+    and 'Bukkit.getScheduler().runTask(plugin' in bin_load,
+    'reading on the refresh thread is the main-thread JDBC the fix removes',
+)
+check(
+    'M6 one read per player at a time',
+    'if (!collectionBinLoading.add(playerUUID))' in auction_mgr,
+    'without the guard a rebuild per tick queues a read per tick',
+)
+collect_src = auction_gui.split('private void handleCollection', 1)[1].split(
+    'private void confirmCollection', 1)[0]
+check(
+    'M6 the collect claim is written off the main thread',
+    'runTaskAsynchronously' in collect_src
+    and 'markCollectedAtomic' not in collect_src.split('runTaskAsynchronously', 1)[0],
+    'a database write on the click thread is the stall the fix removes',
+)
+check(
+    'M6 the refresh task no longer rebuilds a GUI that never registers a viewer',
+    'instanceof com.aureleconomy.gui.CustomItemsGUI' not in aurel_src,
+    'GUIListener never adds a CustomItemsGUI viewer, so that branch could not run',
+)
+check(
+    'M6 the snapshot test covers the tick path and the off-thread claim',
+    os.path.exists(os.path.join(ROOT, 'src', 'test', 'java', 'com', 'aureleconomy',
+                                'gui', 'AuctionBinSnapshotTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

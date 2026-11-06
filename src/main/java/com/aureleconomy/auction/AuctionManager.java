@@ -54,6 +54,13 @@ public class AuctionManager {
  private final AurelEconomy plugin;
  private final List<com.aureleconomy.auction.AuctionItem> activeAuctions = new ArrayList<>();
 
+ // M6: the bin used to be read from the database on every GUI rebuild, which the
+ // one-second refresh task ran for as long as a bin was open. The snapshot is the
+ // render source now; reads happen off the main thread and are handed back to it.
+ private final java.util.Map<UUID, List<com.aureleconomy.auction.AuctionItem>> collectionBinCache =
+  new java.util.concurrent.ConcurrentHashMap<>();
+ private final java.util.Set<UUID> collectionBinLoading = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
  public AuctionManager(AurelEconomy plugin) {
    this.plugin = plugin;
    this.defaultCurrency = plugin.getEconomyManager().getDefaultCurrency();
@@ -603,7 +610,40 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error fetching collection bin", e);
  }
+ collectionBinCache.put(playerUUID, items);
  return items;
+ }
+
+ /**
+  * The bin as it was last read, or null when this player's bin has never been
+  * loaded. Never touches the database, so a GUI rebuild can call it on the main
+  * thread (M6).
+  */
+ public List<com.aureleconomy.auction.AuctionItem> getCachedCollectionBin(UUID playerUUID) {
+ return collectionBinCache.get(playerUUID);
+ }
+
+ /** Drops a player's snapshot, so the next rebuild reads the bin again (M6). */
+ public void invalidateCollectionBin(UUID playerUUID) {
+ collectionBinCache.remove(playerUUID);
+ }
+
+ /**
+  * Reads a player's bin on a background thread and hands the result back on the
+  * main thread. One read per player at a time: while a load is in flight, further
+  * requests are dropped rather than queued, because the load that is running will
+  * answer for all of them.
+  */
+ public void refreshCollectionBin(UUID playerUUID, Consumer<List<com.aureleconomy.auction.AuctionItem>> onLoaded) {
+ if (!collectionBinLoading.add(playerUUID))
+  return;
+ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+  List<com.aureleconomy.auction.AuctionItem> items = getCollectionBin(playerUUID);
+  collectionBinLoading.remove(playerUUID);
+  if (!plugin.isEnabled())
+   return;
+  Bukkit.getScheduler().runTask(plugin, () -> onLoaded.accept(items));
+ });
  }
 
  public void getOffersForSeller(UUID seller, Consumer<List<Offer>> callback) {
@@ -906,6 +946,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  ps.setBoolean(9, true);
  ps.setBoolean(10, false);
  ps.executeUpdate();
+ // The player's remembered bin no longer matches the table (M6).
+ invalidateCollectionBin(playerUUID);
  com.aureleconomy.gui.AuctionGUI.refreshAllViewers(plugin);
  } catch (SQLException e) {
  plugin.getComponentLogger().error("Database error sending item to collection bin", e);

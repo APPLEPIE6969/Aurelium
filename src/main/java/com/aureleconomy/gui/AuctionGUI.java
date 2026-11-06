@@ -92,7 +92,14 @@ public class AuctionGUI extends GUIHolder {
 
  private void setupCollectionBin() {
  collectable.clear();
- List<AuctionItem> items = plugin.getAuctionManager().getCollectionBin(player.getUniqueId());
+ // M6: the render source is the last snapshot taken off the main thread. This
+ // method runs once a second while the bin is open, so it must not query.
+ List<AuctionItem> items = plugin.getAuctionManager().getCachedCollectionBin(player.getUniqueId());
+ if (items == null) {
+ requestCollectionBin();
+ return;
+ }
+
  for (AuctionItem ai : items) {
  if (inventory.firstEmpty() == -1)
  break;
@@ -115,6 +122,20 @@ public class AuctionGUI extends GUIHolder {
  });
  inventory.addItem(display);
  }
+ }
+
+ /**
+  * Reads the bin off the main thread and rebuilds this view when the snapshot
+  * arrives. AuctionManager drops repeat requests while a read is in flight, so
+  * the one-second refresh cannot turn into a query per second (M6).
+  */
+ private void requestCollectionBin() {
+ plugin.getAuctionManager().refreshCollectionBin(player.getUniqueId(), items -> {
+ if (player.getOpenInventory() != null
+ && player.getOpenInventory().getTopInventory().getHolder() == this) {
+ refresh();
+ }
+ });
  }
 
  private void setupAuctionHouse() {
@@ -385,13 +406,32 @@ refresh();
  return;
  }
 
- if (!plugin.getAuctionManager().markCollectedAtomic(id)) {
+ // M6: the claim is a database write, so it runs off the main thread. The
+ // inventory change that depends on it comes back to the main thread, which is
+ // where a viewed inventory may be touched.
+ int auctionId = id;
+ plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+ boolean claimed = plugin.getAuctionManager().markCollectedAtomic(auctionId);
+ plugin.getServer().getScheduler().runTask(plugin, () -> confirmCollection(player, auctionId, slot, give, claimed));
+ });
+ }
+
+ /** Applies the outcome of a bin claim: the item is handed over only if it won. */
+ private void confirmCollection(Player player, int id, int slot, ItemStack give, boolean claimed) {
+ // Either way the snapshot is stale now: the row was claimed or somebody else
+ // took it, and the next render has to read the bin again.
+ plugin.getAuctionManager().invalidateCollectionBin(player.getUniqueId());
+
+ if (!claimed) {
  player.sendMessage(Component.text("This item has already been collected!", NamedTextColor.RED));
  refresh();
  return;
  }
 
+ if (player.getOpenInventory() != null
+ && player.getOpenInventory().getTopInventory().getHolder() == this) {
  inventory.setItem(slot, null);
+ }
  player.getInventory().addItem(give);
 
  player.sendMessage(Component.text("Collected item!", NamedTextColor.GREEN));
