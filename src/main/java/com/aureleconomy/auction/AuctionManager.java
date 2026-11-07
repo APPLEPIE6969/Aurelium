@@ -295,7 +295,7 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  }
  plugin.getComponentLogger().error("Refund of " + amount + " " + currency + " to " + playerId
  + " failed while bidding on auction " + auction.getId() + "; recorded as an offline earning so it is not lost.");
- logOfflineEarning(playerId, amount, auction.getItem(), cachedDisplayName);
+ logOfflineEarning(playerId, amount, auction.getItem(), cachedDisplayName, currency);
  }
 
  /** What a bid did. Every caller has to handle all four; only SUCCESS commits anything. */
@@ -541,7 +541,7 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  + plugin.getEconomyManager().getFormattedWithSymbol(finalPrice, auction.getCurrency()),
  NamedTextColor.GREEN));
  } else {
- logOfflineEarning(auction.getSeller(), finalPrice, auction.getItem(), cachedDisplayName);
+ logOfflineEarning(auction.getSeller(), finalPrice, auction.getItem(), cachedDisplayName, auction.getCurrency());
  }
  } else if (seller != null) {
  seller.sendMessage(Component.text("Your auction expired without bids. Collect items in /ah collect.",
@@ -549,23 +549,10 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  }
  }
 
- private void logOfflineEarning(UUID uuid, BigDecimal amount, ItemStack item, String displayName) {
- Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
- try (Connection conn = plugin.getDatabaseManager().getConnection();
-        PreparedStatement ps = conn.prepareStatement(
- "INSERT INTO offline_earnings (uuid, amount, item_display, timestamp) VALUES (?, ?, ?, ?)")) {
- ps.setString(1, uuid.toString());
- ps.setBigDecimal(2, amount);
-
- String display = displayName + " (x" + item.getAmount() + ")";
-
- ps.setString(3, display);
- ps.setLong(4, System.currentTimeMillis());
- ps.executeUpdate();
- } catch (SQLException e) {
- plugin.getComponentLogger().error("Database error logging offline earning", e);
- }
- });
+ private void logOfflineEarning(UUID uuid, BigDecimal amount, ItemStack item, String displayName, String currency) {
+ Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
+  com.aureleconomy.utils.OfflineEarnings.record(plugin, uuid, amount, currency,
+   displayName + " (x" + item.getAmount() + ")"));
  }
 
  private void startExpiryTask() {

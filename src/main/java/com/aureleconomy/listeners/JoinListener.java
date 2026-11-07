@@ -33,7 +33,7 @@ public class JoinListener implements Listener {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             boolean hasEarnings = false;
             try (Connection conn = plugin.getDatabaseManager().getConnection();
-        PreparedStatement ps = conn.prepareStatement("SELECT uuid, amount, item_display, timestamp FROM offline_earnings WHERE uuid = ?")) {
+        PreparedStatement ps = conn.prepareStatement("SELECT uuid, amount, currency, item_display, timestamp FROM offline_earnings WHERE uuid = ?")) {
                 ps.setString(1, uuid.toString());
                 ResultSet rs = ps.executeQuery();
 
@@ -41,9 +41,15 @@ public class JoinListener implements Listener {
                     hasEarnings = true;
                     BigDecimal amount = rs.getBigDecimal("amount");
                     String itemDisplay = rs.getString("item_display");
+                    // Rows written before M14 left this NULL. The default currency
+                    // is the right reading for those, and the only reading.
+                    String currency = rs.getString("currency");
+                    if (currency == null || currency.isBlank()) {
+                        currency = plugin.getEconomyManager().getDefaultCurrency();
+                    }
 
                     event.getPlayer().sendMessage(Component.text("You earned ", NamedTextColor.GREEN)
-                            .append(Component.text(plugin.getEconomyManager().getFormattedWithSymbol(amount, plugin.getEconomyManager().getDefaultCurrency()), NamedTextColor.GOLD))
+                            .append(Component.text(plugin.getEconomyManager().getFormattedWithSymbol(amount, currency), NamedTextColor.GOLD))
                             .append(Component.text(" for selling ", NamedTextColor.GREEN))
                             .append(Component.text(itemDisplay, NamedTextColor.AQUA))
                             .append(Component.text(" while you were offline.", NamedTextColor.GREEN)));

@@ -1138,6 +1138,47 @@ check(
         read('src/test/java/com/aureleconomy/web/DashboardAuthTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# M14: offline_earnings.currency was never written and the join message
+# formatted every amount with the default currency, so an earning paid in
+# Dollars was announced in Aurels.
+# --------------------------------------------------------------------------
+join_src = strip_comments(read('src/main/java/com/aureleconomy/listeners/JoinListener.java'))
+offline_src = strip_comments(read('src/main/java/com/aureleconomy/utils/OfflineEarnings.java'))
+auction_src = strip_comments(read('src/main/java/com/aureleconomy/auction/AuctionManager.java'))
+order_src = strip_comments(read('src/main/java/com/aureleconomy/orders/OrderManager.java'))
+check(
+    'M14 every offline earning row is written with its currency',
+    'ps.setString(3, currency)' in offline_src
+    and 'INSERT INTO offline_earnings (uuid, amount, item_display, timestamp)' not in auction_src
+    and 'INSERT INTO offline_earnings (uuid, amount, item_display, timestamp)' not in order_src,
+    'a second insert without the column is the old row coming back',
+)
+check(
+    'M14 both earning paths pass the currency they paid in',
+    'logOfflineEarning(auction.getSeller(), finalPrice, auction.getItem(), cachedDisplayName,'
+    ' auction.getCurrency())' in auction_src
+    and 'logOfflineEarning(playerId, amount, auction.getItem(), cachedDisplayName, currency)'
+    in auction_src
+    and 'recordOfflineOrderNotification(buyerUuid, finalFilled, itemName, currency)' in order_src,
+    'the row can carry a currency only if the caller hands one over',
+)
+check(
+    'M14 the join message formats with the earning currency',
+    'rs.getString("currency")' in join_src
+    and 'getFormattedWithSymbol(amount, currency)' in join_src
+    and 'getFormattedWithSymbol(amount, plugin.getEconomyManager().getDefaultCurrency())'
+    not in join_src,
+    'the default symbol was wrong for every non-default earning',
+)
+check(
+    'M14 the currency test covers the join message and the insert',
+    'joinMessageUsesTheEarningsCurrency' in strip_comments(
+        read('src/test/java/com/aureleconomy/listeners/OfflineEarningCurrencyTest.java'))
+    and 'recordWritesTheCurrency' in strip_comments(
+        read('src/test/java/com/aureleconomy/listeners/OfflineEarningCurrencyTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

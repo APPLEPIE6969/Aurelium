@@ -363,7 +363,7 @@ public class OrderManager {
                             .append(Component.text("/ah collect", NamedTextColor.GOLD))
                             .append(Component.text(" bin!", NamedTextColor.GREEN)));
                 } else {
-                    recordOfflineOrderNotification(buyerUuid, finalFilled, itemName);
+                    recordOfflineOrderNotification(buyerUuid, finalFilled, itemName, currency);
                 }
 
                 lastSoldPrices.put(material.name(), pricePerPiece);
@@ -423,20 +423,10 @@ public class OrderManager {
         return lastSoldPrices.get(materialKey);
     }
 
-    private void recordOfflineOrderNotification(UUID buyerUuid, int amount, String itemName) {
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            try (Connection conn = plugin.getDatabaseManager().getConnection();
-                    PreparedStatement ps = conn.prepareStatement(
-                            "INSERT INTO offline_earnings (uuid, amount, item_display, timestamp) VALUES (?, ?, ?, ?)")) {
-                ps.setString(1, buyerUuid.toString());
-                ps.setBigDecimal(2, BigDecimal.ZERO); // No currency earned, this is an item delivery notification
-                ps.setString(3, amount + "x " + itemName + " (Buy Order)");
-                ps.setLong(4, System.currentTimeMillis());
-                ps.executeUpdate();
-            } catch (SQLException e) {
-                plugin.getComponentLogger().error("Failed to record offline order notification", e);
-            }
-        });
+    private void recordOfflineOrderNotification(UUID buyerUuid, int amount, String itemName, String currency) {
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () ->
+                com.aureleconomy.utils.OfflineEarnings.record(plugin, buyerUuid, BigDecimal.ZERO, currency,
+                        amount + "x " + itemName + " (Buy Order)"));
     }
 
     /**
