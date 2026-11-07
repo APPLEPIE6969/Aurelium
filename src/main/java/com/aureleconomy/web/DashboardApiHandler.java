@@ -40,8 +40,12 @@ import java.util.UUID;
  *   POST /api/{serverId}/fill-order
  * </pre>
  *
- * <p>Auth is {@code Authorization: Bearer <token>} from {@code /web}. The legacy
- * {@code ?token=} query parameter is still accepted so older links keep working.
+ * <p>Auth is {@code Authorization: Bearer <token>} from {@code /web}, on every
+ * route. A {@code ?token=} query parameter used to be accepted as well, but a
+ * token in a URL ends up in access logs, proxy logs and browser history, so the
+ * API no longer reads it (M13). The dashboard page itself still receives the
+ * token in its own URL, scrubs it from the address bar, and sends it as a
+ * header from then on.
  *
  * <p>Mutating routes only <em>queue</em> work; the plugin drains the queue on the
  * main thread, which keeps Bukkit API calls off the HTTP worker threads.
@@ -84,6 +88,10 @@ public class DashboardApiHandler implements HttpHandler {
         // shell gets the same policy with no-cache from WebServer.
         exchange.getResponseHeaders().set("Cache-Control", "no-store");
         exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        // A token must never travel in a URL, and this is what makes it safe if
+        // one ever does: no referrer leaves this origin, on every response,
+        // including the errors raised before authentication (M13).
+        exchange.getResponseHeaders().set("Referrer-Policy", "no-referrer");
 
         if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
             exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -107,7 +115,7 @@ public class DashboardApiHandler implements HttpHandler {
             return;
         }
 
-        UUID player = authenticate(exchange, params);
+        UUID player = authenticate(exchange);
         if (player == null) {
             send(exchange, 401, "{\"error\":\"Invalid or expired session. Use /web in-game.\"}");
             return;
@@ -133,28 +141,27 @@ public class DashboardApiHandler implements HttpHandler {
     }
 
     /**
-     * The token the caller presented, from the Authorization header or {@code ?token=}.
+     * The token the caller presented in the Authorization header, or null.
      *
      * <p>Used by logout, which must revoke the token that was actually presented
      * rather than deriving one from the authenticated player.
      */
-    private static String bearerOrParamToken(HttpExchange exchange, Map<String, String> params) {
+    private static String presentedToken(HttpExchange exchange) {
         String header = exchange.getRequestHeaders().getFirst("Authorization");
         if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
             return header.substring(7).trim();
         }
-        return params.get("token");
+        return null;
     }
 
-    private UUID authenticate(HttpExchange exchange, Map<String, String> params) {
-        String header = exchange.getRequestHeaders().getFirst("Authorization");
-        if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
-            UUID uuid = sessions.validate(header.substring(7).trim());
-            if (uuid != null) {
-                return uuid;
-            }
-        }
-        return sessions.validate(params.get("token"));
+    /**
+     * Header-only on purpose (M13). {@code ?token=} was accepted here for older
+     * links, which put a live session token into every log and history that saw
+     * the URL. Apps that still send it are told to authenticate instead of being
+     * silently downgraded.
+     */
+    private UUID authenticate(HttpExchange exchange) {
+        return sessions.validate(presentedToken(exchange));
     }
 
     private void route(HttpExchange exchange, String action, Map<String, String> params, UUID player)
@@ -184,7 +191,7 @@ public class DashboardApiHandler implements HttpHandler {
                     // Revoke the token the caller presented. It is taken from the
                     // request rather than the authenticated player so that a stale
                     // token revokes only itself and cannot kill a newer session.
-                    boolean revoked = sessions.invalidateToken(bearerOrParamToken(exchange, params));
+                    boolean revoked = sessions.invalidateToken(presentedToken(exchange));
                     send(exchange, 200, "{\"success\":" + revoked + "}");
                 } else {
                     send(exchange, 405, "{\"error\":\"POST required\"}");

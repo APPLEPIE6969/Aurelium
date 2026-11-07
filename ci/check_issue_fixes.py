@@ -1110,6 +1110,34 @@ check(
         read('src/test/java/com/aureleconomy/utils/VaultInstallerTest.java')),
 )
 
+# --------------------------------------------------------------------------
+# M13: the dashboard API also authenticated on ?token=, so a live session
+# token rode into access logs, proxy logs and history, and API responses did
+# not carry Referrer-Policy even though the static shell did.
+# --------------------------------------------------------------------------
+api_src = strip_comments(read('src/main/java/com/aureleconomy/web/DashboardApiHandler.java'))
+check(
+    'M13 the API authenticates on the Authorization header only',
+    'sessions.validate(presentedToken(exchange))' in api_src
+    and 'params.get("token")' not in api_src
+    and 'getQuery()).get("token")' not in api_src,
+    'one query fallback is enough to put the token back in every log',
+)
+api_referrer = api_src.find('exchange.getResponseHeaders().set("Referrer-Policy", "no-referrer");')
+api_authenticate = api_src.find('UUID player = authenticate(exchange);')
+check(
+    'M13 every API response carries Referrer-Policy, set before any route',
+    0 <= api_referrer < api_authenticate,
+    'a header set after the 401 does nothing for the responses that have it',
+)
+check(
+    'M13 the API auth test covers the query token and the header',
+    'queryTokenIsRefused' in strip_comments(
+        read('src/test/java/com/aureleconomy/web/DashboardAuthTest.java'))
+    and 'everyResponseCarriesReferrerPolicy' in strip_comments(
+        read('src/test/java/com/aureleconomy/web/DashboardAuthTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

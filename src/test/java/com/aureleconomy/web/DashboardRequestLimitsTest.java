@@ -51,7 +51,7 @@ class DashboardRequestLimitsTest {
         byte[] body = ("{\"item\":\"" + "a".repeat(70 * 1024) + "\"}")
                 .getBytes(StandardCharsets.UTF_8);
 
-        HttpExchange exchange = exchange("POST", "/api/test/buy?token=t", body);
+        HttpExchange exchange = exchange("POST", "/api/test/buy", body);
         handler.handle(exchange);
 
         assertEquals(413, statusOf(exchange));
@@ -61,7 +61,7 @@ class DashboardRequestLimitsTest {
     @DisplayName("a search query longer than 64 characters is refused")
     void oversizedSearchQueryIsRefused() throws Exception {
         HttpExchange exchange = exchange("GET",
-                "/api/test/search?token=t&q=" + "a".repeat(65), new byte[0]);
+                "/api/test/search?q=" + "a".repeat(65), new byte[0]);
         handler.handle(exchange);
 
         assertEquals(400, statusOf(exchange));
@@ -71,12 +71,12 @@ class DashboardRequestLimitsTest {
     @DisplayName("requests past the burst are rejected with 429 and a retry hint")
     void burstIsThrottled() throws Exception {
         for (int i = 0; i < 20; i++) {
-            HttpExchange allowed = exchange("GET", "/api/test/categories?token=t", new byte[0]);
+            HttpExchange allowed = exchange("GET", "/api/test/categories", new byte[0]);
             handler.handle(allowed);
             assertEquals(200, statusOf(allowed), "request " + i + " inside the burst was refused");
         }
 
-        HttpExchange throttled = exchange("GET", "/api/test/categories?token=t", new byte[0]);
+        HttpExchange throttled = exchange("GET", "/api/test/categories", new byte[0]);
         handler.handle(throttled);
 
         assertEquals(429, statusOf(throttled));
@@ -85,9 +85,11 @@ class DashboardRequestLimitsTest {
 
     private static HttpExchange exchange(String method, String uri, byte[] body) {
         HttpExchange exchange = mock(HttpExchange.class);
-        Headers headers = new Headers();
-        when(exchange.getRequestHeaders()).thenReturn(headers);
-        when(exchange.getResponseHeaders()).thenReturn(headers);
+        Headers requestHeaders = new Headers();
+        requestHeaders.set("Authorization", "Bearer t");
+        Headers responseHeaders = new Headers();
+        when(exchange.getRequestHeaders()).thenReturn(requestHeaders);
+        when(exchange.getResponseHeaders()).thenReturn(responseHeaders);
         when(exchange.getRequestURI()).thenReturn(URI.create(uri));
         when(exchange.getRequestMethod()).thenReturn(method);
         when(exchange.getRequestBody()).thenReturn(new ByteArrayInputStream(body));
