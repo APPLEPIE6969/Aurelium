@@ -1068,6 +1068,48 @@ check(
     'the test has to name the step that must be gone, not just the version row',
 )
 
+# --------------------------------------------------------------------------
+# M12: the Vault auto-installer ran during onEnable with a 75 second worst
+# case, wrote whatever came back to plugins/Vault.jar, and had no checksum,
+# so a replaced release asset or an error page became a loadable plugin.
+# --------------------------------------------------------------------------
+vault_src = strip_comments(read('src/main/java/com/aureleconomy/utils/VaultInstaller.java'))
+check(
+    'M12 the Vault download runs on an async task, not during onEnable',
+    'runTaskAsynchronously(plugin, () -> download(plugin, vaultJar))' in vault_src,
+    'a slow GitHub used to hold the main thread for the whole timeout budget',
+)
+checksum_check = vault_src.find('expectedSha256.equalsIgnoreCase(actualSha256)')
+checksum_move = vault_src.find('Files.move(staged, vaultJar.toPath()')
+check(
+    'M12 the downloaded jar is checked before it is moved into plugins/',
+    0 <= checksum_check < checksum_move
+    and 'acceptDownload(plugin, staged, vaultJar, VAULT_SHA256)' in vault_src,
+    'a checksum that is computed but not consulted installs anything',
+)
+check(
+    'M12 the download timeouts come from config',
+    '.connectTimeout(connectTimeout(plugin.getConfig()))' in vault_src
+    and '.timeout(requestTimeout(plugin.getConfig()))' in vault_src,
+    'hardcoded timeouts are what made the install block for 75 seconds',
+)
+shipped_config = read('src/main/resources/config.yml')
+check(
+    'M12 the shipped config carries the vault section and a bumped version',
+    'config-version: 6' in shipped_config
+    and 'auto-install: true' in shipped_config
+    and 'connect-timeout-seconds: 15' in shipped_config
+    and 'request-timeout-seconds: 60' in shipped_config,
+    'new keys have to be in the shipped config for upgradeConfig to add them',
+)
+check(
+    'M12 the checksum and timeout tests exist',
+    'mismatchedChecksumIsRefused' in strip_comments(
+        read('src/test/java/com/aureleconomy/utils/VaultInstallerTest.java'))
+    and 'timeoutsAreReadFromConfig' in strip_comments(
+        read('src/test/java/com/aureleconomy/utils/VaultInstallerTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

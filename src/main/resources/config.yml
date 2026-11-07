@@ -1,7 +1,7 @@
 # Aurelium Configuration (v1.5.3)
 
 # Don't touch this, used for auto-migration
-config-version: 5
+config-version: 6
 
 # --- Database ---
 database:
@@ -25,6 +25,17 @@ database:
     #   VERIFY_IDENTITY like VERIFY_CA, plus a hostname check
     #   DISABLED        no encryption at all (not recommended)
     ssl-mode: "PREFERRED"
+
+# --- Vault ---
+# Vault is the bridge other plugins use to reach this economy. If it is not
+# installed, Aurelium downloads it once in the background and asks for a restart.
+vault:
+  # Set to false to leave the plugins folder alone. The server then runs
+  # without Vault and other plugins cannot hook into Aurelium.
+  auto-install: true
+  # Network timeouts for that download, in seconds.
+  connect-timeout-seconds: 15
+  request-timeout-seconds: 60
 
 # --- economy ---
 economy:

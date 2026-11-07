@@ -55,11 +55,12 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
     public void onEnable() {
         instance = this;
 
-        // Auto-Install Vault if missing
-        com.aureleconomy.utils.VaultInstaller.install(this);
-
         // Save/Update config with latest keys and comments
         upgradeConfig();
+
+        // Auto-Install Vault if missing. After upgradeConfig, so the vault.*
+        // timeouts are present on the first start after this update.
+        com.aureleconomy.utils.VaultInstaller.install(this);
 
         // Initialize Database
         databaseManager = new DatabaseManager(this);

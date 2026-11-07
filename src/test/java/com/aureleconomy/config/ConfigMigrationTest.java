@@ -235,7 +235,7 @@ class ConfigMigrationTest {
 
         assertTrue(defaults.contains("config-version"),
                 "shipped config.yml has no config-version");
-        assertEquals(5, defaults.getInt("config-version"),
+        assertEquals(6, defaults.getInt("config-version"),
                 "config-version changed; upgradeConfig must be able to recognise it");
     }
 
