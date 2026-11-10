@@ -1094,9 +1094,10 @@ check(
     'hardcoded timeouts are what made the install block for 75 seconds',
 )
 shipped_config = read('src/main/resources/config.yml')
+shipped_version = re.search(r'^config-version:\s*(\d+)\s*$', shipped_config, re.M)
 check(
     'M12 the shipped config carries the vault section and a bumped version',
-    'config-version: 6' in shipped_config
+    shipped_version is not None and int(shipped_version.group(1)) >= 6
     and 'auto-install: true' in shipped_config
     and 'connect-timeout-seconds: 15' in shipped_config
     and 'request-timeout-seconds: 60' in shipped_config,
@@ -1177,6 +1178,55 @@ check(
         read('src/test/java/com/aureleconomy/listeners/OfflineEarningCurrencyTest.java'))
     and 'recordWritesTheCurrency' in strip_comments(
         read('src/test/java/com/aureleconomy/listeners/OfflineEarningCurrencyTest.java')),
+)
+
+# --------------------------------------------------------------------------
+# L4: auctions, offline_earnings and the plugin's own backups grew forever.
+# The purge may only remove what nobody can still claim.
+# --------------------------------------------------------------------------
+retention_src = strip_comments(read('src/main/java/com/aureleconomy/database/RetentionPolicy.java'))
+auction_delete = retention_src.find('DELETE FROM auctions WHERE ended = 1 AND collected = 1'
+                                    ' AND expiration < ?')
+offers_delete = retention_src.find('DELETE FROM auction_offers WHERE auction_id IN (SELECT id')
+check(
+    'L4 only ended, collected and past-window auctions are purged',
+    'DELETE FROM auctions WHERE ended = 1 AND collected = 1 AND expiration < ?' in retention_src,
+    'dropping any clause deletes an auction someone can still claim',
+)
+check(
+    'L4 offers are deleted before the auctions they point at',
+    0 <= offers_delete < auction_delete,
+    'a parent deleted first leaves the offers orphaned and unreachable',
+)
+check(
+    'L4 only the plugin\'s own database backups are purged',
+    'name.startsWith("database_v") && name.endsWith(".db")' in retention_src,
+    'the backups folder can hold an owner\'s own copies',
+)
+economy_src = strip_comments(read('src/main/java/com/aureleconomy/AurelEconomy.java'))
+check(
+    'L4 the purge runs daily off the main thread',
+    'runTaskTimerAsynchronously(this,\n                databaseManager::purgeRetention,'
+    ' 20L * 60L, 20L * 60L * 60L * 24L)' in economy_src,
+    'a purge that only runs on demand is a purge that never runs',
+)
+shipped_config = read('src/main/resources/config.yml')
+check(
+    'L4 the retention windows are in the shipped config',
+    'config-version: 7' in shipped_config
+    and 'retention:' in shipped_config
+    and 'auctions-days: 30' in shipped_config
+    and 'offline-earnings-days: 30' in shipped_config
+    and 'backups-days: 30' in shipped_config,
+    'new keys have to ship before upgradeConfig can add them',
+)
+retention_test = strip_comments(read('src/test/java/com/aureleconomy/database/RetentionPurgeTest.java'))
+check(
+    'L4 the purge test covers eligibility, offers, files and zero',
+    'purgeRemovesOnlyEligibleRows' in retention_test
+    and 'zeroWindowKeepsEverything' in retention_test
+    and 'cutoffIsWholeDays' in retention_test,
+    'each clause of the eligibility rule needs a row that fails it',
 )
 
 print()

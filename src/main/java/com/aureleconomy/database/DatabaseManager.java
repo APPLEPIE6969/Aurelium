@@ -216,6 +216,52 @@ public class DatabaseManager {
 
     // -------------------- Schema --------------------
 
+    /**
+     * Applies the retention policy (L4): ended and collected auctions, offline
+     * earning notifications nobody read, and old database backups. Safe to call
+     * off the main thread; the windows come from {@code database.retention.*}
+     * and a window of 0 keeps that kind forever.
+     *
+     * @return how many rows and files were removed
+     */
+    public int purgeRetention() {
+        FileConfiguration config = plugin.getConfig();
+        int auctionDays = config.getInt("database.retention.auctions-days", RetentionPolicy.DEFAULT_DAYS);
+        int earningDays = config.getInt("database.retention.offline-earnings-days",
+                RetentionPolicy.DEFAULT_DAYS);
+        int backupDays = config.getInt("database.retention.backups-days", RetentionPolicy.DEFAULT_DAYS);
+
+        long now = System.currentTimeMillis();
+        int removed = 0;
+        if (auctionDays > 0 || earningDays > 0) {
+            try (Connection conn = getConnection()) {
+                if (conn != null) {
+                    synchronized (dbWriteLock) {
+                        if (auctionDays > 0) {
+                            removed += RetentionPolicy.purgeAuctions(conn,
+                                    RetentionPolicy.cutoff(auctionDays, now));
+                        }
+                        if (earningDays > 0) {
+                            removed += RetentionPolicy.purgeOfflineEarnings(conn,
+                                    RetentionPolicy.cutoff(earningDays, now));
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                plugin.getComponentLogger().warn("Could not apply the retention policy: " + e.getMessage());
+            }
+        }
+        if (backupDays > 0) {
+            removed += RetentionPolicy.purgeBackupFiles(new File(plugin.getDataFolder(), "backups"),
+                    RetentionPolicy.cutoff(backupDays, now));
+        }
+        if (removed > 0) {
+            plugin.getComponentLogger().info(
+                    "Retention policy removed " + removed + " old rows and backup files.");
+        }
+        return removed;
+    }
+
     private void createTables() throws SQLException {
         for (Schema schema : schemas) {
             try {

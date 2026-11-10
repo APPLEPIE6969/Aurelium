@@ -1,7 +1,7 @@
 # Aurelium Configuration (v1.5.3)
 
 # Don't touch this, used for auto-migration
-config-version: 6
+config-version: 7
 
 # --- Database ---
 database:
@@ -25,6 +25,17 @@ database:
     #   VERIFY_IDENTITY like VERIFY_CA, plus a hostname check
     #   DISABLED        no encryption at all (not recommended)
     ssl-mode: "PREFERRED"
+
+  # --- Retention ---
+  # The daily purge removes finished rows and old backup files. Set a value
+  # to 0 to keep that kind of data forever.
+  retention:
+    # Ended auctions both the seller and the winner have collected.
+    auctions-days: 30
+    # Offline earning notifications the player never came back to read.
+    offline-earnings-days: 30
+    # database_v*.db copies made when the plugin version changes.
+    backups-days: 30
 
 # --- Vault ---
 # Vault is the bridge other plugins use to reach this economy. If it is not

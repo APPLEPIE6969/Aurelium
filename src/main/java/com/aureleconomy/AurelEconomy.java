@@ -181,6 +181,12 @@ private com.aureleconomy.market.TradeVolumeTracker tradeVolumeTracker;
         getServer().getScheduler().runTaskTimerAsynchronously(this,
                 tradeVolumeTracker::prune, 600L, 60L * 60L);
 
+        // L4: ended and collected auctions, unread offline earnings and old
+        // database backups used to stay forever. Runs a minute after start and
+        // then daily, so a server that restarts often still purges on boot.
+        getServer().getScheduler().runTaskTimerAsynchronously(this,
+                databaseManager::purgeRetention, 20L * 60L, 20L * 60L * 60L * 24L);
+
         // Start Web Services
         initializeWebServices();
     }
