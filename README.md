@@ -104,7 +104,7 @@ Automatically discovers custom items from popular third-party plugins:
 - Secure Sessions: `/web` in-game generates a time-limited link (rolling 1-hour timeout)
 - Tab Sleep Mode: no network/CPU when tab is inactive; instant wake on return
 - RAM Optimized: per-server memory under 1MB via raw JSON string caching
-- Activation Queue: fair waitlist when cloud server hits its 500MB limit
+- Activation Queue: fair waitlist when cloud server hits its 256MB limit
 
 ---
 
