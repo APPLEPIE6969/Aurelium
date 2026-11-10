@@ -449,7 +449,15 @@ jobs:
       - name: Verify Vault auto-install attempt
         run: |
           VAULT_AUTOINSTALL_FAIL=0
-          if grep -q "Vault not found. Attempting to auto-install Vault" logs/latest.log; then
+          # The download is asynchronous now: the message is logged before it
+          # starts, but the jar only appears once the transfer finishes.
+          for i in $(seq 1 30); do
+            if [ -f "plugins/Vault.jar" ] || grep -qi "Vault.jar has been installed to" logs/latest.log; then
+              break
+            fi
+            sleep 2
+          done
+          if grep -q "Vault not found. Downloading Vault.jar in the background" logs/latest.log; then
             echo "PASS: Auto-install attempt message found"
           else
             echo "FAIL: Auto-install attempt message not found"
