@@ -2,7 +2,7 @@
 """Config migration test for Aurelium 1.5.2 -> 1.5.3.
 
 Verifies that:
-1. Config loads correctly (config-version stays 2)
+1. Config loads correctly and is stamped with the shipped config-version
 2. User-modified values are preserved
 3. New keys from defaults (buy-orders) are added
 4. Cloud dashboard registration still works
@@ -18,6 +18,7 @@ import uuid
 import time
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "plugins/Aurelium/config.yml")
+SHIPPED_CONFIG_PATH = os.environ.get("SHIPPED_CONFIG_PATH", "src/main/resources/config.yml")
 
 
 def load_config(path):
@@ -112,11 +113,17 @@ def test_migration():
     config = load_config(CONFIG_PATH)
     errors = []
 
-    # 1. config-version should be 5: the upgrade must stamp the version it
-    # actually migrated to, not leave the 1.5.2 value behind.
+    # 1. config-version must match the version this build ships: the upgrade
+    # stamps the version it actually migrated to, and a hardcoded expectation
+    # here goes stale every time a new key bumps it.
     cv = config.get("config-version", 0)
-    if cv != 5:
-        errors.append("FAIL: config-version = " + str(cv) + ", expected 5")
+    expected = None
+    if os.path.exists(SHIPPED_CONFIG_PATH):
+        expected = load_config(SHIPPED_CONFIG_PATH).get("config-version")
+    if expected is None:
+        errors.append("FAIL: could not read config-version from " + SHIPPED_CONFIG_PATH)
+    elif cv != expected:
+        errors.append("FAIL: config-version = " + str(cv) + ", expected " + str(expected))
     else:
         print("PASS: config-version = " + str(cv))
 
