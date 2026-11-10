@@ -3,11 +3,11 @@ package com.aureleconomy.web;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
 import com.aureleconomy.auction.AuctionManager;
+import com.aureleconomy.economy.MoneyFormat;
 import com.aureleconomy.orders.BuyOrder;
 import com.aureleconomy.webstore.PurchaseQueue;
 import com.google.gson.JsonObject;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -341,8 +341,8 @@ public class WebPurchaseExecutor {
             if (quantity <= 0) {
                 return fail(result, "This listing has no items remaining.");
             }
-            BigDecimal totalCost = ai.getPricePerUnit().multiply(BigDecimal.valueOf(quantity))
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal totalCost = MoneyFormat.normalize(
+                    ai.getPricePerUnit().multiply(BigDecimal.valueOf(quantity)));
             if (!plugin.getEconomyManager().has(bidder, totalCost, ai.getCurrency())) {
                 return fail(result, "Not enough funds. You need "
                         + plugin.getEconomyManager().getFormattedWithSymbol(totalCost, ai.getCurrency()));
@@ -355,8 +355,8 @@ public class WebPurchaseExecutor {
             // than asked for when the stock moved. Report that same number rather
             // than the request, so the browser never shows a cost that was not
             // charged.
-            BigDecimal charged = ai.getPricePerUnit().multiply(BigDecimal.valueOf(purchased))
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal charged = MoneyFormat.normalize(
+                    ai.getPricePerUnit().multiply(BigDecimal.valueOf(purchased)));
             BigDecimal newBal = plugin.getEconomyManager().getBalance(bidder, ai.getCurrency());
             result.addProperty("success", true);
             result.addProperty("purchased", purchased);

@@ -3,6 +3,7 @@ package com.aureleconomy.commands;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.economy.LedgerReason;
 import com.aureleconomy.economy.LedgerService;
+import com.aureleconomy.economy.MoneyFormat;
 import com.aureleconomy.utils.PriceParser;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -386,7 +387,7 @@ public class EconomyCommand implements CommandExecutor, TabCompleter {
 
  /** Two decimals always, because a ledger row is money and "+10" reads like a count. */
  private String money(java.math.BigDecimal amount) {
-  return amount.setScale(2, java.math.RoundingMode.HALF_EVEN).toPlainString();
+  return MoneyFormat.plain(amount);
  }
 
  private void sendHistory(CommandSender sender, String displayName, int page,

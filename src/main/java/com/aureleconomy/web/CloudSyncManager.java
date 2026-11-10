@@ -2,6 +2,7 @@ package com.aureleconomy.web;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionManager;
+import com.aureleconomy.economy.MoneyFormat;
 import com.aureleconomy.market.MarketItems;
 import com.aureleconomy.market.MarketItems.Category;
 import com.aureleconomy.market.MarketItems.MarketEntry;
@@ -895,8 +896,8 @@ public class CloudSyncManager {
             quantity = Math.max(1, Math.min(quantity, auction.getAvailableQuantity()));
 
             BigDecimal unitPrice = auction.getPricePerUnit();
-            BigDecimal totalCost = unitPrice.multiply(BigDecimal.valueOf(quantity))
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal totalCost = MoneyFormat.normalize(
+                    unitPrice.multiply(BigDecimal.valueOf(quantity)));
             String currency = auction.getCurrency();
 
             if (!plugin.getEconomyManager().has(player, totalCost, currency)) {

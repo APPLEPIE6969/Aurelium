@@ -3,10 +3,10 @@ package com.aureleconomy.gui;
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
 import com.aureleconomy.auction.AuctionManager;
+import com.aureleconomy.economy.MoneyFormat;
 import com.aureleconomy.utils.ItemBuilder;
 import com.aureleconomy.utils.PriceParser;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -32,7 +32,7 @@ public class BidGUI extends GUIHolder {
         this.plugin = plugin;
         this.player = player;
         this.auction = auction;
-        this.currentBid = auction.getPrice().multiply(MULTIPLIER_10).setScale(2, RoundingMode.HALF_UP);
+        this.currentBid = MoneyFormat.normalize(auction.getPrice().multiply(MULTIPLIER_10));
         this.inventory = Bukkit.createInventory(this, 27,
                 Component.text("Place bid: " + auction.getItem().getType().name()));
         setupItems();
@@ -70,7 +70,7 @@ public class BidGUI extends GUIHolder {
     }
 
     private void addBidButton(int slot, String label, BigDecimal multiplier) {
-        BigDecimal bid = auction.getPrice().multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal bid = MoneyFormat.normalize(auction.getPrice().multiply(multiplier));
         inventory.setItem(slot, net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(Component.text(label)).contains("10") ?
                 new ItemBuilder(Material.LIME_STAINED_GLASS_PANE).name(Component.text(label, NamedTextColor.GREEN))
                         .lore(Component.text("New Bid: " + plugin.getEconomyManager().getFormattedWithSymbol(bid, auction.getCurrency()), NamedTextColor.GRAY)).build() :
@@ -94,9 +94,9 @@ public class BidGUI extends GUIHolder {
         int slot = event.getSlot();
 
         switch (slot) {
-            case 11 -> { currentBid = auction.getPrice().multiply(MULTIPLIER_10).setScale(2, RoundingMode.HALF_UP); setupItems(); }
-            case 12 -> { currentBid = auction.getPrice().multiply(MULTIPLIER_50).setScale(2, RoundingMode.HALF_UP); setupItems(); }
-            case 13 -> { currentBid = auction.getPrice().multiply(MULTIPLIER_100).setScale(2, RoundingMode.HALF_UP); setupItems(); }
+            case 11 -> { currentBid = MoneyFormat.normalize(auction.getPrice().multiply(MULTIPLIER_10)); setupItems(); }
+            case 12 -> { currentBid = MoneyFormat.normalize(auction.getPrice().multiply(MULTIPLIER_50)); setupItems(); }
+            case 13 -> { currentBid = MoneyFormat.normalize(auction.getPrice().multiply(MULTIPLIER_100)); setupItems(); }
             case 15 -> handleCustomBid(player);
             case 18 -> new AuctionGUI(plugin, player, false).open();
             case 22 -> {

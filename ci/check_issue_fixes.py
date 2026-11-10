@@ -1229,6 +1229,57 @@ check(
     'each clause of the eligibility rule needs a row that fails it',
 )
 
+# --------------------------------------------------------------------------
+# L5: balances rounded HALF_EVEN while prices rounded HALF_UP, so a half cent
+# was worth different amounts depending on which path it travelled.
+# --------------------------------------------------------------------------
+money_format = strip_comments(read('src/main/java/com/aureleconomy/economy/MoneyFormat.java'))
+check(
+    'L5 the money rounding policy is defined once, as HALF_UP',
+    'public static final RoundingMode ROUNDING = RoundingMode.HALF_UP;' in money_format
+    and 'public static final int SCALE = 2;' in money_format,
+    'one policy in one file is the point of the fix',
+)
+half_even = []
+half_up_literals = []
+for dirpath, _, filenames in os.walk(os.path.join(ROOT, 'src/main/java')):
+    for filename in filenames:
+        if not filename.endswith('.java'):
+            continue
+        path = os.path.join(dirpath, filename)
+        with io.open(path, encoding='utf-8') as fh:
+            source = strip_comments(fh.read())
+        if 'RoundingMode.HALF_EVEN' in source:
+            half_even.append(os.path.relpath(path, ROOT))
+        if 'setScale(2, RoundingMode.HALF_UP)' in source:
+            half_up_literals.append(os.path.relpath(path, ROOT))
+check(
+    'L5 no production code still rounds money HALF_EVEN',
+    not half_even,
+    'found in: ' + ', '.join(half_even),
+)
+check(
+    'L5 money is normalised through MoneyFormat, not a literal scale and mode',
+    not half_up_literals and 'MoneyFormat.normalize(' in auction_mgr,
+    'found in: ' + ', '.join(half_up_literals),
+)
+economy_manager_src = strip_comments(read('src/main/java/com/aureleconomy/economy/EconomyManager.java'))
+check(
+    'L5 the economy layer has no rounding policy of its own',
+    'RoundingMode' not in economy_manager_src and 'MoneyFormat.normalize(' in economy_manager_src
+    and 'MoneyFormat.plain(' in economy_manager_src,
+    'a second policy in the money layer is how the split started',
+)
+check(
+    'L5 the rounding test covers the table and the storage boundary',
+    'halfCentRoundsUp' in strip_comments(
+        read('src/test/java/com/aureleconomy/economy/MoneyRoundingTest.java'))
+    and 'halfCentDepositMintsOneCent' in strip_comments(
+        read('src/test/java/com/aureleconomy/economy/MoneyRoundingTest.java'))
+    and 'halfCentWithdrawalRefusedWhenEmpty' in strip_comments(
+        read('src/test/java/com/aureleconomy/economy/MoneyRoundingTest.java')),
+)
+
 print()
 print(f'{checks - len(failures)}/{checks} checks passed')
 if failures:

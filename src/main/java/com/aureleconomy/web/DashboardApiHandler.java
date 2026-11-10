@@ -2,6 +2,7 @@ package com.aureleconomy.web;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
+import com.aureleconomy.economy.MoneyFormat;
 import com.aureleconomy.webstore.PurchaseQueue;
 import com.aureleconomy.webstore.WebSnapshot;
 import com.aureleconomy.webstore.WebSnapshotCache;
@@ -729,6 +730,6 @@ public class DashboardApiHandler implements HttpHandler {
 
     /** Formats a money amount the way the dashboard displays it. */
     static String formatAmount(BigDecimal amount) {
-        return amount.setScale(2, java.math.RoundingMode.HALF_EVEN).toPlainString();
+        return MoneyFormat.plain(amount);
     }
 }

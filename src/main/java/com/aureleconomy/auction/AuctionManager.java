@@ -2,6 +2,7 @@ package com.aureleconomy.auction;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.economy.LedgerReason;
+import com.aureleconomy.economy.MoneyFormat;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.PreparedStatement;
@@ -347,8 +348,7 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  }
 
  BigDecimal unitPrice = auction.getPricePerUnit();
- BigDecimal totalCost = unitPrice.multiply(BigDecimal.valueOf(quantity))
- .setScale(2, RoundingMode.HALF_UP);
+ BigDecimal totalCost = MoneyFormat.normalize(unitPrice.multiply(BigDecimal.valueOf(quantity)));
  String currency = auction.getCurrency();
 
  if (!plugin.getEconomyManager().has(buyer, totalCost, currency)) {
@@ -392,8 +392,8 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  // Pay seller (minus tax)
  BigDecimal taxRate = BigDecimal.valueOf(plugin.getConfig().getDouble(CONF_TAX_PERCENT, DEFAULT_TAX.doubleValue()))
  .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
- BigDecimal tax = finalTotalCost.multiply(taxRate).setScale(2, RoundingMode.HALF_UP);
- BigDecimal sellerPayout = finalTotalCost.subtract(tax).setScale(2, RoundingMode.HALF_UP);
+ BigDecimal tax = MoneyFormat.normalize(finalTotalCost.multiply(taxRate));
+ BigDecimal sellerPayout = MoneyFormat.normalize(finalTotalCost.subtract(tax));
 
  Player seller = Bukkit.getPlayer(auction.getSeller());
  plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(auction.getSeller()), sellerPayout, currency,
@@ -465,7 +465,7 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  if (totalDuration > 0 && remainingTime > 0) {
  BigDecimal ratio = BigDecimal.valueOf(remainingTime).divide(BigDecimal.valueOf(totalDuration), 4,
  RoundingMode.HALF_UP);
- refund = ai.getListingFee().multiply(ratio).setScale(2, RoundingMode.HALF_UP);
+ refund = MoneyFormat.normalize(ai.getListingFee().multiply(ratio));
  }
 
  final BigDecimal finalRefund = refund;
@@ -531,7 +531,7 @@ Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
  .subtract(BigDecimal.valueOf(taxRate).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP));
 
  if (auction.getHighestBidder() != null) {
- BigDecimal finalPrice = auction.getPrice().multiply(taxMultiplier).setScale(2, RoundingMode.HALF_UP);
+ BigDecimal finalPrice = MoneyFormat.normalize(auction.getPrice().multiply(taxMultiplier));
  plugin.getEconomyManager().deposit(Bukkit.getOfflinePlayer(auction.getSeller()), finalPrice,
  auction.getCurrency(), LedgerReason.AUCTION_SALE, String.valueOf(auction.getId()), null);
 

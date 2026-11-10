@@ -2,7 +2,6 @@ package com.aureleconomy.economy;
 
 import com.aureleconomy.AurelEconomy;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -15,8 +14,6 @@ import org.bukkit.OfflinePlayer;
 
 public class EconomyManager {
 
-    private static final int SCALE = 2;
-    private static final RoundingMode ROUNDING_MODE = RoundingMode.HALF_EVEN;
     private static final double DEFAULT_STARTING_BALANCE = 100.0;
 
     private final AurelEconomy plugin;
@@ -99,7 +96,7 @@ public class EconomyManager {
             return false;
 
         UUID uuid = player.getUniqueId();
-        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+        BigDecimal normalizedAmount = MoneyFormat.normalize(amount);
 
         boolean credited;
         synchronized (plugin.getDatabaseManager().getWriteLock()) {
@@ -191,7 +188,7 @@ public class EconomyManager {
             return false;
 
         UUID uuid = player.getUniqueId();
-        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+        BigDecimal normalizedAmount = MoneyFormat.normalize(amount);
 
         boolean debited;
         synchronized (plugin.getDatabaseManager().getWriteLock()) {
@@ -272,7 +269,7 @@ public class EconomyManager {
         if (fromId.equals(toId))
             return true;
 
-        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+        BigDecimal normalizedAmount = MoneyFormat.normalize(amount);
         boolean committed = false;
 
         synchronized (plugin.getDatabaseManager().getWriteLock()) {
@@ -400,7 +397,7 @@ public class EconomyManager {
     }
 
     public String format(BigDecimal amount, String currency) {
-        return amount.setScale(SCALE, ROUNDING_MODE).toPlainString();
+        return MoneyFormat.plain(amount);
     }
 
     public String getFormattedWithSymbol(BigDecimal amount, String currency) {
@@ -463,7 +460,7 @@ public class EconomyManager {
             ps.setString(1, uuid.toString());
             ps.setString(2, currency);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getBigDecimal(1) : BigDecimal.ZERO.setScale(SCALE, ROUNDING_MODE);
+                return rs.next() ? rs.getBigDecimal(1) : MoneyFormat.normalize(BigDecimal.ZERO);
             }
         }
     }
@@ -486,7 +483,7 @@ public class EconomyManager {
                 BigDecimal bal = rs.getBigDecimal("balance");
                 if (bal == null)
                     bal = BigDecimal.ZERO;
-                bal = bal.setScale(SCALE, ROUNDING_MODE);
+                bal = MoneyFormat.normalize(bal);
                 balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, bal);
                 return bal;
             }
@@ -510,7 +507,7 @@ public class EconomyManager {
     private BigDecimal knownBalanceOrZero(UUID uuid, String currency) {
         ConcurrentHashMap<String, BigDecimal> userBalances = balanceCache.get(uuid);
         BigDecimal cached = userBalances != null ? userBalances.get(currency) : null;
-        return cached != null ? cached : BigDecimal.ZERO.setScale(SCALE, ROUNDING_MODE);
+        return cached != null ? cached : MoneyFormat.normalize(BigDecimal.ZERO);
     }
 
     /**
@@ -520,7 +517,7 @@ public class EconomyManager {
     private BigDecimal creditStartingBalance(UUID uuid, String currency) {
         double startBalRaw = plugin.getConfig().getDouble("economy.currencies." + currency + ".starting-balance",
                 plugin.getConfig().getDouble("economy.starting-balance", DEFAULT_STARTING_BALANCE));
-        BigDecimal startBal = BigDecimal.valueOf(startBalRaw).setScale(SCALE, ROUNDING_MODE);
+        BigDecimal startBal = MoneyFormat.normalize(BigDecimal.valueOf(startBalRaw));
         boolean created = false;
         try (Connection conn = plugin.getDatabaseManager().getConnection();
         PreparedStatement ps = conn.prepareStatement(
@@ -549,7 +546,7 @@ public class EconomyManager {
 
     public void setBalance(OfflinePlayer player, BigDecimal amount, String currency) {
         UUID uuid = player.getUniqueId();
-        BigDecimal normalizedAmount = amount.setScale(SCALE, ROUNDING_MODE);
+        BigDecimal normalizedAmount = MoneyFormat.normalize(amount);
 
         balanceCache.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>()).put(currency, normalizedAmount);
 

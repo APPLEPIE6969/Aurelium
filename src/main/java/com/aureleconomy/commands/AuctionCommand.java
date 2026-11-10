@@ -2,6 +2,7 @@ package com.aureleconomy.commands;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
+import com.aureleconomy.economy.MoneyFormat;
 import com.aureleconomy.gui.AuctionGUI;
 import com.aureleconomy.utils.PriceParser;
 import net.kyori.adventure.text.Component;
@@ -159,7 +160,7 @@ public class AuctionCommand implements TabExecutor {
  BigDecimal feeRate = BigDecimal.valueOf(plugin.getConfig().getDouble("auction-house.listing-fee-percent", 2.0)).divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
  BigDecimal days = BigDecimal.valueOf(durationMillis).divide(BigDecimal.valueOf(86400000L), 4, RoundingMode.HALF_UP);
  BigDecimal scalingMultiplier = BigDecimal.ONE.add(days.subtract(BigDecimal.ONE).max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(0.05)));
- BigDecimal feeAmount = price.multiply(feeRate).multiply(scalingMultiplier).setScale(2, RoundingMode.HALF_UP);
+ BigDecimal feeAmount = MoneyFormat.normalize(price.multiply(feeRate).multiply(scalingMultiplier));
 
  if (!plugin.getEconomyManager().has(player, feeAmount, currency)) {
  player.sendMessage(

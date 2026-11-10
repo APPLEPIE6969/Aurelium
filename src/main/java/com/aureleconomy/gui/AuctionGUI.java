@@ -2,6 +2,7 @@ package com.aureleconomy.gui;
 
 import com.aureleconomy.AurelEconomy;
 import com.aureleconomy.auction.AuctionItem;
+import com.aureleconomy.economy.MoneyFormat;
 import com.aureleconomy.utils.ItemBuilder;
 import com.aureleconomy.utils.PriceParser;
 import java.math.BigDecimal;
@@ -382,7 +383,7 @@ refresh();
  .divide(BigDecimal.valueOf(86400000L), 4, RoundingMode.HALF_UP);
  BigDecimal scalingMultiplier = BigDecimal.ONE
  .add(days.subtract(BigDecimal.ONE).max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(0.05)));
- return price.multiply(feeRate).multiply(scalingMultiplier).setScale(2, RoundingMode.HALF_UP);
+ return MoneyFormat.normalize(price.multiply(feeRate).multiply(scalingMultiplier));
  }
 
  private void handleCollection(Player player, ItemStack clicked, int slot) {
